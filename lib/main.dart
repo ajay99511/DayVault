@@ -1,5 +1,7 @@
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'screens/lock_screen.dart';
 import 'screens/journal_screen.dart';
 import 'screens/calendar_screen.dart';
@@ -10,6 +12,7 @@ import 'widgets/glass_widgets.dart';
 import 'services/storage_service.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
   runApp(const MemoryPalaceApp());
 }
@@ -25,7 +28,11 @@ class MemoryPalaceApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: AppColors.slate950,
-        fontFamily: 'Roboto', // Fallback, assume assets not loaded yet
+        // Match the "Outfit" font from the web version
+        textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme).apply(
+          bodyColor: Colors.white,
+          displayColor: Colors.white,
+        ),
         useMaterial3: true,
       ),
       home: const RootOrchestrator(),
@@ -122,7 +129,7 @@ class _MainShellState extends State<MainShell>
                     child: AnimatedOrb(
                       width: 400,
                       height: 400,
-                      color: AppColors.indigo500.withValues(alpha: 0.15),
+                      color: AppColors.indigo500.withOpacity(0.15),
                     ),
                   ),
                   Positioned(
@@ -131,7 +138,7 @@ class _MainShellState extends State<MainShell>
                     child: AnimatedOrb(
                       width: 300,
                       height: 300,
-                      color: AppColors.fuchsia500.withValues(alpha: 0.1),
+                      color: AppColors.fuchsia500.withOpacity(0.1),
                     ),
                   ),
                   Positioned(
@@ -140,7 +147,7 @@ class _MainShellState extends State<MainShell>
                     child: AnimatedOrb(
                       width: 250,
                       height: 250,
-                      color: AppColors.emerald500.withValues(alpha: 0.05),
+                      color: AppColors.emerald500.withOpacity(0.05),
                     ),
                   ),
                 ],
@@ -189,7 +196,7 @@ class _MainShellState extends State<MainShell>
           const SizedBox(height: 4),
           Text(
             label.toUpperCase(),
-            style: TextStyle(
+            style: GoogleFonts.outfit(
               color: isActive ? AppColors.indigo500 : Colors.transparent,
               fontSize: 10,
               fontWeight: FontWeight.bold,

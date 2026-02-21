@@ -1,4 +1,6 @@
+
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/types.dart';
 import '../services/storage_service.dart';
 import '../widgets/glass_widgets.dart';
@@ -65,9 +67,9 @@ class _JournalScreenState extends State<JournalScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       "Journal",
-                      style: TextStyle(
+                      style: GoogleFonts.outfit(
                         fontSize: 40,
                         fontWeight: FontWeight.w300,
                         color: Colors.white,
@@ -122,13 +124,13 @@ class _JournalScreenState extends State<JournalScreen> {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.indigo500.withValues(alpha: 0.5),
+                      color: AppColors.indigo500.withOpacity(0.5),
                       blurRadius: 20,
                       spreadRadius: 5,
                     ),
                   ],
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: Colors.white.withOpacity(0.2),
                   ),
                 ),
                 child: const Icon(Icons.add, color: Colors.white, size: 32),
@@ -148,7 +150,7 @@ class _JournalScreenState extends State<JournalScreen> {
           Icon(
             Icons.menu_book,
             size: 48,
-            color: Colors.white.withValues(alpha: 0.2),
+            color: Colors.white.withOpacity(0.2),
           ),
           const SizedBox(height: 16),
           const Text(
@@ -187,7 +189,7 @@ class _JournalScreenState extends State<JournalScreen> {
                       border: Border.all(color: AppColors.slate950, width: 2),
                       boxShadow: [
                         BoxShadow(
-                          color: color.withValues(alpha: 0.5),
+                          color: color.withOpacity(0.5),
                           blurRadius: 10,
                         ),
                       ],
@@ -241,7 +243,7 @@ class _JournalScreenState extends State<JournalScreen> {
                                     vertical: 4,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: color.withValues(alpha: 0.1),
+                                    color: color.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
@@ -264,12 +266,17 @@ class _JournalScreenState extends State<JournalScreen> {
                           const SizedBox(height: 12),
                           Text(
                             entry.headline,
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontFamily: isStory ? 'Serif' : null,
-                            ),
+                            style: isStory 
+                              ? GoogleFonts.libreBaskerville(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                )
+                              : GoogleFonts.outfit(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
                           ),
                           const SizedBox(height: 8),
                           Text(
@@ -283,7 +290,7 @@ class _JournalScreenState extends State<JournalScreen> {
                             ),
                           ),
                           const SizedBox(height: 16),
-                          Divider(color: Colors.white.withValues(alpha: 0.1)),
+                          Divider(color: Colors.white.withOpacity(0.1)),
                           const SizedBox(height: 8),
                           Row(
                             children: [

@@ -1,4 +1,6 @@
+
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../services/storage_service.dart';
 import '../models/types.dart';
 import '../config/constants.dart';
@@ -39,11 +41,11 @@ class _IdentityScreenState extends State<IdentityScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 60),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Text(
               "Preference Drift",
-              style: TextStyle(
+              style: GoogleFonts.outfit(
                 fontSize: 32,
                 fontWeight: FontWeight.w300,
                 color: Colors.white,
@@ -79,7 +81,7 @@ class _IdentityScreenState extends State<IdentityScreen> {
                     decoration: BoxDecoration(
                       color: isActive
                           ? Colors.white
-                          : Colors.white.withValues(alpha: 0.05),
+                          : Colors.white.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -156,13 +158,18 @@ class _IdentityScreenState extends State<IdentityScreen> {
                               ),
                               const SizedBox(width: 16),
                               Expanded(
-                                child: Text(
-                                  item.name,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.name,
+                                      style: GoogleFonts.libreBaskerville(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                               Text(
