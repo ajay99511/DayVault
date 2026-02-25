@@ -1,4 +1,3 @@
-
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -72,12 +71,12 @@ class _EntryEditorState extends State<EntryEditor> {
                 end: Alignment.bottomRight,
                 colors: type == EntryType.story
                     ? [
-                        AppColors.indigo500.withOpacity(0.2),
-                        AppColors.rose500.withOpacity(0.1),
+                        AppColors.indigo500.withValues(alpha: 0.2),
+                        AppColors.rose500.withValues(alpha: 0.1),
                       ]
                     : [
-                        AppColors.emerald500.withOpacity(0.2),
-                        AppColors.amber500.withOpacity(0.1),
+                        AppColors.emerald500.withValues(alpha: 0.2),
+                        AppColors.amber500.withValues(alpha: 0.1),
                       ],
               ),
             ),
@@ -215,8 +214,8 @@ class _EntryEditorState extends State<EntryEditor> {
         decoration: BoxDecoration(
           color: isActive
               ? (t == EntryType.story
-                    ? AppColors.indigo500
-                    : AppColors.emerald500)
+                  ? AppColors.indigo500
+                  : AppColors.emerald500)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
@@ -250,9 +249,7 @@ class _EntryEditorState extends State<EntryEditor> {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: isSel
-                      ? Colors.white
-                      : Colors.white.withOpacity(0.05),
+                  color: isSel ? Colors.white : Colors.white.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -285,7 +282,7 @@ class _EntryEditorState extends State<EntryEditor> {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: AppColors.emerald500.withOpacity(0.2),
+                    color: AppColors.emerald500.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -390,7 +387,7 @@ class _EntryEditorState extends State<EntryEditor> {
                     style: BorderStyle.solid,
                   ),
                   borderRadius: BorderRadius.circular(12),
-                  color: Colors.white.withOpacity(0.05),
+                  color: Colors.white.withValues(alpha: 0.05),
                 ),
                 child: const Icon(Icons.add_a_photo, color: Colors.white54),
               ),
@@ -478,7 +475,7 @@ class RadialTimePickerPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 40;
 
-    final colors = [
+    const colors = [
       AppColors.indigo500,
       AppColors.rose500,
       AppColors.amber500,
@@ -491,7 +488,7 @@ class RadialTimePickerPainter extends CustomPainter {
     final sweepAngle = 2 * pi / 6;
 
     for (int i = 0; i < 6; i++) {
-      paint.color = colors[i].withOpacity(0.8);
+      paint.color = colors[i].withValues(alpha: 0.8);
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: radius - 20),
         startAngle,

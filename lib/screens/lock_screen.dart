@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:local_auth/local_auth.dart';
 import '../config/constants.dart';
 
 class LockScreen extends StatefulWidget {
@@ -12,10 +14,43 @@ class LockScreen extends StatefulWidget {
 
 class _LockScreenState extends State<LockScreen>
     with SingleTickerProviderStateMixin {
+  final _storage = const FlutterSecureStorage();
+  final _auth = LocalAuthentication();
+  String? _storedPin;
   String pin = '';
   bool isError = false;
 
-  void handleTap(String val) {
+  @override
+  void initState() {
+    super.initState();
+    _loadPin();
+  }
+
+  Future<void> _loadPin() async {
+    _storedPin = await _storage.read(key: 'user_pin');
+  }
+
+  Future<void> _authenticateBiometric() async {
+    try {
+      final canAuthenticateWithBiometrics = await _auth.canCheckBiometrics;
+      final canAuthenticate =
+          canAuthenticateWithBiometrics || await _auth.isDeviceSupported();
+      if (!canAuthenticate) return;
+
+      final didAuthenticate = await _auth.authenticate(
+        localizedReason: 'Please authenticate to access Memory Palace',
+      );
+
+      if (didAuthenticate) {
+        HapticFeedback.heavyImpact();
+        widget.onUnlock();
+      }
+    } catch (e) {
+      debugPrint("Biometric error: $e");
+    }
+  }
+
+  void handleTap(String val) async {
     if (pin.length < 4) {
       setState(() {
         pin += val;
@@ -24,14 +59,19 @@ class _LockScreenState extends State<LockScreen>
       HapticFeedback.lightImpact();
 
       if (pin.length == 4) {
-        if (pin == '1234') {
+        if (_storedPin == null) {
+          // Set new pin if not previously set
+          await _storage.write(key: 'user_pin', value: pin);
+          HapticFeedback.heavyImpact();
+          widget.onUnlock();
+        } else if (pin == _storedPin) {
           HapticFeedback.heavyImpact();
           widget.onUnlock();
         } else {
           HapticFeedback.mediumImpact();
           setState(() => isError = true);
           Future.delayed(const Duration(milliseconds: 500), () {
-            setState(() => pin = '');
+            if (mounted) setState(() => pin = '');
           });
         }
       }
@@ -123,11 +163,10 @@ class _LockScreenState extends State<LockScreen>
                       boxShadow: pin.length > index
                           ? [
                               BoxShadow(
-                                color:
-                                    (isError
-                                            ? AppColors.rose500
-                                            : AppColors.indigo500)
-                                        .withValues(alpha: 0.5),
+                                color: (isError
+                                        ? AppColors.rose500
+                                        : AppColors.indigo500)
+                                    .withValues(alpha: 0.5),
                                 blurRadius: 12,
                                 spreadRadius: 2,
                               ),
@@ -175,7 +214,13 @@ class _LockScreenState extends State<LockScreen>
 
   Widget _buildKey(String val, {IconData? icon}) {
     return GestureDetector(
-      onTap: () => icon != null ? widget.onUnlock() : handleTap(val),
+      onTap: () {
+        if (icon != null) {
+          _authenticateBiometric();
+        } else {
+          handleTap(val);
+        }
+      },
       child: Container(
         width: 70,
         height: 70,

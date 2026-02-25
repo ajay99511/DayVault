@@ -1,19 +1,19 @@
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/storage_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../config/constants.dart';
 import '../widgets/glass_widgets.dart';
 
-class IdentityScreen extends StatefulWidget {
+class IdentityScreen extends ConsumerStatefulWidget {
   const IdentityScreen({super.key});
 
   @override
-  State<IdentityScreen> createState() => _IdentityScreenState();
+  ConsumerState<IdentityScreen> createState() => _IdentityScreenState();
 }
 
-class _IdentityScreenState extends State<IdentityScreen> {
+class _IdentityScreenState extends ConsumerState<IdentityScreen> {
   List<RankingCategory> categories = [];
   String activeId = 'movies';
 
@@ -24,7 +24,7 @@ class _IdentityScreenState extends State<IdentityScreen> {
   }
 
   Future<void> _load() async {
-    final d = await StorageService().getRankings();
+    final d = await ref.read(storageServiceProvider).getRankings();
     setState(() => categories = d);
   }
 
@@ -81,7 +81,7 @@ class _IdentityScreenState extends State<IdentityScreen> {
                     decoration: BoxDecoration(
                       color: isActive
                           ? Colors.white
-                          : Colors.white.withOpacity(0.05),
+                          : Colors.white.withValues(alpha: 0.05),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -209,6 +209,7 @@ class _IdentityScreenState extends State<IdentityScreen> {
     if (rank == 3) {
       return const LinearGradient(colors: [Colors.orange, Colors.deepOrange]);
     }
-    return LinearGradient(colors: [AppColors.slate800, AppColors.slate900]);
+    return const LinearGradient(
+        colors: [AppColors.slate800, AppColors.slate900]);
   }
 }

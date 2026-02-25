@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import '../services/storage_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../config/constants.dart';
 import '../widgets/glass_widgets.dart';
 
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  UserSettings settings = UserSettings();
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  UserSettings settings = const UserSettings();
   int totalMemories = 0;
 
   @override
@@ -22,8 +23,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _load() async {
-    final s = StorageService().getSettings();
-    final j = await StorageService().getJournal();
+    final s = ref.read(storageServiceProvider).getSettings();
+    final j = await ref.read(storageServiceProvider).getJournal();
     setState(() {
       settings = s;
       totalMemories = j.length;
@@ -36,7 +37,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       username: settings.username,
       theme: settings.theme,
     );
-    StorageService().saveSettings(newSettings);
+    ref.read(storageServiceProvider).saveSettings(newSettings);
     setState(() => settings = newSettings);
   }
 
@@ -170,10 +171,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                         const SizedBox(width: 16),
-                        Expanded(
+                        const Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
+                            children: [
                               Text(
                                 "Neural Encryption",
                                 style: TextStyle(

@@ -1,7 +1,7 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'screens/lock_screen.dart';
 import 'screens/journal_screen.dart';
 import 'screens/calendar_screen.dart';
@@ -14,7 +14,7 @@ import 'services/storage_service.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
-  runApp(const MemoryPalaceApp());
+  runApp(const ProviderScope(child: MemoryPalaceApp()));
 }
 
 class MemoryPalaceApp extends StatelessWidget {
@@ -29,7 +29,8 @@ class MemoryPalaceApp extends StatelessWidget {
         brightness: Brightness.dark,
         scaffoldBackgroundColor: AppColors.slate950,
         // Match the "Outfit" font from the web version
-        textTheme: GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme).apply(
+        textTheme:
+            GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme).apply(
           bodyColor: Colors.white,
           displayColor: Colors.white,
         ),
@@ -40,14 +41,14 @@ class MemoryPalaceApp extends StatelessWidget {
   }
 }
 
-class RootOrchestrator extends StatefulWidget {
+class RootOrchestrator extends ConsumerStatefulWidget {
   const RootOrchestrator({super.key});
 
   @override
-  State<RootOrchestrator> createState() => _RootOrchestratorState();
+  ConsumerState<RootOrchestrator> createState() => _RootOrchestratorState();
 }
 
-class _RootOrchestratorState extends State<RootOrchestrator> {
+class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
   bool isAuthenticated = false;
   bool isLoading = true;
 
@@ -58,7 +59,7 @@ class _RootOrchestratorState extends State<RootOrchestrator> {
   }
 
   Future<void> _checkSecurity() async {
-    final settings = StorageService().getSettings();
+    final settings = ref.read(storageServiceProvider).getSettings();
     setState(() {
       isAuthenticated = !settings.securityEnabled; // If disabled, auto-auth
       isLoading = false;
@@ -129,7 +130,7 @@ class _MainShellState extends State<MainShell>
                     child: AnimatedOrb(
                       width: 400,
                       height: 400,
-                      color: AppColors.indigo500.withOpacity(0.15),
+                      color: AppColors.indigo500.withValues(alpha: 0.15),
                     ),
                   ),
                   Positioned(
@@ -138,7 +139,7 @@ class _MainShellState extends State<MainShell>
                     child: AnimatedOrb(
                       width: 300,
                       height: 300,
-                      color: AppColors.fuchsia500.withOpacity(0.1),
+                      color: AppColors.fuchsia500.withValues(alpha: 0.1),
                     ),
                   ),
                   Positioned(
@@ -147,7 +148,7 @@ class _MainShellState extends State<MainShell>
                     child: AnimatedOrb(
                       width: 250,
                       height: 250,
-                      color: AppColors.emerald500.withOpacity(0.05),
+                      color: AppColors.emerald500.withValues(alpha: 0.05),
                     ),
                   ),
                 ],

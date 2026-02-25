@@ -1,24 +1,32 @@
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
+
+final storageServiceProvider = Provider<StorageService>((ref) {
+  return StorageService();
+});
 
 // Mock data to start with
 final List<JournalEntry> _mockEntries = [];
 
 final List<RankingCategory> _mockCategories = [
-  RankingCategory(id: 'movies', title: 'Movies', iconName: 'movie', items: []),
-  RankingCategory(id: 'restaurants', title: 'Restaurants', iconName: 'restaurant', items: []),
-  RankingCategory(id: 'places', title: 'Places', iconName: 'place', items: []),
-  RankingCategory(id: 'people', title: 'People', iconName: 'person', items: []),
-  RankingCategory(id: 'books', title: 'Books', iconName: 'book', items: []),
+  const RankingCategory(
+      id: 'movies', title: 'Movies', iconName: 'movie', items: []),
+  const RankingCategory(
+      id: 'restaurants',
+      title: 'Restaurants',
+      iconName: 'restaurant',
+      items: []),
+  const RankingCategory(
+      id: 'places', title: 'Places', iconName: 'place', items: []),
+  const RankingCategory(
+      id: 'people', title: 'People', iconName: 'person', items: []),
+  const RankingCategory(
+      id: 'books', title: 'Books', iconName: 'book', items: []),
 ];
 
 class StorageService {
-  static final StorageService _instance = StorageService._internal();
-  factory StorageService() => _instance;
-  StorageService._internal();
+  UserSettings _settings = const UserSettings(securityEnabled: false);
 
-  UserSettings _settings = UserSettings(securityEnabled: false);
-  
   Future<List<JournalEntry>> getJournal() async {
     // Simulate delay
     await Future.delayed(const Duration(milliseconds: 100));

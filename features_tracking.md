@@ -44,6 +44,18 @@ Memory Palace is a futuristic, offline-first journaling and identity tracking ap
 
 ---
 
+## 🏗 Architecture & Code Quality (Production Readiness)
+*Analysis of current codebase against industry standards.*
+
+| Area | Status | Recommendation |
+| :--- | :--- | :--- |
+| **State Management** | 🟡 Basic (`setState`) | App currently relies heavily on `setState` and singletons (`StorageService`). For a scalable production app, migrating to **Riverpod** or **Bloc** is highly recommended to decouple business logic from UI. |
+| **Data Models** | 🟡 Standard Dart Classes | Models in `types.dart` lack serialization. Adopt **Freezed** or **JsonSerializable** for robust data classes, especially when integrating local DBs like Isar. |
+| **Code Structure** | 🟢 Organized | `lib/` is cleanly separated by domain (`models`, `screens`, `services`, `widgets`, `config`). |
+| **Security/Safety** | 🛑 Hardcoded Secrets | PIN logic in `LockScreen` sits directly on the UI and checks for `'1234'`. Critical safety hazard that must be secured via `flutter_secure_storage`. |
+
+---
+
 ## 🟡 Limitations & Mocked Functionality
 *This section tracks features that are visually implemented but functionally limited or mocked.*
 
