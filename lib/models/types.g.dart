@@ -93,6 +93,9 @@ _RankedItem _$RankedItemFromJson(Map<String, dynamic> json) => _RankedItem(
       id: json['id'] as String,
       rank: (json['rank'] as num).toInt(),
       name: json['name'] as String,
+      rating: (json['rating'] as num?)?.toDouble() ?? 0,
+      subtitle: json['subtitle'] as String? ?? '',
+      notes: json['notes'] as String? ?? '',
       dateAdded: DateTime.parse(json['dateAdded'] as String),
     );
 
@@ -101,6 +104,9 @@ Map<String, dynamic> _$RankedItemToJson(_RankedItem instance) =>
       'id': instance.id,
       'rank': instance.rank,
       'name': instance.name,
+      'rating': instance.rating,
+      'subtitle': instance.subtitle,
+      'notes': instance.notes,
       'dateAdded': instance.dateAdded.toIso8601String(),
     };
 

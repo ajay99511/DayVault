@@ -249,7 +249,9 @@ class _EntryEditorState extends State<EntryEditor> {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: isSel ? Colors.white : Colors.white.withValues(alpha: 0.05),
+                  color: isSel
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -485,7 +487,7 @@ class RadialTimePickerPainter extends CustomPainter {
     ];
 
     double startAngle = -pi / 2;
-    final sweepAngle = 2 * pi / 6;
+    const sweepAngle = 2 * pi / 6;
 
     for (int i = 0; i < 6; i++) {
       paint.color = colors[i].withValues(alpha: 0.8);

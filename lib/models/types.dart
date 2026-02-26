@@ -62,6 +62,9 @@ abstract class RankedItem with _$RankedItem {
     required String id,
     required int rank,
     required String name,
+    @Default(0) double rating, // 0 – 5 star rating
+    @Default('') String subtitle, // e.g. director, author, cuisine type
+    @Default('') String notes, // free-form personal notes
     required DateTime dateAdded,
   }) = _RankedItem;
 

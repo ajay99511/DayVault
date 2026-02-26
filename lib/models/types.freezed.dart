@@ -1013,6 +1013,9 @@ mixin _$RankedItem {
   String get id;
   int get rank;
   String get name;
+  double get rating; // 0 – 5 star rating
+  String get subtitle; // e.g. director, author, cuisine type
+  String get notes; // free-form personal notes
   DateTime get dateAdded;
 
   /// Create a copy of RankedItem
@@ -1033,17 +1036,22 @@ mixin _$RankedItem {
             (identical(other.id, id) || other.id == id) &&
             (identical(other.rank, rank) || other.rank == rank) &&
             (identical(other.name, name) || other.name == name) &&
+            (identical(other.rating, rating) || other.rating == rating) &&
+            (identical(other.subtitle, subtitle) ||
+                other.subtitle == subtitle) &&
+            (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.dateAdded, dateAdded) ||
                 other.dateAdded == dateAdded));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, id, rank, name, dateAdded);
+  int get hashCode => Object.hash(
+      runtimeType, id, rank, name, rating, subtitle, notes, dateAdded);
 
   @override
   String toString() {
-    return 'RankedItem(id: $id, rank: $rank, name: $name, dateAdded: $dateAdded)';
+    return 'RankedItem(id: $id, rank: $rank, name: $name, rating: $rating, subtitle: $subtitle, notes: $notes, dateAdded: $dateAdded)';
   }
 }
 
@@ -1053,7 +1061,14 @@ abstract mixin class $RankedItemCopyWith<$Res> {
           RankedItem value, $Res Function(RankedItem) _then) =
       _$RankedItemCopyWithImpl;
   @useResult
-  $Res call({String id, int rank, String name, DateTime dateAdded});
+  $Res call(
+      {String id,
+      int rank,
+      String name,
+      double rating,
+      String subtitle,
+      String notes,
+      DateTime dateAdded});
 }
 
 /// @nodoc
@@ -1071,6 +1086,9 @@ class _$RankedItemCopyWithImpl<$Res> implements $RankedItemCopyWith<$Res> {
     Object? id = null,
     Object? rank = null,
     Object? name = null,
+    Object? rating = null,
+    Object? subtitle = null,
+    Object? notes = null,
     Object? dateAdded = null,
   }) {
     return _then(_self.copyWith(
@@ -1085,6 +1103,18 @@ class _$RankedItemCopyWithImpl<$Res> implements $RankedItemCopyWith<$Res> {
       name: null == name
           ? _self.name
           : name // ignore: cast_nullable_to_non_nullable
+              as String,
+      rating: null == rating
+          ? _self.rating
+          : rating // ignore: cast_nullable_to_non_nullable
+              as double,
+      subtitle: null == subtitle
+          ? _self.subtitle
+          : subtitle // ignore: cast_nullable_to_non_nullable
+              as String,
+      notes: null == notes
+          ? _self.notes
+          : notes // ignore: cast_nullable_to_non_nullable
               as String,
       dateAdded: null == dateAdded
           ? _self.dateAdded
@@ -1187,14 +1217,16 @@ extension RankedItemPatterns on RankedItem {
 
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>(
-    TResult Function(String id, int rank, String name, DateTime dateAdded)?
+    TResult Function(String id, int rank, String name, double rating,
+            String subtitle, String notes, DateTime dateAdded)?
         $default, {
     required TResult orElse(),
   }) {
     final _that = this;
     switch (_that) {
       case _RankedItem() when $default != null:
-        return $default(_that.id, _that.rank, _that.name, _that.dateAdded);
+        return $default(_that.id, _that.rank, _that.name, _that.rating,
+            _that.subtitle, _that.notes, _that.dateAdded);
       case _:
         return orElse();
     }
@@ -1215,13 +1247,15 @@ extension RankedItemPatterns on RankedItem {
 
   @optionalTypeArgs
   TResult when<TResult extends Object?>(
-    TResult Function(String id, int rank, String name, DateTime dateAdded)
+    TResult Function(String id, int rank, String name, double rating,
+            String subtitle, String notes, DateTime dateAdded)
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _RankedItem():
-        return $default(_that.id, _that.rank, _that.name, _that.dateAdded);
+        return $default(_that.id, _that.rank, _that.name, _that.rating,
+            _that.subtitle, _that.notes, _that.dateAdded);
       case _:
         throw StateError('Unexpected subclass');
     }
@@ -1241,13 +1275,15 @@ extension RankedItemPatterns on RankedItem {
 
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>(
-    TResult? Function(String id, int rank, String name, DateTime dateAdded)?
+    TResult? Function(String id, int rank, String name, double rating,
+            String subtitle, String notes, DateTime dateAdded)?
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _RankedItem() when $default != null:
-        return $default(_that.id, _that.rank, _that.name, _that.dateAdded);
+        return $default(_that.id, _that.rank, _that.name, _that.rating,
+            _that.subtitle, _that.notes, _that.dateAdded);
       case _:
         return null;
     }
@@ -1261,6 +1297,9 @@ class _RankedItem implements RankedItem {
       {required this.id,
       required this.rank,
       required this.name,
+      this.rating = 0,
+      this.subtitle = '',
+      this.notes = '',
       required this.dateAdded});
   factory _RankedItem.fromJson(Map<String, dynamic> json) =>
       _$RankedItemFromJson(json);
@@ -1271,6 +1310,18 @@ class _RankedItem implements RankedItem {
   final int rank;
   @override
   final String name;
+  @override
+  @JsonKey()
+  final double rating;
+// 0 – 5 star rating
+  @override
+  @JsonKey()
+  final String subtitle;
+// e.g. director, author, cuisine type
+  @override
+  @JsonKey()
+  final String notes;
+// free-form personal notes
   @override
   final DateTime dateAdded;
 
@@ -1297,17 +1348,22 @@ class _RankedItem implements RankedItem {
             (identical(other.id, id) || other.id == id) &&
             (identical(other.rank, rank) || other.rank == rank) &&
             (identical(other.name, name) || other.name == name) &&
+            (identical(other.rating, rating) || other.rating == rating) &&
+            (identical(other.subtitle, subtitle) ||
+                other.subtitle == subtitle) &&
+            (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.dateAdded, dateAdded) ||
                 other.dateAdded == dateAdded));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, id, rank, name, dateAdded);
+  int get hashCode => Object.hash(
+      runtimeType, id, rank, name, rating, subtitle, notes, dateAdded);
 
   @override
   String toString() {
-    return 'RankedItem(id: $id, rank: $rank, name: $name, dateAdded: $dateAdded)';
+    return 'RankedItem(id: $id, rank: $rank, name: $name, rating: $rating, subtitle: $subtitle, notes: $notes, dateAdded: $dateAdded)';
   }
 }
 
@@ -1319,7 +1375,14 @@ abstract mixin class _$RankedItemCopyWith<$Res>
       __$RankedItemCopyWithImpl;
   @override
   @useResult
-  $Res call({String id, int rank, String name, DateTime dateAdded});
+  $Res call(
+      {String id,
+      int rank,
+      String name,
+      double rating,
+      String subtitle,
+      String notes,
+      DateTime dateAdded});
 }
 
 /// @nodoc
@@ -1337,6 +1400,9 @@ class __$RankedItemCopyWithImpl<$Res> implements _$RankedItemCopyWith<$Res> {
     Object? id = null,
     Object? rank = null,
     Object? name = null,
+    Object? rating = null,
+    Object? subtitle = null,
+    Object? notes = null,
     Object? dateAdded = null,
   }) {
     return _then(_RankedItem(
@@ -1351,6 +1417,18 @@ class __$RankedItemCopyWithImpl<$Res> implements _$RankedItemCopyWith<$Res> {
       name: null == name
           ? _self.name
           : name // ignore: cast_nullable_to_non_nullable
+              as String,
+      rating: null == rating
+          ? _self.rating
+          : rating // ignore: cast_nullable_to_non_nullable
+              as double,
+      subtitle: null == subtitle
+          ? _self.subtitle
+          : subtitle // ignore: cast_nullable_to_non_nullable
+              as String,
+      notes: null == notes
+          ? _self.notes
+          : notes // ignore: cast_nullable_to_non_nullable
               as String,
       dateAdded: null == dateAdded
           ? _self.dateAdded
