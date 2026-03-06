@@ -10,12 +10,12 @@ import 'screens/profile_screen.dart';
 import 'config/constants.dart';
 import 'widgets/glass_widgets.dart';
 import 'services/storage_service.dart';
-import 'services/isar_service.dart';
+import 'services/objectbox_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
-  await IsarService.init();
+  await ObjectBoxService.init();
   runApp(const ProviderScope(child: MemoryPalaceApp()));
 }
 
