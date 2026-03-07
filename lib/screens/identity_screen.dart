@@ -493,184 +493,204 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
       );
     }
 
-    final activeCategory = _activeCategory;
-
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 60),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text(
-              "Preference Drift",
-              style: GoogleFonts.outfit(
-                fontSize: 32,
-                fontWeight: FontWeight.w300,
-                color: Colors.white,
+    return DefaultTabController(
+      length: categories.length,
+      initialIndex: categories
+          .indexWhere((c) => c.id == activeId)
+          .clamp(0, categories.length - 1),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 60),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                "Preference Drift",
+                style: GoogleFonts.outfit(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w300,
+                  color: Colors.white,
+                ),
               ),
             ),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24),
-            child: Text(
-              "The evolution of your taste.",
-              style: TextStyle(color: AppColors.slate400),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                "The evolution of your taste.",
+                style: TextStyle(color: AppColors.slate400),
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-          // Tabs
-          SizedBox(
-            height: 40,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              itemCount: categories.length,
-              itemBuilder: (ctx, i) {
-                final cat = categories[i];
-                final isActive = cat.id == activeId;
-                return GestureDetector(
-                  onTap: () => setState(() => activeId = cat.id),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    margin: const EdgeInsets.only(right: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: isActive
-                          ? Colors.white
-                          : Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      cat.title.toUpperCase(),
-                      style: TextStyle(
-                        color: isActive ? Colors.black : AppColors.slate400,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 24),
+            // Tabs
+            Builder(builder: (ctx) {
+              final tabController = DefaultTabController.of(ctx);
+              tabController.addListener(() {
+                if (!tabController.indexIsChanging && ctx.mounted) {
+                  final newId = categories[tabController.index].id;
+                  if (activeId != newId) {
+                    setState(() => activeId = newId);
+                  }
+                }
+              });
 
-          // List
-          Expanded(
-            child: activeCategory.items.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.indigo500.withValues(alpha: 0.2),
-                                AppColors.fuchsia500.withValues(alpha: 0.1),
-                              ],
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.emoji_events_outlined,
-                            size: 40,
-                            color: Colors.white24,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          "No favourites ranked yet.",
-                          style: GoogleFonts.outfit(
-                            color: Colors.white38,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          "Tap + to add your first ${activeCategory.title.toLowerCase()} item",
-                          style: GoogleFonts.outfit(
-                            color: Colors.white24,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        TextButton(
-                          onPressed: () => _showAddEditDialog(),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 10),
+              return TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                dividerColor: Colors.transparent,
+                indicator: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                labelColor: Colors.black,
+                unselectedLabelColor: AppColors.slate400,
+                labelStyle: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 10,
+                ),
+                tabs: categories.map((cat) {
+                  return Tab(
+                    height: 40,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(cat.title.toUpperCase()),
+                    ),
+                  );
+                }).toList(),
+              );
+            }),
+            const SizedBox(height: 24),
+
+            // TabBarView Content (Swipeable lists)
+            Expanded(
+              child: TabBarView(
+                children: categories.map((cat) {
+                  if (cat.items.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 80,
+                            height: 80,
                             decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(20),
-                              gradient: const LinearGradient(
+                              shape: BoxShape.circle,
+                              gradient: LinearGradient(
                                 colors: [
-                                  AppColors.indigo500,
-                                  AppColors.fuchsia500,
+                                  AppColors.indigo500.withValues(alpha: 0.2),
+                                  AppColors.fuchsia500.withValues(alpha: 0.1),
                                 ],
                               ),
                             ),
-                            child: Text(
-                              "START RANKING",
-                              style: GoogleFonts.outfit(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 2,
-                                fontSize: 12,
+                            child: const Icon(
+                              Icons.emoji_events_outlined,
+                              size: 40,
+                              color: Colors.white24,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            "No favourites ranked yet.",
+                            style: GoogleFonts.outfit(
+                                color: Colors.white38, fontSize: 16),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            "Tap + to add your first ${cat.title.toLowerCase()} item",
+                            style: GoogleFonts.outfit(
+                                color: Colors.white24, fontSize: 13),
+                          ),
+                          const SizedBox(height: 16),
+                          TextButton(
+                            onPressed: () {
+                              setState(() => activeId = cat.id);
+                              _showAddEditDialog();
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 24, vertical: 10),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    AppColors.indigo500,
+                                    AppColors.fuchsia500,
+                                  ],
+                                ),
+                              ),
+                              child: Text(
+                                "START RANKING",
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 2,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ReorderableListView.builder(
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ReorderableListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     proxyDecorator: _proxyDecorator,
-                    onReorder: _onReorder,
-                    itemCount: activeCategory.items.length,
+                    onReorder: (oldIndex, newIndex) {
+                      // Ensure activeId matches current tab when reordering
+                      if (activeId != cat.id) setState(() => activeId = cat.id);
+                      _onReorder(oldIndex, newIndex);
+                    },
+                    itemCount: cat.items.length,
                     itemBuilder: (ctx, i) {
-                      final item = activeCategory.items[i];
+                      final item = cat.items[i];
                       return _RankedItemTile(
                         key: ValueKey(item.id),
                         index: i,
                         item: item,
                         getRankGradient: _getRankGradient,
-                        onTap: () => _showItemDetail(item),
+                        onTap: () {
+                          if (activeId != cat.id) {
+                            setState(() => activeId = cat.id);
+                          }
+                          _showItemDetail(item);
+                        },
                       );
                     },
-                  ),
-          ),
-        ],
-      ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 100),
-        child: Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [AppColors.indigo500, AppColors.fuchsia500],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.indigo500.withValues(alpha: 0.4),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
+                  );
+                }).toList(),
               ),
-            ],
-          ),
-          child: FloatingActionButton(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            onPressed: () => _showAddEditDialog(),
-            child: const Icon(Icons.add, color: Colors.white, size: 28),
+            ),
+          ],
+        ),
+        floatingActionButton: Padding(
+          padding: const EdgeInsets.only(bottom: 100),
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.indigo500, AppColors.fuchsia500],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.indigo500.withValues(alpha: 0.4),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: FloatingActionButton(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              onPressed: () => _showAddEditDialog(),
+              child: const Icon(Icons.add, color: Colors.white, size: 28),
+            ),
           ),
         ),
       ),

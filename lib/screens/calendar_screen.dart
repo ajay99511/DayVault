@@ -19,10 +19,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime _currentDate = DateTime.now();
   List<JournalEntry> _entries = [];
 
+  // To simulate infinite calendar scrolling (page 1200 = current month when initialized)
+  static const int _initialPage = 1200;
+  late final PageController _pageController;
+
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _initialPage);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -35,8 +46,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   void _changeMonth(int delta) {
+    _pageController.animateToPage(
+      (_pageController.page?.round() ?? _initialPage) + delta,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _onPageChanged(int index) {
+    final monthOffset = index - _initialPage;
+    final now = DateTime.now();
     setState(() {
-      _currentDate = DateTime(_currentDate.year, _currentDate.month + delta, 1);
+      _currentDate = DateTime(now.year, now.month + monthOffset, 1);
     });
   }
 
@@ -84,14 +105,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final daysInMonth =
-        DateTime(_currentDate.year, _currentDate.month + 1, 0).day;
-    // DateTime.weekday returns 1 for Monday, 7 for Sunday.
-    // We want Sunday to be 0 for the grid, Monday 1, etc.
-    final firstDayWeekday =
-        DateTime(_currentDate.year, _currentDate.month, 1).weekday;
-    final firstDayOffset = firstDayWeekday == 7 ? 0 : firstDayWeekday;
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Column(
@@ -132,7 +145,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             ),
           ),
           const SizedBox(height: 32),
-          // Calendar Grid
+          // Calendar Grid Wrapper
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -150,87 +163,119 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                           .toList(),
                     ),
                     const SizedBox(height: 16),
+                    // Swipeable area
                     Expanded(
-                      child: GridView.builder(
-                        padding: EdgeInsets.zero,
-                        itemCount: daysInMonth + firstDayOffset,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 7,
-                          mainAxisSpacing: 8,
-                          crossAxisSpacing: 4,
-                        ),
-                        itemBuilder: (ctx, i) {
-                          if (i < firstDayOffset) return const SizedBox();
+                      child: PageView.builder(
+                        controller: _pageController,
+                        onPageChanged: _onPageChanged,
+                        itemBuilder: (ctx, index) {
+                          // Calculate the date for the current page
+                          final monthOffset = index - _initialPage;
+                          final now = DateTime.now();
+                          final pageDate =
+                              DateTime(now.year, now.month + monthOffset, 1);
 
-                          final day = i - firstDayOffset + 1;
-                          final date = DateTime(
-                              _currentDate.year, _currentDate.month, day);
-                          final dayEntries = _getEntriesForDay(date);
-                          final isToday = day == DateTime.now().day &&
-                              _currentDate.month == DateTime.now().month &&
-                              _currentDate.year == DateTime.now().year;
+                          final daysInMonth =
+                              DateTime(pageDate.year, pageDate.month + 1, 0)
+                                  .day;
+                          final firstDayWeekday =
+                              DateTime(pageDate.year, pageDate.month, 1)
+                                  .weekday;
+                          final firstDayOffset =
+                              firstDayWeekday == 7 ? 0 : firstDayWeekday;
 
-                          final hasStory =
-                              dayEntries.any((e) => e.type == EntryType.story);
-                          final hasEvent =
-                              dayEntries.any((e) => e.type == EntryType.event);
-
-                          return GestureDetector(
-                            onTap: () => _showDayDetails(context, date),
-                            child: Container(
-                              decoration: isToday
-                                  ? const BoxDecoration(
-                                      gradient: LinearGradient(colors: [
-                                        AppColors.indigo500,
-                                        AppColors.fuchsia500
-                                      ]),
-                                      shape: BoxShape.circle)
-                                  : null,
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text("$day",
-                                      style: TextStyle(
-                                          color: isToday
-                                              ? Colors.white
-                                              : AppColors.slate400,
-                                          fontWeight: isToday
-                                              ? FontWeight.bold
-                                              : FontWeight.normal)),
-                                  if (hasStory || hasEvent)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 4),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          if (hasEvent)
-                                            Container(
-                                                width: 4,
-                                                height: 4,
-                                                margin:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 1),
-                                                decoration: const BoxDecoration(
-                                                    color: AppColors.emerald500,
-                                                    shape: BoxShape.circle)),
-                                          if (hasStory)
-                                            Container(
-                                                width: 4,
-                                                height: 4,
-                                                margin:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 1),
-                                                decoration: const BoxDecoration(
-                                                    color: AppColors.indigo500,
-                                                    shape: BoxShape.circle)),
-                                        ],
-                                      ),
-                                    )
-                                ],
-                              ),
+                          return GridView.builder(
+                            padding: EdgeInsets.zero,
+                            physics:
+                                const NeverScrollableScrollPhysics(), // Scroll handled by PageView
+                            itemCount: daysInMonth + firstDayOffset,
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 7,
+                              mainAxisSpacing: 8,
+                              crossAxisSpacing: 4,
                             ),
+                            itemBuilder: (ctx, i) {
+                              if (i < firstDayOffset) return const SizedBox();
+
+                              final day = i - firstDayOffset + 1;
+                              final date =
+                                  DateTime(pageDate.year, pageDate.month, day);
+                              final dayEntries = _getEntriesForDay(date);
+                              final isToday = day == now.day &&
+                                  pageDate.month == now.month &&
+                                  pageDate.year == now.year;
+
+                              final hasStory = dayEntries
+                                  .any((e) => e.type == EntryType.story);
+                              final hasEvent = dayEntries
+                                  .any((e) => e.type == EntryType.event);
+
+                              return GestureDetector(
+                                onTap: () => _showDayDetails(context, date),
+                                child: Container(
+                                  decoration: isToday
+                                      ? const BoxDecoration(
+                                          gradient: LinearGradient(colors: [
+                                            AppColors.indigo500,
+                                            AppColors.fuchsia500
+                                          ]),
+                                          shape: BoxShape.circle)
+                                      : null,
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text("$day",
+                                          style: TextStyle(
+                                              color: isToday
+                                                  ? Colors.white
+                                                  : AppColors.slate400,
+                                              fontWeight: isToday
+                                                  ? FontWeight.bold
+                                                  : FontWeight.normal)),
+                                      if (hasStory || hasEvent)
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 4),
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              if (hasEvent)
+                                                Container(
+                                                    width: 4,
+                                                    height: 4,
+                                                    margin: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 1),
+                                                    decoration:
+                                                        const BoxDecoration(
+                                                            color:
+                                                                AppColors
+                                                                    .emerald500,
+                                                            shape: BoxShape
+                                                                .circle)),
+                                              if (hasStory)
+                                                Container(
+                                                    width: 4,
+                                                    height: 4,
+                                                    margin: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 1),
+                                                    decoration:
+                                                        const BoxDecoration(
+                                                            color: AppColors
+                                                                .indigo500,
+                                                            shape: BoxShape
+                                                                .circle)),
+                                            ],
+                                          ),
+                                        )
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
                           );
                         },
                       ),
@@ -352,7 +397,8 @@ class DayDetailSheet extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.calendar_today,
-                                size: 48, color: Colors.white.withValues(alpha: 0.1)),
+                                size: 48,
+                                color: Colors.white.withValues(alpha: 0.1)),
                             const SizedBox(height: 16),
                             const Text("No memories captured.",
                                 style: TextStyle(color: Colors.white24)),
@@ -389,7 +435,8 @@ class DayDetailSheet extends StatelessWidget {
                                             shape: BoxShape.circle,
                                             boxShadow: [
                                               BoxShadow(
-                                                  color: color.withValues(alpha: 0.5),
+                                                  color: color.withValues(
+                                                      alpha: 0.5),
                                                   blurRadius: 8)
                                             ]),
                                       ),
@@ -421,8 +468,8 @@ class DayDetailSheet extends StatelessWidget {
                                                         horizontal: 6,
                                                         vertical: 2),
                                                 decoration: BoxDecoration(
-                                                    color:
-                                                        color.withValues(alpha: 0.1),
+                                                    color: color.withValues(
+                                                        alpha: 0.1),
                                                     borderRadius:
                                                         BorderRadius.circular(
                                                             4)),
@@ -493,7 +540,8 @@ class DayDetailSheet extends StatelessWidget {
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                    color: AppColors.indigo500.withValues(alpha: 0.3),
+                                    color: AppColors.indigo500
+                                        .withValues(alpha: 0.3),
                                     blurRadius: 12,
                                     offset: const Offset(0, 4))
                               ]),
@@ -524,8 +572,8 @@ class DayDetailSheet extends StatelessWidget {
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                    color:
-                                        AppColors.emerald500.withValues(alpha: 0.3),
+                                    color: AppColors.emerald500
+                                        .withValues(alpha: 0.3),
                                     blurRadius: 12,
                                     offset: const Offset(0, 4))
                               ]),
