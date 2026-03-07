@@ -53,6 +53,38 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
+  void _jumpToToday() {
+    final currentPage = _pageController.page?.round() ?? _initialPage;
+    final diff = (_initialPage - currentPage).abs();
+
+    if (diff > 12) {
+      // If far away, jump instantly to prevent lag
+      _pageController.jumpToPage(_initialPage);
+    } else {
+      // If close, animate smoothly
+      _pageController.animateToPage(
+        _initialPage,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _jumpToMonth(int targetYear, int targetMonth) {
+    if (!mounted) return;
+    final now = DateTime.now();
+    // Calculate the total month offset from the current real-world month
+    final targetOffset =
+        (targetYear - now.year) * 12 + (targetMonth - now.month);
+    final targetPage = _initialPage + targetOffset;
+
+    // Immediately jump without animation to avoid rendering thousands of frames
+    _pageController.jumpToPage(targetPage);
+    setState(() {
+      _currentDate = DateTime(targetYear, targetMonth, 1);
+    });
+  }
+
   void _onPageChanged(int index) {
     final monthOffset = index - _initialPage;
     final now = DateTime.now();
@@ -127,15 +159,27 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         color: Colors.white,
                       ),
                     ),
-                    Text(
-                      DateFormat('yyyy').format(_currentDate),
-                      style: const TextStyle(
-                          fontSize: 18, color: AppColors.slate400),
+                    GestureDetector(
+                      onTap: () => _showYearSelector(context),
+                      child: Row(
+                        children: [
+                          Text(
+                            DateFormat('yyyy').format(_currentDate),
+                            style: const TextStyle(
+                                fontSize: 18, color: AppColors.slate400),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.arrow_drop_down,
+                              color: AppColors.slate400, size: 20),
+                        ],
+                      ),
                     ),
                   ],
                 ),
                 Row(
                   children: [
+                    _navBtn(Icons.today, _jumpToToday),
+                    const SizedBox(width: 12),
                     _navBtn(Icons.chevron_left, () => _changeMonth(-1)),
                     const SizedBox(width: 8),
                     _navBtn(Icons.chevron_right, () => _changeMonth(1)),
@@ -299,8 +343,109 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           color: Colors.white.withValues(alpha: 0.05),
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, color: Colors.white),
+        child: Icon(icon, color: Colors.white, size: 20),
       ),
+    );
+  }
+
+  void _showYearSelector(BuildContext context) {
+    final currentYear = DateTime.now().year;
+    final years = List.generate(100, (index) => currentYear - 50 + index);
+
+    // Find initial scroll index
+    final initialIndex = years.indexOf(_currentDate.year);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.5,
+          decoration: BoxDecoration(
+            color: AppColors.slate900.withValues(alpha: 0.95),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Select Year",
+                      style: GoogleFonts.outfit(
+                        fontSize: 24,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white54),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: GridView.builder(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 4,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 2,
+                  ),
+                  itemCount: years.length,
+                  // Use a controller to jump near the currently viewed year
+                  controller: ScrollController(
+                    initialScrollOffset: (initialIndex / 4).floor() * 46.0,
+                  ),
+                  itemBuilder: (ctx, i) {
+                    final year = years[i];
+                    final isSelected = year == _currentDate.year;
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        if (year == currentYear) {
+                          _jumpToToday();
+                        } else {
+                          // Jump to Jan of selected year
+                          _jumpToMonth(year, 1);
+                        }
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.indigo500
+                              : Colors.white.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: isSelected
+                              ? Border.all(
+                                  color: AppColors.fuchsia500, width: 2)
+                              : null,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          year.toString(),
+                          style: GoogleFonts.outfit(
+                            color: isSelected ? Colors.white : Colors.white70,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
