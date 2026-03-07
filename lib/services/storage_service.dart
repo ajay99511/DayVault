@@ -71,6 +71,15 @@ class StorageService {
 
   // ─── Rankings ───────────────────────────────────────────────────────────
 
+  Future<List<RankingCategory>> getFavoriteRankings() async {
+    final query = _rankingBox
+        .query(ObjectBoxRankingCategory_.isFavorite.equals(true))
+        .build();
+    final results = query.find();
+    query.close();
+    return results.map((c) => c.toFreezed()).toList();
+  }
+
   Future<List<RankingCategory>> getRankings() async {
     var results = _rankingBox.getAll();
 
@@ -83,6 +92,29 @@ class StorageService {
     }
 
     return results.map((c) => c.toFreezed()).toList();
+  }
+
+  Future<void> addRankingCategory(RankingCategory category) async {
+    final existing = _rankingBox
+        .query(ObjectBoxRankingCategory_.categoryId.equals(category.id))
+        .build()
+        .findFirst();
+
+    final obCategory = ObjectBoxRankingCategory.fromFreezed(category);
+    if (existing != null) {
+      obCategory.id = existing.id;
+    }
+    _rankingBox.put(obCategory);
+  }
+
+  Future<void> deleteRankingCategory(String categoryId) async {
+    final existing = _rankingBox
+        .query(ObjectBoxRankingCategory_.categoryId.equals(categoryId))
+        .build()
+        .findFirst();
+    if (existing != null) {
+      _rankingBox.remove(existing.id);
+    }
   }
 
   Future<void> updateRankingCategory(RankingCategory category) async {

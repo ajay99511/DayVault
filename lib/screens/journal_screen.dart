@@ -19,6 +19,17 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
   List<JournalEntry> entries = [];
   bool isLoading = true;
 
+  // Search state
+  bool _isSearching = false;
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +65,15 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Filtered entries
+    final filteredEntries = _searchQuery.isEmpty
+        ? entries
+        : entries.where((e) {
+            final q = _searchQuery.toLowerCase();
+            return e.headline.toLowerCase().contains(q) ||
+                e.content.toLowerCase().contains(q);
+          }).toList();
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
@@ -63,32 +83,111 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 60),
+              // Header
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      "Journal",
-                      style: GoogleFonts.outfit(
-                        fontSize: 40,
-                        fontWeight: FontWeight.w300,
-                        color: Colors.white,
-                      ),
-                    ),
-                    GlassContainer(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      borderRadius: 20,
-                      child: Text(
-                        "${entries.length} Memories",
-                        style: const TextStyle(
-                          color: AppColors.slate400,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+                    if (!_isSearching)
+                      Text(
+                        "Journal",
+                        style: GoogleFonts.outfit(
+                          fontSize: 40,
+                          fontWeight: FontWeight.w300,
+                          color: Colors.white,
                         ),
+                      ),
+
+                    // Search Bar / Actions
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (_isSearching)
+                            Expanded(
+                              child: GlassContainer(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
+                                borderRadius: 20,
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.search,
+                                        color: AppColors.slate400, size: 18),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _searchCtrl,
+                                        autofocus: true,
+                                        onChanged: (val) =>
+                                            setState(() => _searchQuery = val),
+                                        style: GoogleFonts.outfit(
+                                            color: Colors.white, fontSize: 14),
+                                        decoration: InputDecoration(
+                                          hintText: 'Search memories...',
+                                          hintStyle: GoogleFonts.outfit(
+                                              color: Colors.white54,
+                                              fontSize: 14),
+                                          border: InputBorder.none,
+                                          isDense: true,
+                                        ),
+                                      ),
+                                    ),
+                                    if (_searchQuery.isNotEmpty)
+                                      GestureDetector(
+                                        onTap: () {
+                                          _searchCtrl.clear();
+                                          setState(() => _searchQuery = '');
+                                        },
+                                        child: const Icon(Icons.close,
+                                            color: AppColors.slate400,
+                                            size: 16),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          else
+                            GlassContainer(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              borderRadius: 20,
+                              child: Text(
+                                "${entries.length} Memories",
+                                style: const TextStyle(
+                                  color: AppColors.slate400,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          const SizedBox(width: 12),
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _isSearching = !_isSearching;
+                                if (!_isSearching) {
+                                  _searchCtrl.clear();
+                                  _searchQuery = '';
+                                }
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                _isSearching ? Icons.close : Icons.search,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -98,14 +197,14 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
               Expanded(
                 child: isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : entries.isEmpty
+                    : filteredEntries.isEmpty
                         ? _buildEmptyState()
                         : ListView.builder(
                             padding:
                                 const EdgeInsets.only(bottom: 120, top: 20),
-                            itemCount: entries.length,
+                            itemCount: filteredEntries.length,
                             itemBuilder: (ctx, i) =>
-                                _buildEntryItem(entries[i]),
+                                _buildEntryItem(filteredEntries[i]),
                           ),
               ),
             ],
@@ -151,14 +250,16 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.menu_book,
+            _isSearching ? Icons.search_off : Icons.menu_book,
             size: 48,
             color: Colors.white.withValues(alpha: 0.2),
           ),
           const SizedBox(height: 16),
-          const Text(
-            "Your journal is waiting.",
-            style: TextStyle(color: Colors.white24),
+          Text(
+            _isSearching
+                ? "No matching memories found."
+                : "Your journal is waiting.",
+            style: const TextStyle(color: Colors.white24),
           ),
         ],
       ),

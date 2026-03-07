@@ -1444,6 +1444,7 @@ mixin _$RankingCategory {
   String get title;
   String get iconName;
   List<RankedItem> get items;
+  bool get isFavorite;
 
   /// Create a copy of RankingCategory
   /// with the given fields replaced by the non-null parameter values.
@@ -1465,17 +1466,19 @@ mixin _$RankingCategory {
             (identical(other.title, title) || other.title == title) &&
             (identical(other.iconName, iconName) ||
                 other.iconName == iconName) &&
-            const DeepCollectionEquality().equals(other.items, items));
+            const DeepCollectionEquality().equals(other.items, items) &&
+            (identical(other.isFavorite, isFavorite) ||
+                other.isFavorite == isFavorite));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, id, title, iconName,
-      const DeepCollectionEquality().hash(items));
+      const DeepCollectionEquality().hash(items), isFavorite);
 
   @override
   String toString() {
-    return 'RankingCategory(id: $id, title: $title, iconName: $iconName, items: $items)';
+    return 'RankingCategory(id: $id, title: $title, iconName: $iconName, items: $items, isFavorite: $isFavorite)';
   }
 }
 
@@ -1485,7 +1488,12 @@ abstract mixin class $RankingCategoryCopyWith<$Res> {
           RankingCategory value, $Res Function(RankingCategory) _then) =
       _$RankingCategoryCopyWithImpl;
   @useResult
-  $Res call({String id, String title, String iconName, List<RankedItem> items});
+  $Res call(
+      {String id,
+      String title,
+      String iconName,
+      List<RankedItem> items,
+      bool isFavorite});
 }
 
 /// @nodoc
@@ -1505,6 +1513,7 @@ class _$RankingCategoryCopyWithImpl<$Res>
     Object? title = null,
     Object? iconName = null,
     Object? items = null,
+    Object? isFavorite = null,
   }) {
     return _then(_self.copyWith(
       id: null == id
@@ -1523,6 +1532,10 @@ class _$RankingCategoryCopyWithImpl<$Res>
           ? _self.items
           : items // ignore: cast_nullable_to_non_nullable
               as List<RankedItem>,
+      isFavorite: null == isFavorite
+          ? _self.isFavorite
+          : isFavorite // ignore: cast_nullable_to_non_nullable
+              as bool,
     ));
   }
 }
@@ -1620,15 +1633,16 @@ extension RankingCategoryPatterns on RankingCategory {
 
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>(
-    TResult Function(
-            String id, String title, String iconName, List<RankedItem> items)?
+    TResult Function(String id, String title, String iconName,
+            List<RankedItem> items, bool isFavorite)?
         $default, {
     required TResult orElse(),
   }) {
     final _that = this;
     switch (_that) {
       case _RankingCategory() when $default != null:
-        return $default(_that.id, _that.title, _that.iconName, _that.items);
+        return $default(_that.id, _that.title, _that.iconName, _that.items,
+            _that.isFavorite);
       case _:
         return orElse();
     }
@@ -1649,14 +1663,15 @@ extension RankingCategoryPatterns on RankingCategory {
 
   @optionalTypeArgs
   TResult when<TResult extends Object?>(
-    TResult Function(
-            String id, String title, String iconName, List<RankedItem> items)
+    TResult Function(String id, String title, String iconName,
+            List<RankedItem> items, bool isFavorite)
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _RankingCategory():
-        return $default(_that.id, _that.title, _that.iconName, _that.items);
+        return $default(_that.id, _that.title, _that.iconName, _that.items,
+            _that.isFavorite);
       case _:
         throw StateError('Unexpected subclass');
     }
@@ -1676,14 +1691,15 @@ extension RankingCategoryPatterns on RankingCategory {
 
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>(
-    TResult? Function(
-            String id, String title, String iconName, List<RankedItem> items)?
+    TResult? Function(String id, String title, String iconName,
+            List<RankedItem> items, bool isFavorite)?
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _RankingCategory() when $default != null:
-        return $default(_that.id, _that.title, _that.iconName, _that.items);
+        return $default(_that.id, _that.title, _that.iconName, _that.items,
+            _that.isFavorite);
       case _:
         return null;
     }
@@ -1697,7 +1713,8 @@ class _RankingCategory implements RankingCategory {
       {required this.id,
       required this.title,
       required this.iconName,
-      final List<RankedItem> items = const []})
+      final List<RankedItem> items = const [],
+      this.isFavorite = false})
       : _items = items;
   factory _RankingCategory.fromJson(Map<String, dynamic> json) =>
       _$RankingCategoryFromJson(json);
@@ -1716,6 +1733,10 @@ class _RankingCategory implements RankingCategory {
     // ignore: implicit_dynamic_type
     return EqualUnmodifiableListView(_items);
   }
+
+  @override
+  @JsonKey()
+  final bool isFavorite;
 
   /// Create a copy of RankingCategory
   /// with the given fields replaced by the non-null parameter values.
@@ -1741,17 +1762,19 @@ class _RankingCategory implements RankingCategory {
             (identical(other.title, title) || other.title == title) &&
             (identical(other.iconName, iconName) ||
                 other.iconName == iconName) &&
-            const DeepCollectionEquality().equals(other._items, _items));
+            const DeepCollectionEquality().equals(other._items, _items) &&
+            (identical(other.isFavorite, isFavorite) ||
+                other.isFavorite == isFavorite));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, id, title, iconName,
-      const DeepCollectionEquality().hash(_items));
+      const DeepCollectionEquality().hash(_items), isFavorite);
 
   @override
   String toString() {
-    return 'RankingCategory(id: $id, title: $title, iconName: $iconName, items: $items)';
+    return 'RankingCategory(id: $id, title: $title, iconName: $iconName, items: $items, isFavorite: $isFavorite)';
   }
 }
 
@@ -1763,7 +1786,12 @@ abstract mixin class _$RankingCategoryCopyWith<$Res>
       __$RankingCategoryCopyWithImpl;
   @override
   @useResult
-  $Res call({String id, String title, String iconName, List<RankedItem> items});
+  $Res call(
+      {String id,
+      String title,
+      String iconName,
+      List<RankedItem> items,
+      bool isFavorite});
 }
 
 /// @nodoc
@@ -1783,6 +1811,7 @@ class __$RankingCategoryCopyWithImpl<$Res>
     Object? title = null,
     Object? iconName = null,
     Object? items = null,
+    Object? isFavorite = null,
   }) {
     return _then(_RankingCategory(
       id: null == id
@@ -1801,6 +1830,10 @@ class __$RankingCategoryCopyWithImpl<$Res>
           ? _self._items
           : items // ignore: cast_nullable_to_non_nullable
               as List<RankedItem>,
+      isFavorite: null == isFavorite
+          ? _self.isFavorite
+          : isFavorite // ignore: cast_nullable_to_non_nullable
+              as bool,
     ));
   }
 }

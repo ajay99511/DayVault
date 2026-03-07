@@ -16,6 +16,19 @@ class IdentityScreen extends ConsumerStatefulWidget {
 class _IdentityScreenState extends ConsumerState<IdentityScreen> {
   List<RankingCategory> categories = [];
   String activeId = 'movies';
+  bool _showFavoritesOnly = false;
+  bool _isLoading = true;
+
+  // Search state
+  bool _isSearching = false;
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -24,14 +37,171 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
   }
 
   Future<void> _load() async {
-    final d = await ref.read(storageServiceProvider).getRankings();
-    setState(() => categories = d);
+    final storage = ref.read(storageServiceProvider);
+    final d = _showFavoritesOnly
+        ? await storage.getFavoriteRankings()
+        : await storage.getRankings();
+
+    if (d.isNotEmpty && !d.any((c) => c.id == activeId)) {
+      activeId = d.first.id;
+    }
+    setState(() {
+      categories = d;
+      _isLoading = false;
+    });
   }
 
   RankingCategory get _activeCategory => categories.firstWhere(
         (c) => c.id == activeId,
         orElse: () => categories.first,
       );
+
+  // ─── Category Management ──────────────────────────────────────────────
+
+  Future<void> _showCategoryDialog({RankingCategory? existingCat}) async {
+    final titleCtrl = TextEditingController(text: existingCat?.title ?? '');
+    bool isFav = existingCat?.isFavorite ?? false;
+    final isEditing = existingCat != null;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setModalState) {
+        return AlertDialog(
+          backgroundColor: AppColors.slate900,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(isEditing ? 'Edit Category' : 'New Category',
+              style: const TextStyle(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'e.g. Video Games',
+                  hintStyle: const TextStyle(color: Colors.white54),
+                  filled: true,
+                  fillColor: Colors.white10,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SwitchListTile(
+                title: const Text('Favourite',
+                    style: TextStyle(color: Colors.white)),
+                value: isFav,
+                activeThumbColor: AppColors.amber500,
+                onChanged: (val) => setModalState(() => isFav = val),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('CANCEL',
+                    style: TextStyle(color: AppColors.slate400))),
+            TextButton(
+              onPressed: () async {
+                if (titleCtrl.text.trim().isEmpty) return;
+                final storage = ref.read(storageServiceProvider);
+                final cat = RankingCategory(
+                  id: existingCat?.id ??
+                      DateTime.now().millisecondsSinceEpoch.toString(),
+                  title: titleCtrl.text.trim(),
+                  iconName: existingCat?.iconName ?? 'category',
+                  items: existingCat?.items ?? [],
+                  isFavorite: isFav,
+                );
+                await storage.addRankingCategory(cat);
+                if (ctx.mounted) Navigator.pop(ctx, true);
+              },
+              child: const Text('SAVE',
+                  style: TextStyle(color: AppColors.indigo500)),
+            ),
+          ],
+        );
+      }),
+    );
+
+    if (result == true) {
+      await _load();
+    }
+  }
+
+  void _showCategoryOptions(RankingCategory cat) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.slate900,
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.edit, color: Colors.white),
+            title: const Text('Edit Category',
+                style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(ctx);
+              _showCategoryDialog(existingCat: cat);
+            },
+          ),
+          ListTile(
+            leading: Icon(cat.isFavorite ? Icons.star_border : Icons.star,
+                color: AppColors.amber500),
+            title: Text(
+                cat.isFavorite ? 'Remove from Favourites' : 'Add to Favourites',
+                style: const TextStyle(color: Colors.white)),
+            onTap: () async {
+              Navigator.pop(ctx);
+              final updated = cat.copyWith(isFavorite: !cat.isFavorite);
+              await ref
+                  .read(storageServiceProvider)
+                  .addRankingCategory(updated);
+              _load();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete, color: AppColors.rose500),
+            title: const Text('Delete Category',
+                style: TextStyle(color: AppColors.rose500)),
+            onTap: () async {
+              Navigator.pop(ctx);
+              final confirmed = await showDialog<bool>(
+                context: context,
+                builder: (c) => AlertDialog(
+                  backgroundColor: AppColors.slate900,
+                  title: const Text('Delete Category?',
+                      style: TextStyle(color: Colors.white)),
+                  content: const Text(
+                      'This will delete the category and all its items.',
+                      style: TextStyle(color: Colors.white70)),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(c, false),
+                        child: const Text('CANCEL',
+                            style: TextStyle(color: AppColors.slate400))),
+                    TextButton(
+                        onPressed: () => Navigator.pop(c, true),
+                        child: const Text('DELETE',
+                            style: TextStyle(color: AppColors.rose500))),
+                  ],
+                ),
+              );
+              if (confirmed == true) {
+                await ref
+                    .read(storageServiceProvider)
+                    .deleteRankingCategory(cat.id);
+                _load();
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
 
   // ─── Add / Edit Dialog ────────────────────────────────────────────────
 
@@ -486,18 +656,23 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (categories.isEmpty) {
+    if (_isLoading) {
       return const Scaffold(
         backgroundColor: Colors.transparent,
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
+    final int initialIndex = categories.isEmpty
+        ? 0
+        : categories
+            .indexWhere((c) => c.id == activeId)
+            .clamp(0, categories.length - 1)
+            .toInt();
+
     return DefaultTabController(
-      length: categories.length,
-      initialIndex: categories
-          .indexWhere((c) => c.id == activeId)
-          .clamp(0, categories.length - 1),
+      length: categories.isEmpty ? 1 : categories.length,
+      initialIndex: initialIndex,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: Column(
@@ -506,193 +681,371 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
             const SizedBox(height: 60),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                "Preference Drift",
-                style: GoogleFonts.outfit(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w300,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                "The evolution of your taste.",
-                style: TextStyle(color: AppColors.slate400),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  if (!_isSearching)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Preference Drift",
+                          style: GoogleFonts.outfit(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w300,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        const Text(
+                          "The evolution of your taste.",
+                          style: TextStyle(color: AppColors.slate400),
+                        ),
+                      ],
+                    ),
+
+                  // Search and Actions
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (_isSearching)
+                          Expanded(
+                            child: GlassContainer(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              borderRadius: 20,
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.search,
+                                      color: AppColors.slate400, size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _searchCtrl,
+                                      autofocus: true,
+                                      onChanged: (val) =>
+                                          setState(() => _searchQuery = val),
+                                      style: GoogleFonts.outfit(
+                                          color: Colors.white, fontSize: 14),
+                                      decoration: InputDecoration(
+                                        hintText: 'Search items...',
+                                        hintStyle: GoogleFonts.outfit(
+                                            color: Colors.white54,
+                                            fontSize: 14),
+                                        border: InputBorder.none,
+                                        isDense: true,
+                                      ),
+                                    ),
+                                  ),
+                                  if (_searchQuery.isNotEmpty)
+                                    GestureDetector(
+                                      onTap: () {
+                                        _searchCtrl.clear();
+                                        setState(() => _searchQuery = '');
+                                      },
+                                      child: const Icon(Icons.close,
+                                          color: AppColors.slate400, size: 16),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        if (!_isSearching) ...[
+                          IconButton(
+                            onPressed: () {
+                              setState(() =>
+                                  _showFavoritesOnly = !_showFavoritesOnly);
+                              _load();
+                            },
+                            icon: Icon(
+                              _showFavoritesOnly
+                                  ? Icons.star
+                                  : Icons.star_border,
+                              color: _showFavoritesOnly
+                                  ? AppColors.amber500
+                                  : AppColors.slate400,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => _showCategoryDialog(),
+                            icon: const Icon(Icons.add_box_outlined,
+                                color: Colors.white),
+                          ),
+                        ],
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _isSearching = !_isSearching;
+                              if (!_isSearching) {
+                                _searchCtrl.clear();
+                                _searchQuery = '';
+                              }
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              _isSearching ? Icons.close : Icons.search,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 24),
 
             // Tabs
-            Builder(builder: (ctx) {
-              final tabController = DefaultTabController.of(ctx);
-              tabController.addListener(() {
-                if (!tabController.indexIsChanging && ctx.mounted) {
-                  final newId = categories[tabController.index].id;
-                  if (activeId != newId) {
-                    setState(() => activeId = newId);
+            if (categories.isNotEmpty)
+              Builder(builder: (ctx) {
+                final tabController = DefaultTabController.of(ctx);
+                tabController.addListener(() {
+                  if (!tabController.indexIsChanging && ctx.mounted) {
+                    if (tabController.index < categories.length) {
+                      final newId = categories[tabController.index].id;
+                      if (activeId != newId) {
+                        setState(() => activeId = newId);
+                      }
+                    }
                   }
-                }
-              });
+                });
 
-              return TabBar(
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                dividerColor: Colors.transparent,
-                indicator: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                labelColor: Colors.black,
-                unselectedLabelColor: AppColors.slate400,
-                labelStyle: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 10,
-                ),
-                tabs: categories.map((cat) {
-                  return Tab(
-                    height: 40,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(cat.title.toUpperCase()),
+                return Row(
+                  children: [
+                    Expanded(
+                      child: TabBar(
+                        isScrollable: true,
+                        tabAlignment: TabAlignment.start,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        dividerColor: Colors.transparent,
+                        indicator: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        labelColor: Colors.black,
+                        unselectedLabelColor: AppColors.slate400,
+                        labelStyle: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                        ),
+                        tabs: categories.map((cat) {
+                          return Tab(
+                            height: 40,
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (cat.isFavorite) ...[
+                                    const Icon(Icons.star,
+                                        size: 12, color: AppColors.amber500),
+                                    const SizedBox(width: 4),
+                                  ],
+                                  Text(cat.title.toUpperCase()),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
                     ),
-                  );
-                }).toList(),
-              );
-            }),
+                    IconButton(
+                      icon: const Icon(Icons.more_vert,
+                          color: AppColors.slate400),
+                      onPressed: () => _showCategoryOptions(_activeCategory),
+                    ),
+                  ],
+                );
+              }),
             const SizedBox(height: 24),
 
             // TabBarView Content (Swipeable lists)
             Expanded(
-              child: TabBarView(
-                children: categories.map((cat) {
-                  if (cat.items.isEmpty) {
-                    return Center(
+              child: categories.isEmpty
+                  ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Container(
-                            width: 80,
-                            height: 80,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: LinearGradient(
-                                colors: [
-                                  AppColors.indigo500.withValues(alpha: 0.2),
-                                  AppColors.fuchsia500.withValues(alpha: 0.1),
-                                ],
-                              ),
-                            ),
-                            child: const Icon(
-                              Icons.emoji_events_outlined,
-                              size: 40,
-                              color: Colors.white24,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Text(
-                            "No favourites ranked yet.",
-                            style: GoogleFonts.outfit(
-                                color: Colors.white38, fontSize: 16),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            "Tap + to add your first ${cat.title.toLowerCase()} item",
-                            style: GoogleFonts.outfit(
-                                color: Colors.white24, fontSize: 13),
-                          ),
+                          const Icon(Icons.category_outlined,
+                              size: 60, color: Colors.white24),
+                          const SizedBox(height: 16),
+                          const Text('No categories found',
+                              style: TextStyle(
+                                  color: Colors.white54, fontSize: 16)),
                           const SizedBox(height: 16),
                           TextButton(
-                            onPressed: () {
-                              setState(() => activeId = cat.id);
-                              _showAddEditDialog();
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 24, vertical: 10),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    AppColors.indigo500,
-                                    AppColors.fuchsia500,
-                                  ],
-                                ),
-                              ),
-                              child: Text(
-                                "START RANKING",
-                                style: GoogleFonts.outfit(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 2,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
+                            onPressed: () => _showCategoryDialog(),
+                            child: const Text('ADD CATEGORY',
+                                style: TextStyle(
+                                    color: AppColors.indigo500,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.5)),
                           ),
                         ],
                       ),
-                    );
-                  }
+                    )
+                  : TabBarView(
+                      children: categories.map((cat) {
+                        // Filter items
+                        final filteredItems = _searchQuery.isEmpty
+                            ? cat.items
+                            : cat.items.where((item) {
+                                final q = _searchQuery.toLowerCase();
+                                return item.name.toLowerCase().contains(q) ||
+                                    item.subtitle.toLowerCase().contains(q);
+                              }).toList();
 
-                  return ReorderableListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    proxyDecorator: _proxyDecorator,
-                    onReorder: (oldIndex, newIndex) {
-                      // Ensure activeId matches current tab when reordering
-                      if (activeId != cat.id) setState(() => activeId = cat.id);
-                      _onReorder(oldIndex, newIndex);
-                    },
-                    itemCount: cat.items.length,
-                    itemBuilder: (ctx, i) {
-                      final item = cat.items[i];
-                      return _RankedItemTile(
-                        key: ValueKey(item.id),
-                        index: i,
-                        item: item,
-                        getRankGradient: _getRankGradient,
-                        onTap: () {
-                          if (activeId != cat.id) {
-                            setState(() => activeId = cat.id);
-                          }
-                          _showItemDetail(item);
-                        },
-                      );
-                    },
-                  );
-                }).toList(),
-              ),
+                        if (filteredItems.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        AppColors.indigo500
+                                            .withValues(alpha: 0.2),
+                                        AppColors.fuchsia500
+                                            .withValues(alpha: 0.1),
+                                      ],
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    _isSearching
+                                        ? Icons.search_off
+                                        : Icons.emoji_events_outlined,
+                                    size: 40,
+                                    color: Colors.white24,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                Text(
+                                  _isSearching
+                                      ? "No matching items found."
+                                      : "No favourites ranked yet.",
+                                  style: GoogleFonts.outfit(
+                                      color: Colors.white38, fontSize: 16),
+                                ),
+                                if (!_isSearching) ...[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    "Tap + to add your first ${cat.title.toLowerCase()} item",
+                                    style: GoogleFonts.outfit(
+                                        color: Colors.white24, fontSize: 13),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() => activeId = cat.id);
+                                      _showAddEditDialog();
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 24, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(20),
+                                        gradient: const LinearGradient(
+                                          colors: [
+                                            AppColors.indigo500,
+                                            AppColors.fuchsia500
+                                          ],
+                                        ),
+                                      ),
+                                      child: Text(
+                                        "START RANKING",
+                                        style: GoogleFonts.outfit(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 2,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        }
+
+                        return ReorderableListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          proxyDecorator: _proxyDecorator,
+                          onReorder: (oldIndex, newIndex) {
+                            if (_isSearching) {
+                              return; // Disable reorder while searching
+                            }
+
+                            if (activeId != cat.id) {
+                              setState(() => activeId = cat.id);
+                            }
+                            _onReorder(oldIndex, newIndex);
+                          },
+                          itemCount: filteredItems.length,
+                          itemBuilder: (ctx, i) {
+                            final item = filteredItems[i];
+                            return _RankedItemTile(
+                              key: ValueKey(item.id),
+                              index: i,
+                              item: item,
+                              getRankGradient: _getRankGradient,
+                              onTap: () {
+                                if (activeId != cat.id) {
+                                  setState(() => activeId = cat.id);
+                                }
+                                _showItemDetail(item);
+                              },
+                            );
+                          },
+                        );
+                      }).toList(),
+                    ),
             ),
           ],
         ),
-        floatingActionButton: Padding(
-          padding: const EdgeInsets.only(bottom: 100),
-          child: Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.indigo500, AppColors.fuchsia500],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.indigo500.withValues(alpha: 0.4),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
+        floatingActionButton: categories.isEmpty
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(bottom: 100),
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [AppColors.indigo500, AppColors.fuchsia500],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.indigo500.withValues(alpha: 0.4),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: FloatingActionButton(
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
+                    onPressed: () => _showAddEditDialog(),
+                    child: const Icon(Icons.add, color: Colors.white, size: 28),
+                  ),
                 ),
-              ],
-            ),
-            child: FloatingActionButton(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              onPressed: () => _showAddEditDialog(),
-              child: const Icon(Icons.add, color: Colors.white, size: 28),
-            ),
-          ),
-        ),
+              ),
       ),
     );
   }

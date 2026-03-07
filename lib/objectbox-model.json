@@ -81,7 +81,7 @@
     },
     {
       "id": "2:6201097887440269210",
-      "lastPropertyId": "5:5506695917038589590",
+      "lastPropertyId": "6:4134302183630457136",
       "name": "ObjectBoxRankingCategory",
       "properties": [
         {
@@ -111,6 +111,11 @@
           "id": "5:5506695917038589590",
           "name": "itemsJson",
           "type": 9
+        },
+        {
+          "id": "6:4134302183630457136",
+          "name": "isFavorite",
+          "type": 1
         }
       ],
       "relations": []

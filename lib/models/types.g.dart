@@ -119,6 +119,7 @@ _RankingCategory _$RankingCategoryFromJson(Map<String, dynamic> json) =>
               ?.map((e) => RankedItem.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
+      isFavorite: json['isFavorite'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$RankingCategoryToJson(_RankingCategory instance) =>
@@ -127,6 +128,7 @@ Map<String, dynamic> _$RankingCategoryToJson(_RankingCategory instance) =>
       'title': instance.title,
       'iconName': instance.iconName,
       'items': instance.items,
+      'isFavorite': instance.isFavorite,
     };
 
 _UserSettings _$UserSettingsFromJson(Map<String, dynamic> json) =>

@@ -111,7 +111,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(2, 6201097887440269210),
     name: 'ObjectBoxRankingCategory',
-    lastPropertyId: const obx_int.IdUid(5, 5506695917038589590),
+    lastPropertyId: const obx_int.IdUid(6, 4134302183630457136),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -143,6 +143,12 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(5, 5506695917038589590),
         name: 'itemsJson',
         type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 4134302183630457136),
+        name: 'isFavorite',
+        type: 1,
         flags: 0,
       ),
     ],
@@ -351,12 +357,13 @@ obx_int.ModelDefinition getObjectBoxModel() {
             final titleOffset = fbb.writeString(object.title);
             final iconNameOffset = fbb.writeString(object.iconName);
             final itemsJsonOffset = fbb.writeString(object.itemsJson);
-            fbb.startTable(6);
+            fbb.startTable(7);
             fbb.addInt64(0, object.id);
             fbb.addOffset(1, categoryIdOffset);
             fbb.addOffset(2, titleOffset);
             fbb.addOffset(3, iconNameOffset);
             fbb.addOffset(4, itemsJsonOffset);
+            fbb.addBool(5, object.isFavorite);
             fbb.finish(fbb.endTable());
             return object.id;
           },
@@ -377,7 +384,13 @@ obx_int.ModelDefinition getObjectBoxModel() {
               ).vTableGet(buffer, rootOffset, 10, '')
               ..itemsJson = const fb.StringReader(
                 asciiOptimization: true,
-              ).vTableGet(buffer, rootOffset, 12, '');
+              ).vTableGet(buffer, rootOffset, 12, '')
+              ..isFavorite = const fb.BoolReader().vTableGet(
+                buffer,
+                rootOffset,
+                14,
+                false,
+              );
 
             return object;
           },
@@ -522,6 +535,11 @@ class ObjectBoxRankingCategory_ {
   /// See [ObjectBoxRankingCategory.itemsJson].
   static final itemsJson = obx.QueryStringProperty<ObjectBoxRankingCategory>(
     _entities[1].properties[4],
+  );
+
+  /// See [ObjectBoxRankingCategory.isFavorite].
+  static final isFavorite = obx.QueryBooleanProperty<ObjectBoxRankingCategory>(
+    _entities[1].properties[5],
   );
 }
 

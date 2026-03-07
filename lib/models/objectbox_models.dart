@@ -55,9 +55,8 @@ class ObjectBoxJournalEntry {
             ? LocationData.fromJson(
                 jsonDecode(locationJson!) as Map<String, dynamic>)
             : null,
-        timeBucket: timeBucketIndex >= 0
-            ? TimeBucket.values[timeBucketIndex]
-            : null,
+        timeBucket:
+            timeBucketIndex >= 0 ? TimeBucket.values[timeBucketIndex] : null,
         images: List<String>.from(jsonDecode(imagesJson)),
         isSpotlight: isSpotlight,
       );
@@ -90,6 +89,7 @@ class ObjectBoxRankingCategory {
 
   String title = '';
   String iconName = '';
+  bool isFavorite = false;
 
   /// Items stored as JSON-encoded list of RankedItem maps.
   String itemsJson = '[]';
@@ -107,6 +107,7 @@ class ObjectBoxRankingCategory {
       title: title,
       iconName: iconName,
       items: items,
+      isFavorite: isFavorite,
     );
   }
 
@@ -115,8 +116,8 @@ class ObjectBoxRankingCategory {
       ..categoryId = category.id
       ..title = category.title
       ..iconName = category.iconName
-      ..itemsJson =
-          jsonEncode(category.items.map((i) => i.toJson()).toList());
+      ..isFavorite = category.isFavorite
+      ..itemsJson = jsonEncode(category.items.map((i) => i.toJson()).toList());
   }
 }
 

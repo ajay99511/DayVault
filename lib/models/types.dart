@@ -79,6 +79,7 @@ abstract class RankingCategory with _$RankingCategory {
     required String title,
     required String iconName,
     @Default([]) List<RankedItem> items,
+    @Default(false) bool isFavorite,
   }) = _RankingCategory;
 
   factory RankingCategory.fromJson(Map<String, dynamic> json) =>
