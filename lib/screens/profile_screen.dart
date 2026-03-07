@@ -1,4 +1,9 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:battery_plus/battery_plus.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:system_info2/system_info2.dart';
 import '../services/storage_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
@@ -16,10 +21,96 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   UserSettings settings = const UserSettings();
   int totalMemories = 0;
 
+  // System Tracking
+  final Battery _battery = Battery();
+  Timer? _timer;
+  int _batteryLevel = 100;
+  String _batteryState = 'Unknown';
+  String _osName = 'Loading...';
+  String _deviceName = 'Loading...';
+  double _freeRamGB = 0;
+  double _totalRamGB = 0;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _initSystemInfo();
+    _startMetricsTimer();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initSystemInfo() async {
+    final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    try {
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        _deviceName = androidInfo.model;
+        _osName = 'Android ${androidInfo.version.release}';
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        _deviceName = iosInfo.utsname.machine;
+        _osName = 'iOS ${iosInfo.systemVersion}';
+      } else if (Platform.isWindows) {
+        final windowsInfo = await deviceInfo.windowsInfo;
+        _deviceName = windowsInfo.productName;
+        _osName = 'Windows';
+      } else if (Platform.isMacOS) {
+        final macInfo = await deviceInfo.macOsInfo;
+        _deviceName = macInfo.model;
+        _osName = 'macOS ${macInfo.osRelease}';
+      } else if (Platform.isLinux) {
+        final linuxInfo = await deviceInfo.linuxInfo;
+        _deviceName = linuxInfo.prettyName;
+        _osName = 'Linux';
+      } else {
+        _deviceName = 'Unknown Device';
+        _osName = Platform.operatingSystem;
+      }
+    } catch (e) {
+      _deviceName = 'Access Denied';
+      _osName = 'Unknown OS';
+    }
+
+    if (mounted) setState(() {});
+  }
+
+  void _startMetricsTimer() {
+    _updateMetrics();
+    _timer =
+        Timer.periodic(const Duration(seconds: 5), (_) => _updateMetrics());
+  }
+
+  Future<void> _updateMetrics() async {
+    if (!mounted) return;
+    try {
+      final level = await _battery.batteryLevel;
+      final state = await _battery.batteryState;
+      if (mounted) {
+        setState(() {
+          _batteryLevel = level;
+          _batteryState = state.name.toUpperCase();
+
+          try {
+            // Using system_info2 for memory stats (in bytes)
+            _totalRamGB =
+                SysInfo.getTotalPhysicalMemory() / (1024 * 1024 * 1024);
+            _freeRamGB = SysInfo.getFreePhysicalMemory() / (1024 * 1024 * 1024);
+          } catch (e) {
+            // Fallbacks in case system_info2 fails on the target platform
+            _totalRamGB = 0;
+            _freeRamGB = 0;
+          }
+        });
+      }
+    } catch (e) {
+      // Ignore battery errors on unsupported devices (e.g. some emulators/desktops)
+    }
   }
 
   Future<void> _load() async {
@@ -62,33 +153,42 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       shape: BoxShape.circle,
                       color: AppColors.slate800,
                     ),
-                    child: const CircleAvatar(
-                      backgroundColor: Colors.grey,
-                      child: Icon(Icons.person, color: Colors.white),
+                    child: CircleAvatar(
+                      backgroundColor: AppColors.slate900,
+                      child: Icon(
+                        Platform.isAndroid || Platform.isIOS
+                            ? Icons.phone_android
+                            : Icons.computer,
+                        color: AppColors.indigo500,
+                        size: 32,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 20),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "The Architect",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _deviceName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                      Text(
-                        "Level 4 Observer",
-                        style: TextStyle(
-                          color: AppColors.indigo500,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1,
+                        Text(
+                          "OS: $_osName",
+                          style: const TextStyle(
+                            color: AppColors.fuchsia500,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -127,6 +227,42 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   "87%",
                   Icons.psychology,
                   AppColors.fuchsia500,
+                ),
+              ],
+            ),
+            const SizedBox(height: 40),
+
+            // Diagnostics Grid
+            const Text(
+              "REAL-TIME DIAGNOSTICS",
+              style: TextStyle(
+                color: AppColors.slate400,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _statCard(
+                  "Battery",
+                  "$_batteryLevel%",
+                  _batteryState == 'CHARGING'
+                      ? Icons.battery_charging_full
+                      : Icons.battery_full,
+                  _batteryLevel <= 20
+                      ? AppColors.rose500
+                      : AppColors.emerald500,
+                ),
+                const SizedBox(width: 12),
+                _statCard(
+                  "RAM Status",
+                  _totalRamGB > 0
+                      ? "${(_totalRamGB - _freeRamGB).toStringAsFixed(1)} / ${_totalRamGB.toStringAsFixed(1)} GB"
+                      : "N/A",
+                  Icons.memory,
+                  AppColors.amber500,
                 ),
               ],
             ),

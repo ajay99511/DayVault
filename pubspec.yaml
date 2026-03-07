@@ -22,6 +22,9 @@ dependencies:
   lucide_icons: ^0.257.0 # Optional, but using Material icons mapped in code for now.
   path_provider: ^2.1.5
   riverpod_annotation: ^4.0.2
+  device_info_plus: ^12.3.0
+  battery_plus: ^7.0.0
+  system_info2: ^4.1.0
 
 dev_dependencies:
   flutter_test:
