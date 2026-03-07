@@ -6,6 +6,7 @@ import '../services/storage_service.dart';
 import '../widgets/glass_widgets.dart';
 import '../config/constants.dart';
 import 'entry_editor.dart';
+import 'journal_viewer_screen.dart';
 
 class JournalScreen extends ConsumerStatefulWidget {
   const JournalScreen({super.key});
@@ -203,139 +204,153 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
             const SizedBox(width: 16),
             // Card
             Expanded(
-              child: GlassContainer(
-                borderRadius: 24,
-                padding: EdgeInsets.zero,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (entry.images.isNotEmpty)
-                      Container(
-                        height: 180,
-                        decoration: BoxDecoration(
-                          image: DecorationImage(
-                            image: NetworkImage(entry.images.first),
-                            fit: BoxFit.cover,
+              child: GestureDetector(
+                onTap: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => JournalViewerScreen(entry: entry),
+                    ),
+                  );
+                  if (result == true) {
+                    _loadData(); // Refresh list if entry was edited or deleted
+                  }
+                },
+                child: GlassContainer(
+                  borderRadius: 24,
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (entry.images.isNotEmpty)
+                        Container(
+                          height: 180,
+                          decoration: BoxDecoration(
+                            image: DecorationImage(
+                              image: NetworkImage(entry.images.first),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          alignment: Alignment.bottomRight,
+                          padding: const EdgeInsets.all(12),
+                          child: Text(
+                            moodIcons[entry.mood] ?? '',
+                            style: const TextStyle(fontSize: 32),
                           ),
                         ),
-                        alignment: Alignment.bottomRight,
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          moodIcons[entry.mood] ?? '',
-                          style: const TextStyle(fontSize: 32),
-                        ),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (entry.images.isEmpty)
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  moodIcons[entry.mood] ?? '',
-                                  style: const TextStyle(fontSize: 24),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
+                      Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (entry.images.isEmpty)
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    moodIcons[entry.mood] ?? '',
+                                    style: const TextStyle(fontSize: 24),
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: color.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    isStory
-                                        ? (entry.feeling ?? 'STORY')
-                                        : (entry.timeBucket
-                                                ?.toString()
-                                                .split('.')
-                                                .last ??
-                                            'EVENT'),
-                                    style: TextStyle(
-                                      color: color,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: color.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      isStory
+                                          ? (entry.feeling ?? 'STORY')
+                                          : (entry.timeBucket
+                                                  ?.toString()
+                                                  .split('.')
+                                                  .last ??
+                                              'EVENT'),
+                                      style: TextStyle(
+                                        color: color,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                            const SizedBox(height: 12),
+                            Text(
+                              entry.headline,
+                              style: isStory
+                                  ? GoogleFonts.libreBaskerville(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    )
+                                  : GoogleFonts.outfit(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
                             ),
-                          const SizedBox(height: 12),
-                          Text(
-                            entry.headline,
-                            style: isStory
-                                ? GoogleFonts.libreBaskerville(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  )
-                                : GoogleFonts.outfit(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            entry.content,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AppColors.slate400,
-                              fontSize: 14,
-                              height: 1.5,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Divider(color: Colors.white.withValues(alpha: 0.1)),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.calendar_today,
-                                size: 12,
+                            const SizedBox(height: 8),
+                            Text(
+                              entry.content,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
                                 color: AppColors.slate400,
+                                fontSize: 14,
+                                height: 1.5,
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                "${entry.date.day}/${entry.date.month}",
-                                style: const TextStyle(
-                                  color: AppColors.slate400,
-                                  fontSize: 10,
-                                ),
-                              ),
-                              if (entry.location != null) ...[
-                                const SizedBox(width: 12),
+                            ),
+                            const SizedBox(height: 16),
+                            Divider(color: Colors.white.withValues(alpha: 0.1)),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
                                 const Icon(
-                                  Icons.location_on,
+                                  Icons.calendar_today,
                                   size: 12,
-                                  color: AppColors.emerald500,
+                                  color: AppColors.slate400,
                                 ),
                                 const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    entry.location!.name,
-                                    style: const TextStyle(
-                                      color: AppColors.slate400,
-                                      fontSize: 10,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+                                Text(
+                                  "${entry.date.day}/${entry.date.month}",
+                                  style: const TextStyle(
+                                    color: AppColors.slate400,
+                                    fontSize: 10,
                                   ),
                                 ),
+                                if (entry.location != null) ...[
+                                  const SizedBox(width: 12),
+                                  const Icon(
+                                    Icons.location_on,
+                                    size: 12,
+                                    color: AppColors.emerald500,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      entry.location!.name,
+                                      style: const TextStyle(
+                                        color: AppColors.slate400,
+                                        fontSize: 10,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ],
-                            ],
-                          ),
-                        ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
+            )
           ],
         ),
       ),

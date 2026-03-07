@@ -22,15 +22,14 @@ const List<RankingCategory> _defaultCategories = [
 ];
 
 class StorageService {
-  final Store _store;
   late final Box<ObjectBoxJournalEntry> _journalBox;
   late final Box<ObjectBoxRankingCategory> _rankingBox;
   late final Box<ObjectBoxUserSettings> _settingsBox;
 
-  StorageService(this._store)
-      : _journalBox = _store.box<ObjectBoxJournalEntry>(),
-        _rankingBox = _store.box<ObjectBoxRankingCategory>(),
-        _settingsBox = _store.box<ObjectBoxUserSettings>();
+  StorageService(Store store)
+      : _journalBox = store.box<ObjectBoxJournalEntry>(),
+        _rankingBox = store.box<ObjectBoxRankingCategory>(),
+        _settingsBox = store.box<ObjectBoxUserSettings>();
 
   // ─── Journal ────────────────────────────────────────────────────────────
 
@@ -58,6 +57,16 @@ class StorageService {
     }
 
     _journalBox.put(obEntry);
+  }
+
+  Future<void> deleteJournalEntry(String entryId) async {
+    final existing = _journalBox
+        .query(ObjectBoxJournalEntry_.entryId.equals(entryId))
+        .build()
+        .findFirst();
+    if (existing != null) {
+      _journalBox.remove(existing.id);
+    }
   }
 
   // ─── Rankings ───────────────────────────────────────────────────────────

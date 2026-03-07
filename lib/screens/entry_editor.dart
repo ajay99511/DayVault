@@ -8,6 +8,7 @@ import '../widgets/glass_widgets.dart';
 class EntryEditor extends StatefulWidget {
   final DateTime initialDate;
   final EntryType initialType;
+  final JournalEntry? initialEntry;
   final Function(JournalEntry) onSave;
   final VoidCallback onCancel;
 
@@ -15,6 +16,7 @@ class EntryEditor extends StatefulWidget {
     super.key,
     required this.initialDate,
     this.initialType = EntryType.story,
+    this.initialEntry,
     required this.onSave,
     required this.onCancel,
   });
@@ -25,25 +27,32 @@ class EntryEditor extends StatefulWidget {
 
 class _EntryEditorState extends State<EntryEditor> {
   late EntryType type;
-  final TextEditingController _headlineCtrl = TextEditingController();
-  final TextEditingController _contentCtrl = TextEditingController();
-  Mood selectedMood = Mood.happy;
+  late final TextEditingController _headlineCtrl;
+  late final TextEditingController _contentCtrl;
+  late Mood selectedMood;
   String? selectedFeeling;
-  TimeBucket selectedBucket = TimeBucket.morning;
-  List<String> images = [];
+  late TimeBucket selectedBucket;
+  late List<String> images;
   bool showTimePicker = false;
 
   @override
   void initState() {
     super.initState();
-    type = widget.initialType;
+    type = widget.initialEntry?.type ?? widget.initialType;
+    _headlineCtrl = TextEditingController(text: widget.initialEntry?.headline);
+    _contentCtrl = TextEditingController(text: widget.initialEntry?.content);
+    selectedMood = widget.initialEntry?.mood ?? Mood.happy;
+    selectedFeeling = widget.initialEntry?.feeling;
+    selectedBucket = widget.initialEntry?.timeBucket ?? TimeBucket.morning;
+    images = List.from(widget.initialEntry?.images ?? []);
   }
 
   void handleSave() {
     if (_headlineCtrl.text.isEmpty) return;
 
     final entry = JournalEntry(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: widget.initialEntry?.id ??
+          DateTime.now().millisecondsSinceEpoch.toString(),
       type: type,
       date: widget.initialDate,
       headline: _headlineCtrl.text,
