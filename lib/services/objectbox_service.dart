@@ -24,4 +24,12 @@ class ObjectBoxService {
     assert(_instance != null, 'ObjectBoxService.init() must be called first');
     return _instance!;
   }
+
+  /// Close the store (for testing or app shutdown)
+  static Future<void> close() async {
+    if (_instance != null) {
+      _instance!.store.close();
+      _instance = null;
+    }
+  }
 }

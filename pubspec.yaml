@@ -25,6 +25,11 @@ dependencies:
   device_info_plus: ^12.3.0
   battery_plus: ^7.0.0
   system_info2: ^4.1.0
+  crypto: ^3.0.3
+  image_picker: ^1.0.7
+  share_plus: ^7.2.2
+  uuid: ^4.3.3
+  permission_handler: ^11.3.0
 
 dev_dependencies:
   flutter_test:

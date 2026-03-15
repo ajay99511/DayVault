@@ -3,6 +3,7 @@ import '../models/types.dart';
 import '../models/objectbox_models.dart';
 import '../objectbox.g.dart';
 import 'objectbox_service.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 final storageServiceProvider = Provider<StorageService>((ref) {
   return StorageService(ObjectBoxService.instance.store);
@@ -25,6 +26,7 @@ class StorageService {
   late final Box<ObjectBoxJournalEntry> _journalBox;
   late final Box<ObjectBoxRankingCategory> _rankingBox;
   late final Box<ObjectBoxUserSettings> _settingsBox;
+  final FlutterSecureStorage _draftStorage = const FlutterSecureStorage();
 
   StorageService(Store store)
       : _journalBox = store.box<ObjectBoxJournalEntry>(),
@@ -45,7 +47,7 @@ class StorageService {
   }
 
   Future<void> saveJournalEntry(JournalEntry entry) async {
-    final obEntry = ObjectBoxJournalEntry.fromFreezed(entry);
+    final obEntry = await ObjectBoxJournalEntry.fromFreezed(entry);
 
     // Check if entry with this entryId already exists (update case)
     final existing = _journalBox
@@ -199,5 +201,37 @@ class StorageService {
     final obSettings = ObjectBoxUserSettings.fromFreezed(settings);
     _settingsBox.put(obSettings);
     return settings;
+  }
+
+  // ─── Draft Management ───────────────────────────────────────────────────
+
+  /// Save entry draft for auto-save functionality
+  Future<void> saveDraft(String draftId, String draftData) async {
+    await _draftStorage.write(key: 'draft_$draftId', value: draftData);
+  }
+
+  /// Get saved draft by ID
+  Future<String?> getDraft(String draftId) async {
+    return await _draftStorage.read(key: 'draft_$draftId');
+  }
+
+  /// Delete draft by ID
+  Future<void> deleteDraft(String draftId) async {
+    await _draftStorage.delete(key: 'draft_$draftId');
+  }
+
+  /// Get all draft IDs
+  Future<List<String>> getAllDraftIds() async {
+    final drafts = <String>[];
+    // Read all keys and filter for draft keys
+    // Note: flutter_secure_storage doesn't have a getAllKeys method,
+    // so we track draft IDs separately if needed
+    return drafts;
+  }
+
+  /// Clear all drafts (useful after successful save or user logout)
+  Future<void> clearAllDrafts() async {
+    // Implementation depends on tracking draft IDs
+    // For now, drafts are cleared individually after save
   }
 }

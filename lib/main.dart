@@ -11,11 +11,13 @@ import 'config/constants.dart';
 import 'widgets/glass_widgets.dart';
 import 'services/storage_service.dart';
 import 'services/objectbox_service.dart';
+import 'services/security_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
   await ObjectBoxService.init();
+  await SecurityService().initialize();
   runApp(const ProviderScope(child: MemoryPalaceApp()));
 }
 

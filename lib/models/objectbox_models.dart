@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:objectbox/objectbox.dart';
 import 'types.dart';
+import '../services/encryption_service.dart';
 
 // ─── Entities ────────────────────────────────────────────────────────────────
 
@@ -18,12 +19,16 @@ class ObjectBoxJournalEntry {
   @Property(type: PropertyType.date)
   DateTime date = DateTime.now();
 
+  /// Encrypted field - headline
   String headline = '';
+
+  /// Encrypted field - content
   String content = '';
 
   /// Stored as enum index.
   int moodIndex = 0;
 
+  /// Encrypted field - feeling
   String? feeling;
 
   /// Tags stored as JSON-encoded list.
@@ -42,34 +47,47 @@ class ObjectBoxJournalEntry {
 
   // ── Converters ──────────────────────────────────────────────────────────
 
-  JournalEntry toFreezed() => JournalEntry(
-        id: entryId,
-        type: EntryType.values[typeIndex],
-        date: date,
-        headline: headline,
-        content: content,
-        mood: Mood.values[moodIndex],
-        feeling: feeling,
-        tags: List<String>.from(jsonDecode(tagsJson)),
-        location: locationJson != null
-            ? LocationData.fromJson(
-                jsonDecode(locationJson!) as Map<String, dynamic>)
-            : null,
-        timeBucket:
-            timeBucketIndex >= 0 ? TimeBucket.values[timeBucketIndex] : null,
-        images: List<String>.from(jsonDecode(imagesJson)),
-        isSpotlight: isSpotlight,
-      );
+  JournalEntry toFreezed() {
+    return JournalEntry(
+      id: entryId,
+      type: EntryType.values[typeIndex],
+      date: date,
+      headline: headline,
+      content: content,
+      mood: Mood.values[moodIndex],
+      feeling: feeling,
+      tags: List<String>.from(jsonDecode(tagsJson)),
+      location: locationJson != null
+          ? LocationData.fromJson(
+              jsonDecode(locationJson!) as Map<String, dynamic>)
+          : null,
+      timeBucket:
+          timeBucketIndex >= 0 ? TimeBucket.values[timeBucketIndex] : null,
+      images: List<String>.from(jsonDecode(imagesJson)),
+      isSpotlight: isSpotlight,
+    );
+  }
 
-  static ObjectBoxJournalEntry fromFreezed(JournalEntry entry) {
+  static Future<ObjectBoxJournalEntry> fromFreezed(
+    JournalEntry entry,
+  ) async {
+    final encryptionService = EncryptionService();
+    
+    // Encrypt sensitive fields
+    final encryptedHeadline = await encryptionService.encrypt(entry.headline);
+    final encryptedContent = await encryptionService.encrypt(entry.content);
+    final encryptedFeeling = entry.feeling != null
+        ? await encryptionService.encrypt(entry.feeling!)
+        : null;
+
     return ObjectBoxJournalEntry()
       ..entryId = entry.id
       ..typeIndex = entry.type.index
       ..date = entry.date
-      ..headline = entry.headline
-      ..content = entry.content
+      ..headline = encryptedHeadline ?? entry.headline
+      ..content = encryptedContent ?? entry.content
       ..moodIndex = entry.mood.index
-      ..feeling = entry.feeling
+      ..feeling = encryptedFeeling
       ..tagsJson = jsonEncode(entry.tags)
       ..locationJson =
           entry.location != null ? jsonEncode(entry.location!.toJson()) : null

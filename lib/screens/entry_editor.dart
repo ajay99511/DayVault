@@ -1,11 +1,20 @@
-import 'dart:math';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import '../models/types.dart';
 import '../config/constants.dart';
 import '../widgets/glass_widgets.dart';
+import '../services/storage_service.dart';
+import '../services/encryption_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
-class EntryEditor extends StatefulWidget {
+class EntryEditor extends ConsumerStatefulWidget {
   final DateTime initialDate;
   final EntryType initialType;
   final JournalEntry? initialEntry;
@@ -22,10 +31,10 @@ class EntryEditor extends StatefulWidget {
   });
 
   @override
-  State<EntryEditor> createState() => _EntryEditorState();
+  ConsumerState<EntryEditor> createState() => _EntryEditorState();
 }
 
-class _EntryEditorState extends State<EntryEditor> {
+class _EntryEditorState extends ConsumerState<EntryEditor> {
   late EntryType type;
   late final TextEditingController _headlineCtrl;
   late final TextEditingController _contentCtrl;
@@ -35,40 +44,221 @@ class _EntryEditorState extends State<EntryEditor> {
   late List<String> images;
   bool showTimePicker = false;
 
+  // Auto-save functionality
+  Timer? _autoSaveTimer;
+  bool _isSaving = false;
+  bool _hasChanges = false;
+  String? _draftId;
+  static const _autoSaveDelay = Duration(seconds: 3);
+
+  // Image picker
+  final ImagePicker _imagePicker = ImagePicker();
+
   @override
   void initState() {
     super.initState();
     type = widget.initialEntry?.type ?? widget.initialType;
-    _headlineCtrl = TextEditingController(text: widget.initialEntry?.headline);
-    _contentCtrl = TextEditingController(text: widget.initialEntry?.content);
+    _headlineCtrl = TextEditingController(text: widget.initialEntry?.headline ?? '');
+    _contentCtrl = TextEditingController(text: widget.initialEntry?.content ?? '');
     selectedMood = widget.initialEntry?.mood ?? Mood.happy;
     selectedFeeling = widget.initialEntry?.feeling;
     selectedBucket = widget.initialEntry?.timeBucket ?? TimeBucket.morning;
     images = List.from(widget.initialEntry?.images ?? []);
+    
+    // Set draft ID for existing or new entries
+    _draftId = widget.initialEntry?.id ?? const Uuid().v4();
+    
+    // Load any existing draft for new entries
+    if (widget.initialEntry == null) {
+      _loadDraft();
+    }
+    
+    // Setup auto-save listeners
+    _setupAutoSave();
+  }
+  
+  void _setupAutoSave() {
+    _headlineCtrl.addListener(_onTextChanged);
+    _contentCtrl.addListener(_onTextChanged);
+  }
+  
+  void _onTextChanged() {
+    if (!_hasChanges) {
+      setState(() => _hasChanges = true);
+    }
+    
+    // Cancel existing timer
+    _autoSaveTimer?.cancel();
+    
+    // Start new timer for auto-save
+    _autoSaveTimer = Timer(_autoSaveDelay, _saveDraft);
+  }
+  
+  Future<void> _saveDraft() async {
+    if (!_hasChanges || _isSaving) return;
+    
+    setState(() => _isSaving = true);
+    
+    try {
+      final draftData = {
+        'id': _draftId,
+        'type': type.index,
+        'date': widget.initialDate.toIso8601String(),
+        'headline': _headlineCtrl.text,
+        'content': _contentCtrl.text,
+        'mood': selectedMood.index,
+        'feeling': selectedFeeling,
+        'timeBucket': selectedBucket.index,
+        'images': images,
+        'timestamp': DateTime.now().toIso8601String(),
+      };
+      
+      final draftJson = jsonEncode(draftData);
+      
+      // Optionally encrypt the draft
+      final encryptionService = EncryptionService();
+      final encryptedDraft = await encryptionService.encrypt(draftJson);
+      
+      await ref
+          .read(storageServiceProvider)
+          .saveDraft(_draftId!, encryptedDraft ?? draftJson);
+          
+      if (mounted) {
+        setState(() {
+          _hasChanges = false;
+          _isSaving = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Auto-save failed: $e');
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+  
+  Future<void> _loadDraft() async {
+    if (_draftId == null) return;
+    
+    try {
+      final draftJson = await ref
+          .read(storageServiceProvider)
+          .getDraft(_draftId!);
+      
+      if (draftJson != null) {
+        // Try to decrypt first
+        final encryptionService = EncryptionService();
+        final decryptedJson = await encryptionService.decrypt(draftJson);
+        
+        final draftData = jsonDecode(decryptedJson) as Map<String, dynamic>;
+        
+        if (mounted) {
+          setState(() {
+            type = EntryType.values[draftData['type'] as int];
+            _headlineCtrl.text = draftData['headline'] as String;
+            _contentCtrl.text = draftData['content'] as String;
+            selectedMood = Mood.values[draftData['mood'] as int];
+            selectedFeeling = draftData['feeling'] as String?;
+            selectedBucket = TimeBucket.values[draftData['timeBucket'] as int];
+            images = List<String>.from(draftData['images'] as List);
+          });
+          
+          // Show recovery message
+          _showDraftRecoveredSnackbar();
+        }
+      }
+    } catch (e) {
+      debugPrint('Load draft failed: $e');
+    }
+  }
+  
+  void _showDraftRecoveredSnackbar() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Unsaved draft recovered'),
+        backgroundColor: AppColors.indigo500,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'DISCARD',
+          textColor: Colors.white,
+          onPressed: () async {
+            await ref.read(storageServiceProvider).deleteDraft(_draftId!);
+          },
+        ),
+      ),
+    );
+  }
+  
+  Future<void> _clearDraft() async {
+    if (_draftId != null) {
+      await ref.read(storageServiceProvider).deleteDraft(_draftId!);
+    }
+    _autoSaveTimer?.cancel();
   }
 
-  void handleSave() {
-    if (_headlineCtrl.text.isEmpty) return;
+  void handleSave() async {
+    if (_headlineCtrl.text.isEmpty) {
+      _showError('Please add a headline for your entry');
+      return;
+    }
 
-    final entry = JournalEntry(
-      id: widget.initialEntry?.id ??
-          DateTime.now().millisecondsSinceEpoch.toString(),
-      type: type,
-      date: widget.initialDate,
-      headline: _headlineCtrl.text,
-      content: _contentCtrl.text,
-      mood: selectedMood,
-      feeling: selectedFeeling,
-      timeBucket: type == EntryType.event ? selectedBucket : null,
-      images: images,
+    setState(() => _isSaving = true);
+    
+    try {
+      final entry = JournalEntry(
+        id: widget.initialEntry?.id ?? _draftId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        type: type,
+        date: widget.initialDate,
+        headline: _headlineCtrl.text,
+        content: _contentCtrl.text,
+        mood: selectedMood,
+        feeling: selectedFeeling,
+        timeBucket: type == EntryType.event ? selectedBucket : null,
+        images: images,
+      );
+      
+      await widget.onSave(entry);
+      
+      // Clear draft after successful save
+      await _clearDraft();
+      
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    } catch (e) {
+      debugPrint('Save failed: $e');
+      if (mounted) {
+        setState(() => _isSaving = false);
+        _showError('Failed to save entry. Please try again.');
+      }
+    }
+  }
+  
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.rose500,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
-    widget.onSave(entry);
+  }
+
+  @override
+  void dispose() {
+    _autoSaveTimer?.cancel();
+    _headlineCtrl.removeListener(_onTextChanged);
+    _contentCtrl.removeListener(_onTextChanged);
+    _headlineCtrl.dispose();
+    _contentCtrl.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // Base
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
           // Dynamic Background Gradients
@@ -104,7 +294,7 @@ class _EntryEditorState extends State<EntryEditor> {
                         const SizedBox(height: 20),
                         // Date
                         Text(
-                          "${widget.initialDate.weekday == 7 ? 'Sunday' : 'Monday'}, ${widget.initialDate.day}",
+                          "${_getWeekday(widget.initialDate.weekday)}, ${widget.initialDate.day}",
                           style: const TextStyle(
                             color: AppColors.slate400,
                             letterSpacing: 2,
@@ -142,10 +332,35 @@ class _EntryEditorState extends State<EntryEditor> {
                             fontWeight: FontWeight.w900,
                             height: 1.1,
                           ),
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             hintText: 'Headline...',
-                            hintStyle: TextStyle(color: Colors.white24),
+                            hintStyle: const TextStyle(color: Colors.white24),
                             border: InputBorder.none,
+                            suffixIcon: _hasChanges
+                                ? Padding(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (_isSaving)
+                                          const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: AppColors.emerald500,
+                                            ),
+                                          )
+                                        else
+                                          const Icon(
+                                            Icons.edit,
+                                            color: AppColors.amber500,
+                                            size: 18,
+                                          ),
+                                      ],
+                                    ),
+                                  )
+                                : null,
                           ),
                         ),
                         const SizedBox(height: 10),
@@ -168,7 +383,7 @@ class _EntryEditorState extends State<EntryEditor> {
 
                         const SizedBox(height: 40),
                         _buildImageSection(),
-                        const SizedBox(height: 100), // Keyboard spacing
+                        const SizedBox(height: 100),
                       ],
                     ),
                   ),
@@ -183,6 +398,11 @@ class _EntryEditorState extends State<EntryEditor> {
     );
   }
 
+  String _getWeekday(int weekday) {
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    return days[weekday - 1];
+  }
+
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -191,7 +411,13 @@ class _EntryEditorState extends State<EntryEditor> {
         children: [
           IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white54),
-            onPressed: widget.onCancel,
+            onPressed: () async {
+              // Save draft before closing if there are changes
+              if (_hasChanges) {
+                await _saveDraft();
+              }
+              widget.onCancel();
+            },
           ),
           // Type Switcher
           GlassContainer(
@@ -205,8 +431,17 @@ class _EntryEditorState extends State<EntryEditor> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.check, color: AppColors.emerald500),
-            onPressed: handleSave,
+            icon: _isSaving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.emerald500,
+                    ),
+                  )
+                : const Icon(Icons.check, color: AppColors.emerald500),
+            onPressed: _isSaving ? null : handleSave,
           ),
         ],
       ),
@@ -373,7 +608,7 @@ class _EntryEditorState extends State<EntryEditor> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               image: DecorationImage(
-                image: NetworkImage(images.last),
+                image: _getImageProvider(images.last),
                 fit: BoxFit.cover,
               ),
             ),
@@ -382,13 +617,7 @@ class _EntryEditorState extends State<EntryEditor> {
         Row(
           children: [
             GestureDetector(
-              onTap: () {
-                setState(() {
-                  images.add(
-                    "https://picsum.photos/seed/${DateTime.now().millisecondsSinceEpoch}/800/600",
-                  );
-                });
-              },
+              onTap: _pickImage,
               child: Container(
                 width: 60,
                 height: 60,
@@ -412,14 +641,41 @@ class _EntryEditorState extends State<EntryEditor> {
                   itemCount: images.length,
                   itemBuilder: (ctx, i) => Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        images[i],
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.cover,
-                      ),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image(
+                            image: _getImageProvider(images[i]),
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                images.removeAt(i);
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: const BoxDecoration(
+                                color: AppColors.rose500,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.close,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -429,6 +685,46 @@ class _EntryEditorState extends State<EntryEditor> {
         ),
       ],
     );
+  }
+
+  ImageProvider _getImageProvider(String imagePath) {
+    if (imagePath.startsWith('http')) {
+      return NetworkImage(imagePath);
+    }
+    return FileImage(File(imagePath));
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (image != null && mounted) {
+        // Save image to app documents directory
+        final dir = await getApplicationDocumentsDirectory();
+        final imageDir = Directory('${dir.path}/images');
+        
+        if (!await imageDir.exists()) {
+          await imageDir.create(recursive: true);
+        }
+        
+        final fileName = '${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4()}.jpg';
+        final savedImage = await File(image.path).copy('${imageDir.path}/$fileName');
+        
+        setState(() {
+          images.add(savedImage.path);
+        });
+      }
+    } catch (e) {
+      debugPrint('Image pick failed: $e');
+      if (mounted) {
+        _showError('Failed to pick image. Please try again.');
+      }
+    }
   }
 
   Widget _buildRadialTimePickerOverlay() {
@@ -495,8 +791,8 @@ class RadialTimePickerPainter extends CustomPainter {
       AppColors.slate400,
     ];
 
-    double startAngle = -pi / 2;
-    const sweepAngle = 2 * pi / 6;
+    double startAngle = -math.pi / 2;
+    const sweepAngle = 2 * math.pi / 6;
 
     for (int i = 0; i < 6; i++) {
       paint.color = colors[i].withValues(alpha: 0.8);

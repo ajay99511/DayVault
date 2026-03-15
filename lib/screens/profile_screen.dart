@@ -5,6 +5,7 @@ import 'package:battery_plus/battery_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:system_info2/system_info2.dart';
 import '../services/storage_service.dart';
+import '../services/backup_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../config/constants.dart';
@@ -363,6 +364,276 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     ),
                 ],
               ),
+            ),
+            const SizedBox(height: 32),
+
+            // Data Management
+            const Text(
+              "DATA MANAGEMENT",
+              style: TextStyle(
+                color: AppColors.slate400,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            GlassContainer(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  _backupTile(
+                    context,
+                    ref,
+                    title: 'Export Backup',
+                    subtitle: 'Save all your memories securely',
+                    icon: Icons.backup,
+                    iconColor: AppColors.emerald500,
+                    encrypted: true,
+                  ),
+                  Divider(color: Colors.white.withValues(alpha: 0.1)),
+                  _backupTile(
+                    context,
+                    ref,
+                    title: 'Export Unencrypted',
+                    subtitle: 'Readable JSON format (not recommended)',
+                    icon: Icons.file_download,
+                    iconColor: AppColors.amber500,
+                    encrypted: false,
+                  ),
+                  Divider(color: Colors.white.withValues(alpha: 0.1)),
+                  _manageBackupsTile(context, ref),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _backupTile(
+    BuildContext context,
+    WidgetRef ref, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color iconColor,
+    required bool encrypted,
+  }) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: iconColor.withValues(alpha: 0.2),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: iconColor, size: 20),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(color: AppColors.slate400, fontSize: 11),
+      ),
+      trailing: const Icon(Icons.chevron_right, color: AppColors.slate400),
+      onTap: () async {
+        final backupService = ref.read(backupServiceProvider);
+        
+        // Show loading
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => const Center(
+            child: GlassContainer(
+              child: CircularProgressIndicator(color: AppColors.indigo500),
+            ),
+          ),
+        );
+
+        final result = await backupService.exportToFile(encrypted: encrypted);
+        
+        if (context.mounted) {
+          Navigator.pop(context); // Close loading
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                result.success 
+                  ? (result.message ?? 'Backup exported successfully')
+                  : (result.error ?? 'Export failed'),
+              ),
+              backgroundColor: result.success 
+                ? AppColors.emerald500 
+                : AppColors.rose500,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  Widget _manageBackupsTile(BuildContext context, WidgetRef ref) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: AppColors.fuchsia500.withValues(alpha: 0.2),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.folder, color: AppColors.fuchsia500, size: 20),
+      ),
+      title: const Text(
+        'Manage Backups',
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+      ),
+      subtitle: const Text(
+        'View and restore previous backups',
+        style: TextStyle(color: AppColors.slate400, fontSize: 11),
+      ),
+      trailing: const Icon(Icons.chevron_right, color: AppColors.slate400),
+      onTap: () => _showBackupsDialog(context, ref),
+    );
+  }
+
+  void _showBackupsDialog(BuildContext context, WidgetRef ref) async {
+    final backupService = ref.read(backupServiceProvider);
+    final backups = await backupService.listBackups();
+
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: BoxDecoration(
+          color: AppColors.slate900.withValues(alpha: 0.95),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Manage Backups',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white54),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: backups.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.folder_open, size: 48, color: AppColors.slate400),
+                          SizedBox(height: 16),
+                          Text(
+                            'No backups found',
+                            style: TextStyle(color: AppColors.slate400),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: backups.length,
+                      itemBuilder: (ctx, i) {
+                        final backup = backups[i];
+                        return GlassContainer(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              Icon(
+                                backup.isEncrypted ? Icons.lock : Icons.description,
+                                color: backup.isEncrypted
+                                    ? AppColors.emerald500
+                                    : AppColors.amber500,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      backup.name,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${backup.formattedDate} • ${backup.formattedSize}',
+                                      style: const TextStyle(
+                                        color: AppColors.slate400,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: AppColors.rose500),
+                                onPressed: () async {
+                                  final confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (dialog) => AlertDialog(
+                                      backgroundColor: AppColors.slate900,
+                                      title: const Text('Delete Backup?',
+                                          style: TextStyle(color: Colors.white)),
+                                      content: const Text(
+                                          'This action cannot be undone.',
+                                          style: TextStyle(color: Colors.white70)),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(dialog, false),
+                                          child: const Text('CANCEL',
+                                              style: TextStyle(color: AppColors.slate400)),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(dialog, true),
+                                          child: const Text('DELETE',
+                                              style: TextStyle(color: AppColors.rose500)),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  
+                                  if (confirmed == true) {
+                                    await backupService.deleteBackup(backup.path);
+                                    if (ctx.mounted) {
+                                      Navigator.pop(ctx);
+                                      _showBackupsDialog(context, ref);
+                                    }
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),

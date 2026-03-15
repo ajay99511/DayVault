@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Dayvault</string>
+	<string>DayVault</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -26,6 +26,24 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	
+	<!-- Privacy Descriptions for DayVault -->
+	<!-- Camera Access for Memory Photos -->
+	<key>NSCameraUsageDescription</key>
+	<string>DayVault needs camera access to capture photos for your memories.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>DayVault needs photo library access to add images to your journal entries.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>DayVault saves your journal images to the photo library for backup.</string>
+	
+	<!-- Biometric Authentication -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>DayVault uses Face ID to securely unlock your private journal.</string>
+	
+	<!-- File Access for Backups -->
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>DayVault needs file access to save and restore backup files.</string>
+	
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
