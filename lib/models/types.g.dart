@@ -6,6 +6,26 @@ part of 'types.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
+_ImageReference _$ImageReferenceFromJson(Map<String, dynamic> json) =>
+    _ImageReference(
+      source: json['source'] as String,
+      type: $enumDecode(_$ImageSourceTypeEnumMap, json['type']),
+      displayName: json['displayName'] as String?,
+    );
+
+Map<String, dynamic> _$ImageReferenceToJson(_ImageReference instance) =>
+    <String, dynamic>{
+      'source': instance.source,
+      'type': _$ImageSourceTypeEnumMap[instance.type]!,
+      'displayName': instance.displayName,
+    };
+
+const _$ImageSourceTypeEnumMap = {
+  ImageSourceType.galleryAsset: 'galleryAsset',
+  ImageSourceType.webUrl: 'webUrl',
+  ImageSourceType.filePath: 'filePath',
+};
+
 _LocationData _$LocationDataFromJson(Map<String, dynamic> json) =>
     _LocationData(
       name: json['name'] as String,
@@ -37,7 +57,7 @@ _JournalEntry _$JournalEntryFromJson(Map<String, dynamic> json) =>
           : LocationData.fromJson(json['location'] as Map<String, dynamic>),
       timeBucket: $enumDecodeNullable(_$TimeBucketEnumMap, json['timeBucket']),
       images: (json['images'] as List<dynamic>?)
-              ?.map((e) => e as String)
+              ?.map((e) => ImageReference.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const [],
       isSpotlight: json['isSpotlight'] as bool? ?? false,

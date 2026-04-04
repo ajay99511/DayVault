@@ -76,6 +76,30 @@ If your device supports biometrics:
 
 ---
 
+## Local AI Setup (On-Device)
+
+The app now supports local RAG + llama.cpp inference via `llamadart`.
+
+### 1) Place GGUF model files on device
+Copy one or both model files into the app documents `models` folder:
+
+- `<AppDocuments>/models/meta-llama-3.2-1b-instruct-q4km.gguf`
+- `<AppDocuments>/models/meta-llama-3.2-1b-embed-q4km.gguf`
+
+If only one file is present, the app uses it as fallback for both generation and embeddings.
+
+### 2) Open the AI assistant
+- Go to **Journal**
+- Tap the ✨ icon in the header
+- Ask questions about your saved memories
+
+### 3) Background indexing behavior
+- On every save/edit/delete, an embedding job is queued
+- Jobs are processed in background while app is open
+- Interrupted jobs resume next launch
+
+---
+
 ## Using the Calendar
 
 ### View Entries by Month

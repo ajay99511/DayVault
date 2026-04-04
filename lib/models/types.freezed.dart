@@ -13,6 +13,353 @@ part of 'types.dart';
 T _$identity<T>(T value) => value;
 
 /// @nodoc
+mixin _$ImageReference {
+  /// The source identifier: asset ID, URL string, or absolute file path.
+  String get source;
+
+  /// How this image was sourced (determines rendering strategy).
+  ImageSourceType get type;
+
+  /// Optional display name or caption.
+  String? get displayName;
+
+  /// Create a copy of ImageReference
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $ImageReferenceCopyWith<ImageReference> get copyWith =>
+      _$ImageReferenceCopyWithImpl<ImageReference>(
+          this as ImageReference, _$identity);
+
+  /// Serializes this ImageReference to a JSON map.
+  Map<String, dynamic> toJson();
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is ImageReference &&
+            (identical(other.source, source) || other.source == source) &&
+            (identical(other.type, type) || other.type == type) &&
+            (identical(other.displayName, displayName) ||
+                other.displayName == displayName));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, source, type, displayName);
+
+  @override
+  String toString() {
+    return 'ImageReference(source: $source, type: $type, displayName: $displayName)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $ImageReferenceCopyWith<$Res> {
+  factory $ImageReferenceCopyWith(
+          ImageReference value, $Res Function(ImageReference) _then) =
+      _$ImageReferenceCopyWithImpl;
+  @useResult
+  $Res call({String source, ImageSourceType type, String? displayName});
+}
+
+/// @nodoc
+class _$ImageReferenceCopyWithImpl<$Res>
+    implements $ImageReferenceCopyWith<$Res> {
+  _$ImageReferenceCopyWithImpl(this._self, this._then);
+
+  final ImageReference _self;
+  final $Res Function(ImageReference) _then;
+
+  /// Create a copy of ImageReference
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? source = null,
+    Object? type = null,
+    Object? displayName = freezed,
+  }) {
+    return _then(_self.copyWith(
+      source: null == source
+          ? _self.source
+          : source // ignore: cast_nullable_to_non_nullable
+              as String,
+      type: null == type
+          ? _self.type
+          : type // ignore: cast_nullable_to_non_nullable
+              as ImageSourceType,
+      displayName: freezed == displayName
+          ? _self.displayName
+          : displayName // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ));
+  }
+}
+
+/// Adds pattern-matching-related methods to [ImageReference].
+extension ImageReferencePatterns on ImageReference {
+  /// A variant of `map` that fallback to returning `orElse`.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case _:
+  ///     return orElse();
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>(
+    TResult Function(_ImageReference value)? $default, {
+    required TResult orElse(),
+  }) {
+    final _that = this;
+    switch (_that) {
+      case _ImageReference() when $default != null:
+        return $default(_that);
+      case _:
+        return orElse();
+    }
+  }
+
+  /// A `switch`-like method, using callbacks.
+  ///
+  /// Callbacks receives the raw object, upcasted.
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case final Subclass2 value:
+  ///     return ...;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>(
+    TResult Function(_ImageReference value) $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _ImageReference():
+        return $default(_that);
+      case _:
+        throw StateError('Unexpected subclass');
+    }
+  }
+
+  /// A variant of `map` that fallback to returning `null`.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case _:
+  ///     return null;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>(
+    TResult? Function(_ImageReference value)? $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _ImageReference() when $default != null:
+        return $default(_that);
+      case _:
+        return null;
+    }
+  }
+
+  /// A variant of `when` that fallback to an `orElse` callback.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case _:
+  ///     return orElse();
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>(
+    TResult Function(String source, ImageSourceType type, String? displayName)?
+        $default, {
+    required TResult orElse(),
+  }) {
+    final _that = this;
+    switch (_that) {
+      case _ImageReference() when $default != null:
+        return $default(_that.source, _that.type, _that.displayName);
+      case _:
+        return orElse();
+    }
+  }
+
+  /// A `switch`-like method, using callbacks.
+  ///
+  /// As opposed to `map`, this offers destructuring.
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case Subclass2(:final field2):
+  ///     return ...;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>(
+    TResult Function(String source, ImageSourceType type, String? displayName)
+        $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _ImageReference():
+        return $default(_that.source, _that.type, _that.displayName);
+      case _:
+        throw StateError('Unexpected subclass');
+    }
+  }
+
+  /// A variant of `when` that fallback to returning `null`
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case _:
+  ///     return null;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>(
+    TResult? Function(String source, ImageSourceType type, String? displayName)?
+        $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _ImageReference() when $default != null:
+        return $default(_that.source, _that.type, _that.displayName);
+      case _:
+        return null;
+    }
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _ImageReference implements ImageReference {
+  const _ImageReference(
+      {required this.source, required this.type, this.displayName});
+  factory _ImageReference.fromJson(Map<String, dynamic> json) =>
+      _$ImageReferenceFromJson(json);
+
+  /// The source identifier: asset ID, URL string, or absolute file path.
+  @override
+  final String source;
+
+  /// How this image was sourced (determines rendering strategy).
+  @override
+  final ImageSourceType type;
+
+  /// Optional display name or caption.
+  @override
+  final String? displayName;
+
+  /// Create a copy of ImageReference
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  _$ImageReferenceCopyWith<_ImageReference> get copyWith =>
+      __$ImageReferenceCopyWithImpl<_ImageReference>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$ImageReferenceToJson(
+      this,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _ImageReference &&
+            (identical(other.source, source) || other.source == source) &&
+            (identical(other.type, type) || other.type == type) &&
+            (identical(other.displayName, displayName) ||
+                other.displayName == displayName));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, source, type, displayName);
+
+  @override
+  String toString() {
+    return 'ImageReference(source: $source, type: $type, displayName: $displayName)';
+  }
+}
+
+/// @nodoc
+abstract mixin class _$ImageReferenceCopyWith<$Res>
+    implements $ImageReferenceCopyWith<$Res> {
+  factory _$ImageReferenceCopyWith(
+          _ImageReference value, $Res Function(_ImageReference) _then) =
+      __$ImageReferenceCopyWithImpl;
+  @override
+  @useResult
+  $Res call({String source, ImageSourceType type, String? displayName});
+}
+
+/// @nodoc
+class __$ImageReferenceCopyWithImpl<$Res>
+    implements _$ImageReferenceCopyWith<$Res> {
+  __$ImageReferenceCopyWithImpl(this._self, this._then);
+
+  final _ImageReference _self;
+  final $Res Function(_ImageReference) _then;
+
+  /// Create a copy of ImageReference
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? source = null,
+    Object? type = null,
+    Object? displayName = freezed,
+  }) {
+    return _then(_ImageReference(
+      source: null == source
+          ? _self.source
+          : source // ignore: cast_nullable_to_non_nullable
+              as String,
+      type: null == type
+          ? _self.type
+          : type // ignore: cast_nullable_to_non_nullable
+              as ImageSourceType,
+      displayName: freezed == displayName
+          ? _self.displayName
+          : displayName // ignore: cast_nullable_to_non_nullable
+              as String?,
+    ));
+  }
+}
+
+/// @nodoc
 mixin _$LocationData {
   String get name;
   double get latitude;
@@ -360,7 +707,7 @@ mixin _$JournalEntry {
   List<String> get tags;
   LocationData? get location;
   TimeBucket? get timeBucket;
-  List<String> get images;
+  List<ImageReference> get images;
   bool get isSpotlight;
 
   /// Create a copy of JournalEntry
@@ -437,7 +784,7 @@ abstract mixin class $JournalEntryCopyWith<$Res> {
       List<String> tags,
       LocationData? location,
       TimeBucket? timeBucket,
-      List<String> images,
+      List<ImageReference> images,
       bool isSpotlight});
 
   $LocationDataCopyWith<$Res>? get location;
@@ -512,7 +859,7 @@ class _$JournalEntryCopyWithImpl<$Res> implements $JournalEntryCopyWith<$Res> {
       images: null == images
           ? _self.images
           : images // ignore: cast_nullable_to_non_nullable
-              as List<String>,
+              as List<ImageReference>,
       isSpotlight: null == isSpotlight
           ? _self.isSpotlight
           : isSpotlight // ignore: cast_nullable_to_non_nullable
@@ -639,7 +986,7 @@ extension JournalEntryPatterns on JournalEntry {
             List<String> tags,
             LocationData? location,
             TimeBucket? timeBucket,
-            List<String> images,
+            List<ImageReference> images,
             bool isSpotlight)?
         $default, {
     required TResult orElse(),
@@ -691,7 +1038,7 @@ extension JournalEntryPatterns on JournalEntry {
             List<String> tags,
             LocationData? location,
             TimeBucket? timeBucket,
-            List<String> images,
+            List<ImageReference> images,
             bool isSpotlight)
         $default,
   ) {
@@ -741,7 +1088,7 @@ extension JournalEntryPatterns on JournalEntry {
             List<String> tags,
             LocationData? location,
             TimeBucket? timeBucket,
-            List<String> images,
+            List<ImageReference> images,
             bool isSpotlight)?
         $default,
   ) {
@@ -781,7 +1128,7 @@ class _JournalEntry implements JournalEntry {
       final List<String> tags = const [],
       this.location,
       this.timeBucket,
-      final List<String> images = const [],
+      final List<ImageReference> images = const [],
       this.isSpotlight = false})
       : _tags = tags,
         _images = images;
@@ -815,10 +1162,10 @@ class _JournalEntry implements JournalEntry {
   final LocationData? location;
   @override
   final TimeBucket? timeBucket;
-  final List<String> _images;
+  final List<ImageReference> _images;
   @override
   @JsonKey()
-  List<String> get images {
+  List<ImageReference> get images {
     if (_images is EqualUnmodifiableListView) return _images;
     // ignore: implicit_dynamic_type
     return EqualUnmodifiableListView(_images);
@@ -908,7 +1255,7 @@ abstract mixin class _$JournalEntryCopyWith<$Res>
       List<String> tags,
       LocationData? location,
       TimeBucket? timeBucket,
-      List<String> images,
+      List<ImageReference> images,
       bool isSpotlight});
 
   @override
@@ -985,7 +1332,7 @@ class __$JournalEntryCopyWithImpl<$Res>
       images: null == images
           ? _self._images
           : images // ignore: cast_nullable_to_non_nullable
-              as List<String>,
+              as List<ImageReference>,
       isSpotlight: null == isSpotlight
           ? _self.isSpotlight
           : isSpotlight // ignore: cast_nullable_to_non_nullable

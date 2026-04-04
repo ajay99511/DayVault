@@ -230,9 +230,31 @@ class BackupService {
       timeBucket: data['timeBucket'] != null
           ? TimeBucket.values[data['timeBucket'] as int]
           : null,
-      images: (data['images'] as List?)?.map((e) => e as String).toList() ?? [],
+      images: _parseBackupImages(data['images'] as List?),
       isSpotlight: data['isSpotlight'] as bool? ?? false,
     );
+  }
+
+  /// Parse images from backup data (backward compatible).
+  static List<ImageReference> _parseBackupImages(List? rawImages) {
+    if (rawImages == null || rawImages.isEmpty) return [];
+
+    final first = rawImages.first;
+    if (first is Map && first.containsKey('source')) {
+      // New format: ImageReference JSON
+      return rawImages
+          .map((m) => ImageReference.fromJson(m as Map<String, dynamic>))
+          .toList();
+    } else if (first is String) {
+      // Old format: plain file paths
+      return rawImages
+          .map((path) => ImageReference(
+                source: path as String,
+                type: ImageSourceType.filePath,
+              ))
+          .toList();
+    }
+    return [];
   }
 
   /// Get backup directory path

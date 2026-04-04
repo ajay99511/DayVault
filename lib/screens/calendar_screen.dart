@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
+import '../widgets/image_widgets.dart';
 import '../services/storage_service.dart';
 import '../widgets/glass_widgets.dart';
 import '../config/constants.dart';
@@ -640,11 +641,15 @@ class DayDetailSheet extends StatelessWidget {
                                               child: ClipRRect(
                                                 borderRadius:
                                                     BorderRadius.circular(8),
-                                                child: Image.network(
-                                                    entry.images.first,
-                                                    height: 60,
-                                                    width: 60,
-                                                    fit: BoxFit.cover),
+                                                child: SizedBox(
+                                                  width: 60,
+                                                  height: 60,
+                                                  child: ImageThumbnailWidget(
+                                                    imageRef:
+                                                        entry.images.first,
+                                                    fit: BoxFit.cover,
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                           Text(entry.headline,

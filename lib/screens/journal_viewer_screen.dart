@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../services/storage_service.dart';
 import '../widgets/glass_widgets.dart';
+import '../widgets/image_widgets.dart';
 import '../config/constants.dart';
 import 'entry_editor.dart';
 
@@ -137,28 +138,96 @@ class JournalViewerScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Hero Image
+                        // Hero Image Carousel
                         if (entry.images.isNotEmpty)
-                          Container(
-                            height: 300,
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              image: DecorationImage(
-                                image: NetworkImage(entry.images.first),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            alignment: Alignment.bottomRight,
-                            padding: const EdgeInsets.all(16),
-                            child: GlassContainer(
-                              borderRadius: 16,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
-                              child: Text(
-                                moodIcons[entry.mood] ?? '',
-                                style: const TextStyle(fontSize: 32),
-                              ),
-                            ),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final carouselHeight =
+                                  (constraints.maxWidth * 9 / 16).clamp(200.0, 400.0);
+                              return SizedBox(
+                                height: carouselHeight,
+                                width: double.infinity,
+                                child: entry.images.length == 1
+                                    ? Stack(
+                                        children: [
+                                          ImageThumbnailWidget(
+                                            imageRef: entry.images.first,
+                                            fit: BoxFit.cover,
+                                            showTapToZoom: true,
+                                          ),
+                                          Positioned(
+                                            bottom: 12,
+                                            right: 12,
+                                            child: GlassContainer(
+                                              borderRadius: 16,
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 12, vertical: 6),
+                                              child: Text(
+                                                moodIcons[entry.mood] ?? '',
+                                                style: const TextStyle(fontSize: 28),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    : PageView.builder(
+                                        itemCount: entry.images.length,
+                                        itemBuilder: (context, index) {
+                                          return Stack(
+                                            children: [
+                                              ImageThumbnailWidget(
+                                                imageRef: entry.images[index],
+                                                fit: BoxFit.cover,
+                                                showTapToZoom: true,
+                                              ),
+                                              if (index == 0)
+                                                Positioned(
+                                                  bottom: 12,
+                                                  right: 12,
+                                                  child: GlassContainer(
+                                                    borderRadius: 16,
+                                                    padding: const EdgeInsets.symmetric(
+                                                        horizontal: 12, vertical: 6),
+                                                    child: Text(
+                                                      moodIcons[entry.mood] ?? '',
+                                                      style:
+                                                          const TextStyle(fontSize: 28),
+                                                    ),
+                                                  ),
+                                                ),
+                                              // Page indicator
+                                              Positioned(
+                                                bottom: 12,
+                                                left: 0,
+                                                right: 0,
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: List.generate(
+                                                    entry.images.length,
+                                                    (i) => Container(
+                                                      margin: const EdgeInsets.symmetric(
+                                                          horizontal: 3),
+                                                      width: 8,
+                                                      height: 8,
+                                                      decoration: BoxDecoration(
+                                                        shape: BoxShape.circle,
+                                                        color: i == index
+                                                            ? Colors.white
+                                                            : Colors.white
+                                                                .withValues(
+                                                                    alpha: 0.4),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                              );
+                            },
                           ),
 
                         Padding(

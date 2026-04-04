@@ -148,10 +148,121 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "4:3585901973835889874",
+      "lastPropertyId": "8:509789025720057401",
+      "name": "ObjectBoxEmbeddingJob",
+      "properties": [
+        {
+          "id": "1:1117379515218973791",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:3556872439417552466",
+          "name": "jobKey",
+          "indexId": "3:3001375219029302713",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:4189005047439268110",
+          "name": "entryId",
+          "type": 9
+        },
+        {
+          "id": "4:8551531285995295237",
+          "name": "opType",
+          "type": 6
+        },
+        {
+          "id": "5:2364649399267191259",
+          "name": "attempts",
+          "type": 6
+        },
+        {
+          "id": "6:8227048881256491829",
+          "name": "lastError",
+          "type": 9
+        },
+        {
+          "id": "7:8487461759383572385",
+          "name": "createdAt",
+          "type": 10
+        },
+        {
+          "id": "8:509789025720057401",
+          "name": "updatedAt",
+          "type": 10
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "5:7733320435101555191",
+      "lastPropertyId": "9:8942645322932569868",
+      "name": "ObjectBoxJournalChunk",
+      "properties": [
+        {
+          "id": "1:2646373858487337960",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:7870407646578146866",
+          "name": "chunkId",
+          "indexId": "4:214616834619001268",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:3863920216845296392",
+          "name": "entryId",
+          "indexId": "5:3288082502696320167",
+          "type": 9,
+          "flags": 2048
+        },
+        {
+          "id": "4:5453253298598396387",
+          "name": "chunkIndex",
+          "type": 6
+        },
+        {
+          "id": "5:9089136160744572825",
+          "name": "tokenEstimate",
+          "type": 6
+        },
+        {
+          "id": "6:5504773770273968173",
+          "name": "chunkText",
+          "type": 9
+        },
+        {
+          "id": "7:8100802078076063927",
+          "name": "embeddingModelId",
+          "type": 9
+        },
+        {
+          "id": "8:8046139973925328996",
+          "name": "embedding",
+          "indexId": "6:6377407347351135660",
+          "type": 28,
+          "flags": 8
+        },
+        {
+          "id": "9:8942645322932569868",
+          "name": "updatedAt",
+          "type": 10
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "3:3031694957752151615",
-  "lastIndexId": "2:226733456472232181",
+  "lastEntityId": "5:7733320435101555191",
+  "lastIndexId": "6:6377407347351135660",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

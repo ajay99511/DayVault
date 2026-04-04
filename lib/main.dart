@@ -12,6 +12,7 @@ import 'widgets/glass_widgets.dart';
 import 'services/storage_service.dart';
 import 'services/objectbox_service.dart';
 import 'services/security_service.dart';
+import 'services/rag_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,6 +60,8 @@ class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
   @override
   void initState() {
     super.initState();
+    // Start background embedding/index worker early.
+    ref.read(ragServiceProvider);
     _checkSecurity();
   }
 

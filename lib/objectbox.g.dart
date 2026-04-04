@@ -189,6 +189,137 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(4, 3585901973835889874),
+    name: 'ObjectBoxEmbeddingJob',
+    lastPropertyId: const obx_int.IdUid(8, 509789025720057401),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 1117379515218973791),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 3556872439417552466),
+        name: 'jobKey',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(3, 3001375219029302713),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 4189005047439268110),
+        name: 'entryId',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 8551531285995295237),
+        name: 'opType',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 2364649399267191259),
+        name: 'attempts',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 8227048881256491829),
+        name: 'lastError',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 8487461759383572385),
+        name: 'createdAt',
+        type: 10,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 509789025720057401),
+        name: 'updatedAt',
+        type: 10,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(5, 7733320435101555191),
+    name: 'ObjectBoxJournalChunk',
+    lastPropertyId: const obx_int.IdUid(9, 8942645322932569868),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 2646373858487337960),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 7870407646578146866),
+        name: 'chunkId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(4, 214616834619001268),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 3863920216845296392),
+        name: 'entryId',
+        type: 9,
+        flags: 2048,
+        indexId: const obx_int.IdUid(5, 3288082502696320167),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 5453253298598396387),
+        name: 'chunkIndex',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 9089136160744572825),
+        name: 'tokenEstimate',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 5504773770273968173),
+        name: 'chunkText',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 8100802078076063927),
+        name: 'embeddingModelId',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 8046139973925328996),
+        name: 'embedding',
+        type: 28,
+        flags: 8,
+        indexId: const obx_int.IdUid(6, 6377407347351135660),
+        hnswParams: obx_int.ModelHnswParams(
+          dimensions: 768,
+          distanceType: 2,
+          vectorCacheHintSizeKB: 262144,
+        ),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(9, 8942645322932569868),
+        name: 'updatedAt',
+        type: 10,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -234,8 +365,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(3, 3031694957752151615),
-    lastIndexId: const obx_int.IdUid(2, 226733456472232181),
+    lastEntityId: const obx_int.IdUid(5, 7733320435101555191),
+    lastIndexId: const obx_int.IdUid(6, 6377407347351135660),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -436,6 +567,132 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    ObjectBoxEmbeddingJob: obx_int.EntityDefinition<ObjectBoxEmbeddingJob>(
+      model: _entities[3],
+      toOneRelations: (ObjectBoxEmbeddingJob object) => [],
+      toManyRelations: (ObjectBoxEmbeddingJob object) => {},
+      getId: (ObjectBoxEmbeddingJob object) => object.id,
+      setId: (ObjectBoxEmbeddingJob object, int id) {
+        object.id = id;
+      },
+      objectToFB: (ObjectBoxEmbeddingJob object, fb.Builder fbb) {
+        final jobKeyOffset = fbb.writeString(object.jobKey);
+        final entryIdOffset = fbb.writeString(object.entryId);
+        final lastErrorOffset = object.lastError == null
+            ? null
+            : fbb.writeString(object.lastError!);
+        fbb.startTable(9);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, jobKeyOffset);
+        fbb.addOffset(2, entryIdOffset);
+        fbb.addInt64(3, object.opType);
+        fbb.addInt64(4, object.attempts);
+        fbb.addOffset(5, lastErrorOffset);
+        fbb.addInt64(6, object.createdAt.millisecondsSinceEpoch);
+        fbb.addInt64(7, object.updatedAt.millisecondsSinceEpoch);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+
+        final object = ObjectBoxEmbeddingJob()
+          ..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0)
+          ..jobKey = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 6, '')
+          ..entryId = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 8, '')
+          ..opType = const fb.Int64Reader().vTableGet(buffer, rootOffset, 10, 0)
+          ..attempts = const fb.Int64Reader().vTableGet(
+            buffer,
+            rootOffset,
+            12,
+            0,
+          )
+          ..lastError = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGetNullable(buffer, rootOffset, 14)
+          ..createdAt = DateTime.fromMillisecondsSinceEpoch(
+            const fb.Int64Reader().vTableGet(buffer, rootOffset, 16, 0),
+          )
+          ..updatedAt = DateTime.fromMillisecondsSinceEpoch(
+            const fb.Int64Reader().vTableGet(buffer, rootOffset, 18, 0),
+          );
+
+        return object;
+      },
+    ),
+    ObjectBoxJournalChunk: obx_int.EntityDefinition<ObjectBoxJournalChunk>(
+      model: _entities[4],
+      toOneRelations: (ObjectBoxJournalChunk object) => [],
+      toManyRelations: (ObjectBoxJournalChunk object) => {},
+      getId: (ObjectBoxJournalChunk object) => object.id,
+      setId: (ObjectBoxJournalChunk object, int id) {
+        object.id = id;
+      },
+      objectToFB: (ObjectBoxJournalChunk object, fb.Builder fbb) {
+        final chunkIdOffset = fbb.writeString(object.chunkId);
+        final entryIdOffset = fbb.writeString(object.entryId);
+        final chunkTextOffset = fbb.writeString(object.chunkText);
+        final embeddingModelIdOffset = fbb.writeString(object.embeddingModelId);
+        final embeddingOffset = fbb.writeListFloat32(object.embedding);
+        fbb.startTable(10);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, chunkIdOffset);
+        fbb.addOffset(2, entryIdOffset);
+        fbb.addInt64(3, object.chunkIndex);
+        fbb.addInt64(4, object.tokenEstimate);
+        fbb.addOffset(5, chunkTextOffset);
+        fbb.addOffset(6, embeddingModelIdOffset);
+        fbb.addOffset(7, embeddingOffset);
+        fbb.addInt64(8, object.updatedAt.millisecondsSinceEpoch);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+
+        final object = ObjectBoxJournalChunk()
+          ..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0)
+          ..chunkId = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 6, '')
+          ..entryId = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 8, '')
+          ..chunkIndex = const fb.Int64Reader().vTableGet(
+            buffer,
+            rootOffset,
+            10,
+            0,
+          )
+          ..tokenEstimate = const fb.Int64Reader().vTableGet(
+            buffer,
+            rootOffset,
+            12,
+            0,
+          )
+          ..chunkText = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 14, '')
+          ..embeddingModelId = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 16, '')
+          ..embedding = const fb.ListReader<double>(
+            fb.Float32Reader(),
+            lazy: false,
+          ).vTableGet(buffer, rootOffset, 18, [])
+          ..updatedAt = DateTime.fromMillisecondsSinceEpoch(
+            const fb.Int64Reader().vTableGet(buffer, rootOffset, 20, 0),
+          );
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -564,5 +821,97 @@ class ObjectBoxUserSettings_ {
   /// See [ObjectBoxUserSettings.theme].
   static final theme = obx.QueryStringProperty<ObjectBoxUserSettings>(
     _entities[2].properties[3],
+  );
+}
+
+/// [ObjectBoxEmbeddingJob] entity fields to define ObjectBox queries.
+class ObjectBoxEmbeddingJob_ {
+  /// See [ObjectBoxEmbeddingJob.id].
+  static final id = obx.QueryIntegerProperty<ObjectBoxEmbeddingJob>(
+    _entities[3].properties[0],
+  );
+
+  /// See [ObjectBoxEmbeddingJob.jobKey].
+  static final jobKey = obx.QueryStringProperty<ObjectBoxEmbeddingJob>(
+    _entities[3].properties[1],
+  );
+
+  /// See [ObjectBoxEmbeddingJob.entryId].
+  static final entryId = obx.QueryStringProperty<ObjectBoxEmbeddingJob>(
+    _entities[3].properties[2],
+  );
+
+  /// See [ObjectBoxEmbeddingJob.opType].
+  static final opType = obx.QueryIntegerProperty<ObjectBoxEmbeddingJob>(
+    _entities[3].properties[3],
+  );
+
+  /// See [ObjectBoxEmbeddingJob.attempts].
+  static final attempts = obx.QueryIntegerProperty<ObjectBoxEmbeddingJob>(
+    _entities[3].properties[4],
+  );
+
+  /// See [ObjectBoxEmbeddingJob.lastError].
+  static final lastError = obx.QueryStringProperty<ObjectBoxEmbeddingJob>(
+    _entities[3].properties[5],
+  );
+
+  /// See [ObjectBoxEmbeddingJob.createdAt].
+  static final createdAt = obx.QueryDateProperty<ObjectBoxEmbeddingJob>(
+    _entities[3].properties[6],
+  );
+
+  /// See [ObjectBoxEmbeddingJob.updatedAt].
+  static final updatedAt = obx.QueryDateProperty<ObjectBoxEmbeddingJob>(
+    _entities[3].properties[7],
+  );
+}
+
+/// [ObjectBoxJournalChunk] entity fields to define ObjectBox queries.
+class ObjectBoxJournalChunk_ {
+  /// See [ObjectBoxJournalChunk.id].
+  static final id = obx.QueryIntegerProperty<ObjectBoxJournalChunk>(
+    _entities[4].properties[0],
+  );
+
+  /// See [ObjectBoxJournalChunk.chunkId].
+  static final chunkId = obx.QueryStringProperty<ObjectBoxJournalChunk>(
+    _entities[4].properties[1],
+  );
+
+  /// See [ObjectBoxJournalChunk.entryId].
+  static final entryId = obx.QueryStringProperty<ObjectBoxJournalChunk>(
+    _entities[4].properties[2],
+  );
+
+  /// See [ObjectBoxJournalChunk.chunkIndex].
+  static final chunkIndex = obx.QueryIntegerProperty<ObjectBoxJournalChunk>(
+    _entities[4].properties[3],
+  );
+
+  /// See [ObjectBoxJournalChunk.tokenEstimate].
+  static final tokenEstimate = obx.QueryIntegerProperty<ObjectBoxJournalChunk>(
+    _entities[4].properties[4],
+  );
+
+  /// See [ObjectBoxJournalChunk.chunkText].
+  static final chunkText = obx.QueryStringProperty<ObjectBoxJournalChunk>(
+    _entities[4].properties[5],
+  );
+
+  /// See [ObjectBoxJournalChunk.embeddingModelId].
+  static final embeddingModelId =
+      obx.QueryStringProperty<ObjectBoxJournalChunk>(
+        _entities[4].properties[6],
+      );
+
+  /// See [ObjectBoxJournalChunk.embedding].
+  static final embedding = obx.QueryHnswProperty<ObjectBoxJournalChunk>(
+    _entities[4].properties[7],
+  );
+
+  /// See [ObjectBoxJournalChunk.updatedAt].
+  static final updatedAt = obx.QueryDateProperty<ObjectBoxJournalChunk>(
+    _entities[4].properties[8],
   );
 }

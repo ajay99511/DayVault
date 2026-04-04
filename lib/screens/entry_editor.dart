@@ -1,16 +1,19 @@
+// ignore_for_file: use_build_context_synchronously
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
+import 'package:photo_manager/photo_manager.dart';
+import 'package:file_picker/file_picker.dart';
 import '../models/types.dart';
 import '../config/constants.dart';
 import '../widgets/glass_widgets.dart';
+import '../widgets/image_widgets.dart';
 import '../services/storage_service.dart';
 import '../services/encryption_service.dart';
+import '../services/image_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -41,7 +44,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
   late Mood selectedMood;
   String? selectedFeeling;
   late TimeBucket selectedBucket;
-  late List<String> images;
+  late List<ImageReference> images;
   bool showTimePicker = false;
 
   // Auto-save functionality
@@ -50,9 +53,6 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
   bool _hasChanges = false;
   String? _draftId;
   static const _autoSaveDelay = Duration(seconds: 3);
-
-  // Image picker
-  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -109,7 +109,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
         'mood': selectedMood.index,
         'feeling': selectedFeeling,
         'timeBucket': selectedBucket.index,
-        'images': images,
+        'images': images.map((img) => img.toJson()).toList(),
         'timestamp': DateTime.now().toIso8601String(),
       };
       
@@ -160,7 +160,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
             selectedMood = Mood.values[draftData['mood'] as int];
             selectedFeeling = draftData['feeling'] as String?;
             selectedBucket = TimeBucket.values[draftData['timeBucket'] as int];
-            images = List<String>.from(draftData['images'] as List);
+            images = _parseDraftImages(draftData['images'] as List?);
           });
           
           // Show recovery message
@@ -601,130 +601,365 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
   Widget _buildImageSection() {
     return Column(
       children: [
-        if (images.isNotEmpty)
-          Container(
-            height: 200,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              image: DecorationImage(
-                image: _getImageProvider(images.last),
-                fit: BoxFit.cover,
-              ),
-            ),
+        const Text(
+          'Images',
+          style: TextStyle(
+            color: AppColors.slate400,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
           ),
-        const SizedBox(height: 12),
+        ),
+        const SizedBox(height: 8),
+        // Add image buttons
         Row(
           children: [
-            GestureDetector(
-              onTap: _pickImage,
-              child: Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Colors.white24,
-                    style: BorderStyle.solid,
+            _addImageButton(Icons.photo_library, 'Gallery', _pickFromGallery),
+            const SizedBox(width: 8),
+            _addImageButton(Icons.link, 'URL', _addFromUrl),
+            const SizedBox(width: 8),
+            _addImageButton(Icons.folder_open, 'Files', _pickFromFile),
+          ],
+        ),
+        if (images.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          // Preview of last added image — responsive aspect ratio
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final previewHeight =
+                    (constraints.maxWidth * 9 / 16).clamp(120.0, 250.0);
+                return SizedBox(
+                  height: previewHeight,
+                  width: double.infinity,
+                  child: ImageThumbnailWidget(
+                    imageRef: images.last,
+                    fit: BoxFit.cover,
+                    showTapToZoom: true,
                   ),
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.white.withValues(alpha: 0.05),
-                ),
-                child: const Icon(Icons.add_a_photo, color: Colors.white54),
-              ),
+                );
+              },
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: SizedBox(
-                height: 60,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: images.length,
-                  itemBuilder: (ctx, i) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
+          ),
+        ],
+        if (images.length > 1) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 76,
+            child: ReorderableListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: images.length,
+              onReorder: _reorderImages,
+              buildDefaultDragHandles: false,
+              itemBuilder: (context, index) {
+                return Padding(
+                  key: ValueKey('${images[index].source}_$index'),
+                  padding: const EdgeInsets.only(right: 8),
+                  child: SizedBox(
+                    width: 68,
+                    height: 68,
                     child: Stack(
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image(
-                            image: _getImageProvider(images[i]),
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                images.removeAt(i);
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: const BoxDecoration(
-                                color: AppColors.rose500,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.close,
-                                size: 12,
-                                color: Colors.white,
+                        // Image thumbnail
+                        Positioned.fill(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: GestureDetector(
+                              onTap: () {
+                                // Move this image to preview
+                                setState(() {
+                                  final item = images.removeAt(index);
+                                  images.add(item);
+                                });
+                              },
+                              child: ImageThumbnailWidget(
+                                imageRef: images[index],
+                                fit: BoxFit.cover,
+                                showTapToZoom: true,
                               ),
                             ),
+                          ),
+                        ),
+                        // Delete button
+                        Positioned(
+                          top: 2,
+                          right: 2,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  images.removeAt(index);
+                                });
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: const BoxDecoration(
+                                  color: AppColors.rose500,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 12,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Drag handle indicator
+                        Positioned(
+                          bottom: 3,
+                          left: 3,
+                          child: Icon(
+                            Icons.drag_indicator,
+                            size: 14,
+                            color: Colors.white.withValues(alpha: 0.7),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ],
     );
   }
 
-  ImageProvider _getImageProvider(String imagePath) {
-    if (imagePath.startsWith('http')) {
-      return NetworkImage(imagePath);
-    }
-    return FileImage(File(imagePath));
+  Widget _addImageButton(IconData icon, String label, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: Colors.white24,
+              style: BorderStyle.solid,
+            ),
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white.withValues(alpha: 0.05),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white54, size: 20),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  Future<void> _pickImage() async {
+  /// Pick image from device gallery using photo_manager (no copy, persistent ID).
+  Future<void> _pickFromGallery() async {
     try {
-      final XFile? image = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1920,
-        maxHeight: 1080,
-        imageQuality: 85,
+      // Request permission
+      final PermissionState permState = await PhotoManager.requestPermissionExtend();
+      if (!permState.isAuth) {
+        if (mounted) {
+          _showError('Gallery permission is required. Please enable it in settings.');
+        }
+        return;
+      }
+
+      // Get recent assets
+      final List<AssetPathEntity> paths = await PhotoManager.getAssetPathList(
+        type: RequestType.image,
+        hasAll: true,
       );
 
-      if (image != null && mounted) {
-        // Save image to app documents directory
-        final dir = await getApplicationDocumentsDirectory();
-        final imageDir = Directory('${dir.path}/images');
-        
-        if (!await imageDir.exists()) {
-          await imageDir.create(recursive: true);
-        }
-        
-        final fileName = '${DateTime.now().millisecondsSinceEpoch}_${const Uuid().v4()}.jpg';
-        final savedImage = await File(image.path).copy('${imageDir.path}/$fileName');
-        
+      if (paths.isEmpty) {
+        if (mounted) _showError('No images found in gallery.');
+        return;
+      }
+
+      final AssetPathEntity path = paths.first;
+      final List<AssetEntity> assets = await path.getAssetListPaged(
+        page: 0,
+        size: 30,
+      );
+
+      if (assets.isEmpty) {
+        if (mounted) _showError('No images found in gallery.');
+        return;
+      }
+
+      // Show asset picker dialog
+      final AssetEntity? selected = await showDialog<AssetEntity>(
+        context: context,
+        builder: (ctx) => _GalleryPickerDialog(assets: assets),
+      );
+
+      if (selected != null && mounted) {
         setState(() {
-          images.add(savedImage.path);
+          images.add(createGalleryImageRef(selected.id));
         });
       }
     } catch (e) {
-      debugPrint('Image pick failed: $e');
+      debugPrint('Gallery pick failed: $e');
       if (mounted) {
-        _showError('Failed to pick image. Please try again.');
+        _showError('Failed to pick image from gallery. Please try again.');
       }
     }
+  }
+
+  /// Add image from URL with validation.
+  Future<void> _addFromUrl() async {
+    final urlCtrl = TextEditingController();
+    String? error;
+    bool isValidating = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.slate900,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text(
+                'Add Image from URL',
+                style: TextStyle(color: Colors.white),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: urlCtrl,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'https://example.com/image.jpg',
+                      hintStyle: const TextStyle(color: Colors.white38),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      errorText: error,
+                    ),
+                    keyboardType: TextInputType.url,
+                  ),
+                  if (isValidating)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: isValidating
+                      ? null
+                      : () async {
+                          final url = urlCtrl.text.trim();
+                          if (url.isEmpty) {
+                            setDialogState(() => error = 'URL cannot be empty');
+                            return;
+                          }
+
+                          setDialogState(() {
+                            error = null;
+                            isValidating = true;
+                          });
+
+                          final (valid, errMsg) = await validateImageUrl(url);
+
+                          setDialogState(() => isValidating = false);
+
+                          if (!valid) {
+                            setDialogState(() => error = errMsg);
+                            return;
+                          }
+
+                          if (mounted) {
+                            setState(() {
+                              images.add(createUrlImageRef(url));
+                            });
+                            Navigator.pop(ctx);
+                          }
+                        },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Pick image from file system using file_picker (no copy, just path reference).
+  Future<void> _pickFromFile() async {
+    try {
+      final FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null && mounted) {
+        setState(() {
+          images.add(createFileImageRef(result.files.single.path!));
+        });
+      }
+    } catch (e) {
+      debugPrint('File pick failed: $e');
+      if (mounted) {
+        _showError('Failed to pick image file. Please try again.');
+      }
+    }
+  }
+
+  /// Reorder images via drag and drop.
+  void _reorderImages(int oldIndex, int newIndex) {
+    setState(() {
+      if (oldIndex < newIndex) newIndex -= 1;
+      final item = images.removeAt(oldIndex);
+      images.insert(newIndex, item);
+    });
+  }
+
+  /// Parse images from draft data (backward compatible).
+  List<ImageReference> _parseDraftImages(List? rawImages) {
+    if (rawImages == null || rawImages.isEmpty) return [];
+
+    final first = rawImages.first;
+    if (first is Map && first.containsKey('source')) {
+      // New format: ImageReference JSON
+      return rawImages
+          .map((m) => ImageReference.fromJson(m as Map<String, dynamic>))
+          .toList();
+    } else if (first is String) {
+      // Old format: plain file paths
+      return rawImages
+          .map((path) => ImageReference(
+                source: path as String,
+                type: ImageSourceType.filePath,
+              ))
+          .toList();
+    }
+    return [];
   }
 
   Widget _buildRadialTimePickerOverlay() {
@@ -809,4 +1044,94 @@ class RadialTimePickerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Simple gallery picker dialog showing thumbnails in a grid.
+class _GalleryPickerDialog extends StatefulWidget {
+  final List<AssetEntity> assets;
+  const _GalleryPickerDialog({required this.assets});
+
+  @override
+  State<_GalleryPickerDialog> createState() => _GalleryPickerDialogState();
+}
+
+class _GalleryPickerDialogState extends State<_GalleryPickerDialog> {
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: AppColors.slate900,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: SizedBox(
+        width: MediaQuery.of(context).size.width * 0.9,
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Select Image',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white54),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.all(8),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 4,
+                  mainAxisSpacing: 4,
+                ),
+                itemCount: widget.assets.length,
+                itemBuilder: (context, index) {
+                  final asset = widget.assets[index];
+                  return GestureDetector(
+                    onTap: () => Navigator.pop(context, asset),
+                    child: FutureBuilder<Uint8List?>(
+                      future: asset.thumbnailDataWithSize(
+                        const ThumbnailSize.square(150),
+                      ),
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData && snapshot.data != null) {
+                          return Image.memory(
+                            snapshot.data!,
+                            fit: BoxFit.cover,
+                          );
+                        }
+                        return Container(
+                          color: AppColors.slate800,
+                          child: const Center(
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.indigo500,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

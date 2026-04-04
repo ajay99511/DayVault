@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../services/storage_service.dart';
 import '../widgets/glass_widgets.dart';
+import '../widgets/image_widgets.dart';
 import '../config/constants.dart';
 import 'entry_editor.dart';
 import 'journal_viewer_screen.dart';
+import 'ai_assistant_screen.dart';
 
 class JournalScreen extends ConsumerStatefulWidget {
   const JournalScreen({super.key});
@@ -163,6 +165,34 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                                 ),
                               ),
                             ),
+                          const SizedBox(width: 12),
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const AiAssistantScreen(),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color:
+                                    AppColors.indigo500.withValues(alpha: 0.2),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppColors.indigo500
+                                      .withValues(alpha: 0.4),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.auto_awesome,
+                                color: AppColors.indigo500,
+                                size: 20,
+                              ),
+                            ),
+                          ),
                           const SizedBox(width: 12),
                           GestureDetector(
                             onTap: () {
@@ -324,19 +354,50 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (entry.images.isNotEmpty)
-                        Container(
-                          height: 180,
-                          decoration: BoxDecoration(
-                            image: DecorationImage(
-                              image: NetworkImage(entry.images.first),
-                              fit: BoxFit.cover,
-                            ),
+                        ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(24),
                           ),
-                          alignment: Alignment.bottomRight,
-                          padding: const EdgeInsets.all(12),
-                          child: Text(
-                            moodIcons[entry.mood] ?? '',
-                            style: const TextStyle(fontSize: 32),
+                          child: AspectRatio(
+                            aspectRatio: 16 / 9,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                ImageThumbnailWidget(
+                                  imageRef: entry.images.first,
+                                  fit: BoxFit.cover,
+                                  showTapToZoom: true,
+                                ),
+                                // Gradient overlay at bottom for text readability
+                                Positioned(
+                                  bottom: 0,
+                                  left: 0,
+                                  right: 0,
+                                  child: Container(
+                                    height: 60,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: [
+                                          Colors.transparent,
+                                          Colors.black.withValues(alpha: 0.4),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // Mood badge
+                                Positioned(
+                                  bottom: 8,
+                                  right: 12,
+                                  child: Text(
+                                    moodIcons[entry.mood] ?? '',
+                                    style: const TextStyle(fontSize: 28),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       Padding(

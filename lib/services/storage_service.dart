@@ -24,12 +24,16 @@ const List<RankingCategory> _defaultCategories = [
 
 class StorageService {
   late final Box<ObjectBoxJournalEntry> _journalBox;
+  late final Box<ObjectBoxJournalChunk> _chunkBox;
+  late final Box<ObjectBoxEmbeddingJob> _embeddingJobBox;
   late final Box<ObjectBoxRankingCategory> _rankingBox;
   late final Box<ObjectBoxUserSettings> _settingsBox;
   final FlutterSecureStorage _draftStorage = const FlutterSecureStorage();
 
   StorageService(Store store)
       : _journalBox = store.box<ObjectBoxJournalEntry>(),
+        _chunkBox = store.box<ObjectBoxJournalChunk>(),
+        _embeddingJobBox = store.box<ObjectBoxEmbeddingJob>(),
         _rankingBox = store.box<ObjectBoxRankingCategory>(),
         _settingsBox = store.box<ObjectBoxUserSettings>();
 
@@ -43,7 +47,7 @@ class StorageService {
         .build();
     final results = query.find();
     query.close();
-    return results.map((e) => e.toFreezed()).toList();
+    return Future.wait(results.map((e) => e.toFreezed()));
   }
 
   Future<void> saveJournalEntry(JournalEntry entry) async {
@@ -59,6 +63,7 @@ class StorageService {
     }
 
     _journalBox.put(obEntry);
+    await enqueueEmbeddingUpsert(entry.id);
   }
 
   Future<void> deleteJournalEntry(String entryId) async {
@@ -69,6 +74,120 @@ class StorageService {
     if (existing != null) {
       _journalBox.remove(existing.id);
     }
+    await enqueueEmbeddingDelete(entryId);
+  }
+
+  Future<ObjectBoxJournalEntry?> getJournalEntryById(String entryId) async {
+    final query = _journalBox
+        .query(ObjectBoxJournalEntry_.entryId.equals(entryId))
+        .build();
+    final result = query.findFirst();
+    query.close();
+    return result;
+  }
+
+  Future<void> replaceEntryChunks(
+    String entryId,
+    List<ObjectBoxJournalChunk> chunks,
+  ) async {
+    final existingQuery =
+        _chunkBox.query(ObjectBoxJournalChunk_.entryId.equals(entryId)).build();
+    final existing = existingQuery.find();
+    existingQuery.close();
+
+    if (existing.isNotEmpty) {
+      _chunkBox.removeMany(existing.map((e) => e.id).toList());
+    }
+
+    if (chunks.isNotEmpty) {
+      _chunkBox.putMany(chunks);
+    }
+  }
+
+  Future<void> deleteChunksForEntry(String entryId) async {
+    final query =
+        _chunkBox.query(ObjectBoxJournalChunk_.entryId.equals(entryId)).build();
+    final existing = query.find();
+    query.close();
+    if (existing.isNotEmpty) {
+      _chunkBox.removeMany(existing.map((e) => e.id).toList());
+    }
+  }
+
+  Future<List<ObjectBoxJournalChunk>> getAllChunks() async {
+    return _chunkBox.getAll();
+  }
+
+  Future<List<ObjectWithScore<ObjectBoxJournalChunk>>> findNearestChunks(
+    List<double> queryVector, {
+    int limit = 8,
+  }) async {
+    final query = _chunkBox
+        .query(
+          ObjectBoxJournalChunk_.embedding.nearestNeighborsF32(
+            queryVector,
+            limit,
+          ),
+        )
+        .build();
+    final found = query.findWithScores();
+    query.close();
+    return found;
+  }
+
+  Future<void> enqueueEmbeddingUpsert(String entryId) async {
+    await _enqueueEmbeddingJob(entryId, opType: 0);
+  }
+
+  Future<void> enqueueEmbeddingDelete(String entryId) async {
+    await _enqueueEmbeddingJob(entryId, opType: 1);
+  }
+
+  Future<void> _enqueueEmbeddingJob(String entryId,
+      {required int opType}) async {
+    final query = _embeddingJobBox
+        .query(ObjectBoxEmbeddingJob_.entryId.equals(entryId))
+        .build();
+    final existing = query.find();
+    query.close();
+    if (existing.isNotEmpty) {
+      _embeddingJobBox.removeMany(existing.map((e) => e.id).toList());
+    }
+
+    final now = DateTime.now();
+    final keySuffix = opType == 1 ? 'delete' : 'upsert';
+    _embeddingJobBox.put(
+      ObjectBoxEmbeddingJob()
+        ..jobKey = '$entryId:$keySuffix'
+        ..entryId = entryId
+        ..opType = opType
+        ..attempts = 0
+        ..createdAt = now
+        ..updatedAt = now,
+    );
+  }
+
+  Future<ObjectBoxEmbeddingJob?> getNextEmbeddingJob() async {
+    final query = _embeddingJobBox
+        .query()
+        .order(ObjectBoxEmbeddingJob_.createdAt)
+        .build();
+    final next = query.findFirst();
+    query.close();
+    return next;
+  }
+
+  Future<void> completeEmbeddingJob(int id) async {
+    _embeddingJobBox.remove(id);
+  }
+
+  Future<void> failEmbeddingJob(ObjectBoxEmbeddingJob job, String error) async {
+    if (job.id == 0) return;
+    job
+      ..attempts += 1
+      ..lastError = error
+      ..updatedAt = DateTime.now();
+    _embeddingJobBox.put(job);
   }
 
   // ─── Rankings ───────────────────────────────────────────────────────────

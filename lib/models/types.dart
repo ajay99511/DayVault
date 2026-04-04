@@ -23,6 +23,29 @@ enum TimeBucket { midnight, earlyMorning, morning, afternoon, evening, night }
 
 enum EntryType { story, event }
 
+/// Source type for image references in journal entries.
+/// - galleryAsset: Reference by persistent asset ID (photo_manager, no copy)
+/// - webUrl: Reference by URL (cached_network_image, auto LRU cache)
+/// - filePath: Reference by absolute file path (FileImage, no copy)
+enum ImageSourceType { galleryAsset, webUrl, filePath }
+
+/// A reference to an image without duplicating the actual file.
+/// Stores only the identifier (asset ID, URL, or file path) and metadata.
+@freezed
+abstract class ImageReference with _$ImageReference {
+  const factory ImageReference({
+    /// The source identifier: asset ID, URL string, or absolute file path.
+    required String source,
+    /// How this image was sourced (determines rendering strategy).
+    required ImageSourceType type,
+    /// Optional display name or caption.
+    String? displayName,
+  }) = _ImageReference;
+
+  factory ImageReference.fromJson(Map<String, dynamic> json) =>
+      _$ImageReferenceFromJson(json);
+}
+
 @freezed
 abstract class LocationData with _$LocationData {
   const factory LocationData({
@@ -48,7 +71,7 @@ abstract class JournalEntry with _$JournalEntry {
     @Default([]) List<String> tags,
     LocationData? location,
     TimeBucket? timeBucket,
-    @Default([]) List<String> images,
+    @Default([]) List<ImageReference> images,
     @Default(false) bool isSpotlight,
   }) = _JournalEntry;
 
