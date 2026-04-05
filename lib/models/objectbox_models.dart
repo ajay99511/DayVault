@@ -194,6 +194,55 @@ class ObjectBoxEmbeddingJob {
 }
 
 @Entity()
+class ObjectBoxAiModel {
+  @Id()
+  int id = 0;
+
+  @Unique()
+  String modelId = '';
+
+  /// 0 = chat, 1 = embedding
+  int roleIndex = 0;
+
+  String displayName = '';
+  String filePath = '';
+  String checksum = '';
+  int fileSizeBytes = 0;
+  bool isActive = false;
+  bool isUsable = true;
+  String? lastError;
+
+  @Property(type: PropertyType.date)
+  DateTime importedAt = DateTime.now();
+
+  @Property(type: PropertyType.date)
+  DateTime updatedAt = DateTime.now();
+}
+
+@Entity()
+class ObjectBoxAiRuntimeConfig {
+  /// Single-row pattern: we always use id = 1.
+  @Id()
+  int id = 1;
+
+  /// 0 = auto, 1 = cpu, 2 = vulkan
+  int backendIndex = 0;
+
+  bool autoPolicy = true;
+  bool pauseEmbeddingOnLowBattery = true;
+  int lowBatteryThreshold = 20;
+
+  /// 0 means auto-tuned by device profile.
+  int forcedContextSize = 0;
+  int forcedThreads = 0;
+
+  /// -1 means auto, 0 means CPU-only.
+  int forcedGpuLayers = -1;
+
+  int maxGenerationTokens = AiConstants.chatMaxOutputTokens;
+}
+
+@Entity()
 class ObjectBoxRankingCategory {
   @Id()
   int id = 0;

@@ -320,6 +320,153 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(6, 7768885777799461887),
+    name: 'ObjectBoxAiModel',
+    lastPropertyId: const obx_int.IdUid(12, 208442891367359287),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 5626053791981755690),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 160929985795630056),
+        name: 'modelId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(7, 5688953762199169554),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 6773261238535694010),
+        name: 'roleIndex',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 894183330041035915),
+        name: 'displayName',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 8473006516861928416),
+        name: 'filePath',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 3340722014534506153),
+        name: 'checksum',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 4809184213554774813),
+        name: 'fileSizeBytes',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 5532172256105894910),
+        name: 'isActive',
+        type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(9, 7147759024845429765),
+        name: 'isUsable',
+        type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(10, 1989601987455538914),
+        name: 'lastError',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(11, 7632437575392646137),
+        name: 'importedAt',
+        type: 10,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(12, 208442891367359287),
+        name: 'updatedAt',
+        type: 10,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(7, 145200524995731987),
+    name: 'ObjectBoxAiRuntimeConfig',
+    lastPropertyId: const obx_int.IdUid(9, 6143100621495716399),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 7081238748852946730),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 5907227477452697104),
+        name: 'backendIndex',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 1605566635441964067),
+        name: 'autoPolicy',
+        type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 3313504787204248815),
+        name: 'pauseEmbeddingOnLowBattery',
+        type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 2354817060094348971),
+        name: 'lowBatteryThreshold',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(6, 2007564073376562653),
+        name: 'forcedContextSize',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 8941261146730272033),
+        name: 'forcedThreads',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(8, 235111832187678466),
+        name: 'forcedGpuLayers',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(9, 6143100621495716399),
+        name: 'maxGenerationTokens',
+        type: 6,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -365,8 +512,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(5, 7733320435101555191),
-    lastIndexId: const obx_int.IdUid(6, 6377407347351135660),
+    lastEntityId: const obx_int.IdUid(7, 145200524995731987),
+    lastIndexId: const obx_int.IdUid(7, 5688953762199169554),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [],
@@ -693,6 +840,174 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    ObjectBoxAiModel: obx_int.EntityDefinition<ObjectBoxAiModel>(
+      model: _entities[5],
+      toOneRelations: (ObjectBoxAiModel object) => [],
+      toManyRelations: (ObjectBoxAiModel object) => {},
+      getId: (ObjectBoxAiModel object) => object.id,
+      setId: (ObjectBoxAiModel object, int id) {
+        object.id = id;
+      },
+      objectToFB: (ObjectBoxAiModel object, fb.Builder fbb) {
+        final modelIdOffset = fbb.writeString(object.modelId);
+        final displayNameOffset = fbb.writeString(object.displayName);
+        final filePathOffset = fbb.writeString(object.filePath);
+        final checksumOffset = fbb.writeString(object.checksum);
+        final lastErrorOffset = object.lastError == null
+            ? null
+            : fbb.writeString(object.lastError!);
+        fbb.startTable(13);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, modelIdOffset);
+        fbb.addInt64(2, object.roleIndex);
+        fbb.addOffset(3, displayNameOffset);
+        fbb.addOffset(4, filePathOffset);
+        fbb.addOffset(5, checksumOffset);
+        fbb.addInt64(6, object.fileSizeBytes);
+        fbb.addBool(7, object.isActive);
+        fbb.addBool(8, object.isUsable);
+        fbb.addOffset(9, lastErrorOffset);
+        fbb.addInt64(10, object.importedAt.millisecondsSinceEpoch);
+        fbb.addInt64(11, object.updatedAt.millisecondsSinceEpoch);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+
+        final object = ObjectBoxAiModel()
+          ..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0)
+          ..modelId = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 6, '')
+          ..roleIndex = const fb.Int64Reader().vTableGet(
+            buffer,
+            rootOffset,
+            8,
+            0,
+          )
+          ..displayName = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 10, '')
+          ..filePath = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 12, '')
+          ..checksum = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 14, '')
+          ..fileSizeBytes = const fb.Int64Reader().vTableGet(
+            buffer,
+            rootOffset,
+            16,
+            0,
+          )
+          ..isActive = const fb.BoolReader().vTableGet(
+            buffer,
+            rootOffset,
+            18,
+            false,
+          )
+          ..isUsable = const fb.BoolReader().vTableGet(
+            buffer,
+            rootOffset,
+            20,
+            false,
+          )
+          ..lastError = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGetNullable(buffer, rootOffset, 22)
+          ..importedAt = DateTime.fromMillisecondsSinceEpoch(
+            const fb.Int64Reader().vTableGet(buffer, rootOffset, 24, 0),
+          )
+          ..updatedAt = DateTime.fromMillisecondsSinceEpoch(
+            const fb.Int64Reader().vTableGet(buffer, rootOffset, 26, 0),
+          );
+
+        return object;
+      },
+    ),
+    ObjectBoxAiRuntimeConfig:
+        obx_int.EntityDefinition<ObjectBoxAiRuntimeConfig>(
+          model: _entities[6],
+          toOneRelations: (ObjectBoxAiRuntimeConfig object) => [],
+          toManyRelations: (ObjectBoxAiRuntimeConfig object) => {},
+          getId: (ObjectBoxAiRuntimeConfig object) => object.id,
+          setId: (ObjectBoxAiRuntimeConfig object, int id) {
+            object.id = id;
+          },
+          objectToFB: (ObjectBoxAiRuntimeConfig object, fb.Builder fbb) {
+            fbb.startTable(10);
+            fbb.addInt64(0, object.id);
+            fbb.addInt64(1, object.backendIndex);
+            fbb.addBool(2, object.autoPolicy);
+            fbb.addBool(3, object.pauseEmbeddingOnLowBattery);
+            fbb.addInt64(4, object.lowBatteryThreshold);
+            fbb.addInt64(5, object.forcedContextSize);
+            fbb.addInt64(6, object.forcedThreads);
+            fbb.addInt64(7, object.forcedGpuLayers);
+            fbb.addInt64(8, object.maxGenerationTokens);
+            fbb.finish(fbb.endTable());
+            return object.id;
+          },
+          objectFromFB: (obx.Store store, ByteData fbData) {
+            final buffer = fb.BufferContext(fbData);
+            final rootOffset = buffer.derefObject(0);
+
+            final object = ObjectBoxAiRuntimeConfig()
+              ..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0)
+              ..backendIndex = const fb.Int64Reader().vTableGet(
+                buffer,
+                rootOffset,
+                6,
+                0,
+              )
+              ..autoPolicy = const fb.BoolReader().vTableGet(
+                buffer,
+                rootOffset,
+                8,
+                false,
+              )
+              ..pauseEmbeddingOnLowBattery = const fb.BoolReader().vTableGet(
+                buffer,
+                rootOffset,
+                10,
+                false,
+              )
+              ..lowBatteryThreshold = const fb.Int64Reader().vTableGet(
+                buffer,
+                rootOffset,
+                12,
+                0,
+              )
+              ..forcedContextSize = const fb.Int64Reader().vTableGet(
+                buffer,
+                rootOffset,
+                14,
+                0,
+              )
+              ..forcedThreads = const fb.Int64Reader().vTableGet(
+                buffer,
+                rootOffset,
+                16,
+                0,
+              )
+              ..forcedGpuLayers = const fb.Int64Reader().vTableGet(
+                buffer,
+                rootOffset,
+                18,
+                0,
+              )
+              ..maxGenerationTokens = const fb.Int64Reader().vTableGet(
+                buffer,
+                rootOffset,
+                20,
+                0,
+              );
+
+            return object;
+          },
+        ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -914,4 +1229,122 @@ class ObjectBoxJournalChunk_ {
   static final updatedAt = obx.QueryDateProperty<ObjectBoxJournalChunk>(
     _entities[4].properties[8],
   );
+}
+
+/// [ObjectBoxAiModel] entity fields to define ObjectBox queries.
+class ObjectBoxAiModel_ {
+  /// See [ObjectBoxAiModel.id].
+  static final id = obx.QueryIntegerProperty<ObjectBoxAiModel>(
+    _entities[5].properties[0],
+  );
+
+  /// See [ObjectBoxAiModel.modelId].
+  static final modelId = obx.QueryStringProperty<ObjectBoxAiModel>(
+    _entities[5].properties[1],
+  );
+
+  /// See [ObjectBoxAiModel.roleIndex].
+  static final roleIndex = obx.QueryIntegerProperty<ObjectBoxAiModel>(
+    _entities[5].properties[2],
+  );
+
+  /// See [ObjectBoxAiModel.displayName].
+  static final displayName = obx.QueryStringProperty<ObjectBoxAiModel>(
+    _entities[5].properties[3],
+  );
+
+  /// See [ObjectBoxAiModel.filePath].
+  static final filePath = obx.QueryStringProperty<ObjectBoxAiModel>(
+    _entities[5].properties[4],
+  );
+
+  /// See [ObjectBoxAiModel.checksum].
+  static final checksum = obx.QueryStringProperty<ObjectBoxAiModel>(
+    _entities[5].properties[5],
+  );
+
+  /// See [ObjectBoxAiModel.fileSizeBytes].
+  static final fileSizeBytes = obx.QueryIntegerProperty<ObjectBoxAiModel>(
+    _entities[5].properties[6],
+  );
+
+  /// See [ObjectBoxAiModel.isActive].
+  static final isActive = obx.QueryBooleanProperty<ObjectBoxAiModel>(
+    _entities[5].properties[7],
+  );
+
+  /// See [ObjectBoxAiModel.isUsable].
+  static final isUsable = obx.QueryBooleanProperty<ObjectBoxAiModel>(
+    _entities[5].properties[8],
+  );
+
+  /// See [ObjectBoxAiModel.lastError].
+  static final lastError = obx.QueryStringProperty<ObjectBoxAiModel>(
+    _entities[5].properties[9],
+  );
+
+  /// See [ObjectBoxAiModel.importedAt].
+  static final importedAt = obx.QueryDateProperty<ObjectBoxAiModel>(
+    _entities[5].properties[10],
+  );
+
+  /// See [ObjectBoxAiModel.updatedAt].
+  static final updatedAt = obx.QueryDateProperty<ObjectBoxAiModel>(
+    _entities[5].properties[11],
+  );
+}
+
+/// [ObjectBoxAiRuntimeConfig] entity fields to define ObjectBox queries.
+class ObjectBoxAiRuntimeConfig_ {
+  /// See [ObjectBoxAiRuntimeConfig.id].
+  static final id = obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
+    _entities[6].properties[0],
+  );
+
+  /// See [ObjectBoxAiRuntimeConfig.backendIndex].
+  static final backendIndex =
+      obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
+        _entities[6].properties[1],
+      );
+
+  /// See [ObjectBoxAiRuntimeConfig.autoPolicy].
+  static final autoPolicy = obx.QueryBooleanProperty<ObjectBoxAiRuntimeConfig>(
+    _entities[6].properties[2],
+  );
+
+  /// See [ObjectBoxAiRuntimeConfig.pauseEmbeddingOnLowBattery].
+  static final pauseEmbeddingOnLowBattery =
+      obx.QueryBooleanProperty<ObjectBoxAiRuntimeConfig>(
+        _entities[6].properties[3],
+      );
+
+  /// See [ObjectBoxAiRuntimeConfig.lowBatteryThreshold].
+  static final lowBatteryThreshold =
+      obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
+        _entities[6].properties[4],
+      );
+
+  /// See [ObjectBoxAiRuntimeConfig.forcedContextSize].
+  static final forcedContextSize =
+      obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
+        _entities[6].properties[5],
+      );
+
+  /// See [ObjectBoxAiRuntimeConfig.forcedThreads].
+  static final forcedThreads =
+      obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
+        _entities[6].properties[6],
+      );
+
+  /// See [ObjectBoxAiRuntimeConfig.forcedGpuLayers].
+  static final forcedGpuLayers =
+      obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
+        _entities[6].properties[7],
+      );
+
+  /// See [ObjectBoxAiRuntimeConfig.maxGenerationTokens].
+  static final maxGenerationTokens =
+      obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
+        _entities[6].properties[8],
+      );
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../models/objectbox_models.dart';
+import '../config/ai_constants.dart';
 import '../objectbox.g.dart';
 import 'objectbox_service.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -26,6 +27,8 @@ class StorageService {
   late final Box<ObjectBoxJournalEntry> _journalBox;
   late final Box<ObjectBoxJournalChunk> _chunkBox;
   late final Box<ObjectBoxEmbeddingJob> _embeddingJobBox;
+  late final Box<ObjectBoxAiModel> _aiModelBox;
+  late final Box<ObjectBoxAiRuntimeConfig> _aiRuntimeConfigBox;
   late final Box<ObjectBoxRankingCategory> _rankingBox;
   late final Box<ObjectBoxUserSettings> _settingsBox;
   final FlutterSecureStorage _draftStorage = const FlutterSecureStorage();
@@ -34,6 +37,8 @@ class StorageService {
       : _journalBox = store.box<ObjectBoxJournalEntry>(),
         _chunkBox = store.box<ObjectBoxJournalChunk>(),
         _embeddingJobBox = store.box<ObjectBoxEmbeddingJob>(),
+        _aiModelBox = store.box<ObjectBoxAiModel>(),
+        _aiRuntimeConfigBox = store.box<ObjectBoxAiRuntimeConfig>(),
         _rankingBox = store.box<ObjectBoxRankingCategory>(),
         _settingsBox = store.box<ObjectBoxUserSettings>();
 
@@ -54,10 +59,11 @@ class StorageService {
     final obEntry = await ObjectBoxJournalEntry.fromFreezed(entry);
 
     // Check if entry with this entryId already exists (update case)
-    final existing = _journalBox
+    final query = _journalBox
         .query(ObjectBoxJournalEntry_.entryId.equals(entry.id))
-        .build()
-        .findFirst();
+        .build();
+    final existing = query.findFirst();
+    query.close();
     if (existing != null) {
       obEntry.id = existing.id; // Preserve ObjectBox ID for update
     }
@@ -67,10 +73,11 @@ class StorageService {
   }
 
   Future<void> deleteJournalEntry(String entryId) async {
-    final existing = _journalBox
+    final query = _journalBox
         .query(ObjectBoxJournalEntry_.entryId.equals(entryId))
-        .build()
-        .findFirst();
+        .build();
+    final existing = query.findFirst();
+    query.close();
     if (existing != null) {
       _journalBox.remove(existing.id);
     }
@@ -114,22 +121,35 @@ class StorageService {
     }
   }
 
-  Future<List<ObjectBoxJournalChunk>> getAllChunks() async {
-    return _chunkBox.getAll();
+  Future<List<ObjectBoxJournalChunk>> getAllChunks(
+      {String? embeddingModelId}) async {
+    if (embeddingModelId == null || embeddingModelId.isEmpty) {
+      return _chunkBox.getAll();
+    }
+    final query = _chunkBox
+        .query(ObjectBoxJournalChunk_.embeddingModelId.equals(embeddingModelId))
+        .build();
+    final found = query.find();
+    query.close();
+    return found;
   }
 
   Future<List<ObjectWithScore<ObjectBoxJournalChunk>>> findNearestChunks(
     List<double> queryVector, {
     int limit = 8,
+    String? embeddingModelId,
   }) async {
-    final query = _chunkBox
-        .query(
-          ObjectBoxJournalChunk_.embedding.nearestNeighborsF32(
-            queryVector,
-            limit,
-          ),
-        )
-        .build();
+    final vectorCond = ObjectBoxJournalChunk_.embedding.nearestNeighborsF32(
+      queryVector,
+      limit,
+    );
+    final condition = (embeddingModelId == null || embeddingModelId.isEmpty)
+        ? vectorCond
+        : (vectorCond &
+            ObjectBoxJournalChunk_.embeddingModelId.equals(
+              embeddingModelId,
+            ));
+    final query = _chunkBox.query(condition).build();
     final found = query.findWithScores();
     query.close();
     return found;
@@ -170,11 +190,17 @@ class StorageService {
   Future<ObjectBoxEmbeddingJob?> getNextEmbeddingJob() async {
     final query = _embeddingJobBox
         .query()
-        .order(ObjectBoxEmbeddingJob_.createdAt)
+        .order(ObjectBoxEmbeddingJob_.updatedAt)
         .build();
-    final next = query.findFirst();
+    final candidates = query.find();
     query.close();
-    return next;
+    for (final job in candidates) {
+      if (job.attempts < AiConstants.embeddingJobMaxAttempts) {
+        return job;
+      }
+      _embeddingJobBox.remove(job.id);
+    }
+    return null;
   }
 
   Future<void> completeEmbeddingJob(int id) async {
@@ -183,11 +209,140 @@ class StorageService {
 
   Future<void> failEmbeddingJob(ObjectBoxEmbeddingJob job, String error) async {
     if (job.id == 0) return;
+    if (job.attempts + 1 >= AiConstants.embeddingJobMaxAttempts) {
+      _embeddingJobBox.remove(job.id);
+      return;
+    }
     job
       ..attempts += 1
       ..lastError = error
       ..updatedAt = DateTime.now();
     _embeddingJobBox.put(job);
+  }
+
+  Future<void> enqueueReindexAllEntries() async {
+    _embeddingJobBox.removeAll();
+    final entries = _journalBox.getAll();
+    final now = DateTime.now();
+    final jobs = <ObjectBoxEmbeddingJob>[];
+    for (final entry in entries) {
+      jobs.add(
+        ObjectBoxEmbeddingJob()
+          ..jobKey = '${entry.entryId}:upsert'
+          ..entryId = entry.entryId
+          ..opType = 0
+          ..attempts = 0
+          ..createdAt = now
+          ..updatedAt = now,
+      );
+    }
+    if (jobs.isNotEmpty) {
+      _embeddingJobBox.putMany(jobs);
+    }
+  }
+
+  // ─── AI Model Registry ──────────────────────────────────────────────────
+
+  Future<List<ObjectBoxAiModel>> getAiModels({int? roleIndex}) async {
+    if (roleIndex == null) {
+      return _aiModelBox.getAll()
+        ..sort((a, b) => b.importedAt.compareTo(a.importedAt));
+    }
+    final query = _aiModelBox
+        .query(ObjectBoxAiModel_.roleIndex.equals(roleIndex))
+        .build();
+    final results = query.find();
+    query.close();
+    results.sort((a, b) => b.importedAt.compareTo(a.importedAt));
+    return results;
+  }
+
+  Future<ObjectBoxAiModel?> getAiModelById(String modelId) async {
+    final query =
+        _aiModelBox.query(ObjectBoxAiModel_.modelId.equals(modelId)).build();
+    final model = query.findFirst();
+    query.close();
+    return model;
+  }
+
+  Future<ObjectBoxAiModel?> getActiveAiModel(int roleIndex) async {
+    final query = _aiModelBox
+        .query(
+          ObjectBoxAiModel_.roleIndex.equals(roleIndex) &
+              ObjectBoxAiModel_.isActive.equals(true),
+        )
+        .build();
+    final model = query.findFirst();
+    query.close();
+    return model;
+  }
+
+  Future<ObjectBoxAiModel> upsertAiModel(ObjectBoxAiModel model) async {
+    final existing = await getAiModelById(model.modelId);
+    if (existing != null) {
+      model.id = existing.id;
+    }
+    _aiModelBox.put(model);
+    return model;
+  }
+
+  Future<void> setActiveAiModel({
+    required int roleIndex,
+    required String modelId,
+  }) async {
+    final roleQuery = _aiModelBox
+        .query(ObjectBoxAiModel_.roleIndex.equals(roleIndex))
+        .build();
+    final roleModels = roleQuery.find();
+    roleQuery.close();
+
+    for (final model in roleModels) {
+      model.isActive = model.modelId == modelId;
+    }
+    if (roleModels.isNotEmpty) {
+      _aiModelBox.putMany(roleModels);
+    }
+  }
+
+  Future<void> deleteAiModel(String modelId) async {
+    final existing = await getAiModelById(modelId);
+    if (existing != null) {
+      _aiModelBox.remove(existing.id);
+    }
+  }
+
+  Future<void> markAiModelError(String modelId, String? error) async {
+    final model = await getAiModelById(modelId);
+    if (model == null) return;
+    model
+      ..isUsable = error == null
+      ..lastError = error
+      ..updatedAt = DateTime.now();
+    _aiModelBox.put(model);
+  }
+
+  Future<ObjectBoxAiRuntimeConfig> getAiRuntimeConfig() async {
+    final byFixedId = _aiRuntimeConfigBox.get(1);
+    if (byFixedId != null) return byFixedId;
+
+    final existing = _aiRuntimeConfigBox.getAll();
+    if (existing.isNotEmpty) return existing.first;
+
+    // Let ObjectBox assign an internal ID on first insert.
+    final created = ObjectBoxAiRuntimeConfig()..id = 0;
+    final id = _aiRuntimeConfigBox.put(created);
+    return _aiRuntimeConfigBox.get(id)!;
+  }
+
+  Future<void> saveAiRuntimeConfig(ObjectBoxAiRuntimeConfig config) async {
+    final existingByFixedId = _aiRuntimeConfigBox.get(1);
+    if (existingByFixedId != null) {
+      config.id = existingByFixedId.id;
+    } else {
+      final existing = _aiRuntimeConfigBox.getAll();
+      config.id = existing.isNotEmpty ? existing.first.id : 0;
+    }
+    _aiRuntimeConfigBox.put(config);
   }
 
   // ─── Rankings ───────────────────────────────────────────────────────────
@@ -309,15 +464,27 @@ class StorageService {
   // ─── Settings ───────────────────────────────────────────────────────────
 
   UserSettings getSettings() {
-    final existing = _settingsBox.get(1);
-    if (existing == null) {
+    final byFixedId = _settingsBox.get(1);
+    if (byFixedId != null) {
+      return byFixedId.toFreezed();
+    }
+
+    final all = _settingsBox.getAll();
+    if (all.isEmpty) {
       return const UserSettings(); // Defaults from Freezed
     }
-    return existing.toFreezed();
+    return all.first.toFreezed();
   }
 
   Future<UserSettings> saveSettings(UserSettings settings) async {
     final obSettings = ObjectBoxUserSettings.fromFreezed(settings);
+    final byFixedId = _settingsBox.get(1);
+    if (byFixedId != null) {
+      obSettings.id = byFixedId.id;
+    } else {
+      final all = _settingsBox.getAll();
+      obSettings.id = all.isNotEmpty ? all.first.id : 0;
+    }
     _settingsBox.put(obSettings);
     return settings;
   }

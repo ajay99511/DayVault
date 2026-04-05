@@ -22,4 +22,5 @@ class AiConstants {
   static const int chatContextTokens = 2048;
   static const int chatMaxOutputTokens = 220;
   static const Duration modelIdleDisposeAfter = Duration(minutes: 3);
+  static const int embeddingJobMaxAttempts = 5;
 }

@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../config/constants.dart';
+import '../services/ai_model_registry_service.dart';
 import '../services/llama_runtime_service.dart';
 import '../services/rag_service.dart';
 import '../widgets/glass_widgets.dart';
+import 'ai_settings_screen.dart';
 
 class AiAssistantScreen extends ConsumerStatefulWidget {
   const AiAssistantScreen({super.key});
@@ -23,8 +25,12 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   String? _error;
   StreamSubscription<String>? _activeSub;
   bool _hasModels = false;
+  bool _hasChatModel = false;
+  bool _hasEmbeddingModel = false;
   String? _chatModelPath;
   String? _embeddingModelPath;
+  String? _chatModelName;
+  String? _embeddingModelName;
 
   @override
   void initState() {
@@ -35,13 +41,28 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   Future<void> _loadModelStatus() async {
     final runtime = LlamaRuntimeService.instance;
     final has = await runtime.hasAnyModel();
-    final chatPath = await runtime.getChatModelPath();
-    final embedPath = await runtime.getEmbeddingModelPath();
+    final modelDir = await runtime.getModelDirectory();
+    final chatPath = '${modelDir.path}/chat_*.gguf';
+    final embedPath = '${modelDir.path}/embed_*.gguf';
+    final chatModel =
+        await ref.read(aiModelRegistryServiceProvider).getModels(roleIndex: 0);
+    final embedModel =
+        await ref.read(aiModelRegistryServiceProvider).getModels(roleIndex: 1);
+    final activeChatCandidates = chatModel.where((m) => m.isActive);
+    final activeEmbedCandidates = embedModel.where((m) => m.isActive);
+    final activeChat =
+        activeChatCandidates.isNotEmpty ? activeChatCandidates.first : null;
+    final activeEmbed =
+        activeEmbedCandidates.isNotEmpty ? activeEmbedCandidates.first : null;
     if (!mounted) return;
     setState(() {
       _hasModels = has;
+      _hasChatModel = activeChat != null;
+      _hasEmbeddingModel = activeEmbed != null;
       _chatModelPath = chatPath;
       _embeddingModelPath = embedPath;
+      _chatModelName = activeChat?.displayName;
+      _embeddingModelName = activeEmbed?.displayName;
     });
   }
 
@@ -84,6 +105,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   @override
   void dispose() {
     _activeSub?.cancel();
+    LlamaRuntimeService.instance.cancelGeneration();
     _queryCtrl.dispose();
     super.dispose();
   }
@@ -111,6 +133,19 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
                     ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.tune, color: Colors.white70),
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AiSettingsScreen(),
+                        ),
+                      );
+                      await _loadModelStatus();
+                    },
                   ),
                 ],
               ),
@@ -177,6 +212,52 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                   ),
                 ),
               ),
+            if (_hasModels)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: GlassContainer(
+                  borderRadius: 16,
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Chat: ${_chatModelName ?? "Not selected"}',
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Embedding: ${_embeddingModelName ?? "Not selected"}',
+                        style: const TextStyle(
+                            color: Colors.white70, fontSize: 12),
+                      ),
+                      if (!_hasChatModel)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Select an active chat model in AI Settings to start chatting.',
+                            style: TextStyle(
+                              color: AppColors.amber500,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      if (!_hasEmbeddingModel)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: Text(
+                            'No active embedding model: answers will have reduced diary context.',
+                            style: TextStyle(
+                              color: AppColors.amber500,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -225,7 +306,8 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                     ),
                     const SizedBox(width: 8),
                     IconButton(
-                      onPressed: (_isGenerating || !_hasModels) ? null : _ask,
+                      onPressed:
+                          (_isGenerating || !_hasChatModel) ? null : _ask,
                       icon: _isGenerating
                           ? const SizedBox(
                               width: 18,

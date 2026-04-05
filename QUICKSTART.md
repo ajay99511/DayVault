@@ -80,20 +80,24 @@ If your device supports biometrics:
 
 The app now supports local RAG + llama.cpp inference via `llamadart`.
 
-### 1) Place GGUF model files on device
-Copy one or both model files into the app documents `models` folder:
+### 1) Import GGUF models in-app
+1. Go to **Profile**
+2. Tap **AI Model Settings**
+3. Tap **Import Chat Model** and/or **Import Embed Model**
+4. Activate the desired model from the list
 
-- `<AppDocuments>/models/meta-llama-3.2-1b-instruct-q4km.gguf`
-- `<AppDocuments>/models/meta-llama-3.2-1b-embed-q4km.gguf`
+### 2) Configure runtime safely
+In **AI Model Settings**, tune:
+- Backend: `Auto`, `CPU`, or `Vulkan`
+- Low-battery pause for embedding
+- Max output tokens
 
-If only one file is present, the app uses it as fallback for both generation and embeddings.
-
-### 2) Open the AI assistant
+### 3) Open the AI assistant
 - Go to **Journal**
 - Tap the ✨ icon in the header
 - Ask questions about your saved memories
 
-### 3) Background indexing behavior
+### 4) Background indexing behavior
 - On every save/edit/delete, an embedding job is queued
 - Jobs are processed in background while app is open
 - Interrupted jobs resume next launch

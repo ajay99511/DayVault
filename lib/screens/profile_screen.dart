@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../config/constants.dart';
 import '../widgets/glass_widgets.dart';
+import 'ai_settings_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -403,6 +404,42 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     encrypted: false,
                   ),
                   Divider(color: Colors.white.withValues(alpha: 0.1)),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.indigo500.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.auto_awesome,
+                        color: AppColors.indigo500,
+                        size: 20,
+                      ),
+                    ),
+                    title: const Text(
+                      'AI Model Settings',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'Import GGUF models and tune runtime policy',
+                      style: TextStyle(color: AppColors.slate400, fontSize: 11),
+                    ),
+                    trailing: const Icon(Icons.chevron_right,
+                        color: AppColors.slate400),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AiSettingsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  Divider(color: Colors.white.withValues(alpha: 0.1)),
                   _manageBackupsTile(context, ref),
                 ],
               ),
@@ -433,7 +470,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       title: Text(
         title,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        style:
+            const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
       ),
       subtitle: Text(
         subtitle,
@@ -442,7 +480,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       trailing: const Icon(Icons.chevron_right, color: AppColors.slate400),
       onTap: () async {
         final backupService = ref.read(backupServiceProvider);
-        
+
         // Show loading
         showDialog(
           context: context,
@@ -455,20 +493,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         );
 
         final result = await backupService.exportToFile(encrypted: encrypted);
-        
+
         if (context.mounted) {
           Navigator.pop(context); // Close loading
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                result.success 
-                  ? (result.message ?? 'Backup exported successfully')
-                  : (result.error ?? 'Export failed'),
+                result.success
+                    ? (result.message ?? 'Backup exported successfully')
+                    : (result.error ?? 'Export failed'),
               ),
-              backgroundColor: result.success 
-                ? AppColors.emerald500 
-                : AppColors.rose500,
+              backgroundColor:
+                  result.success ? AppColors.emerald500 : AppColors.rose500,
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -545,7 +582,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.folder_open, size: 48, color: AppColors.slate400),
+                          Icon(Icons.folder_open,
+                              size: 48, color: AppColors.slate400),
                           SizedBox(height: 16),
                           Text(
                             'No backups found',
@@ -564,7 +602,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           child: Row(
                             children: [
                               Icon(
-                                backup.isEncrypted ? Icons.lock : Icons.description,
+                                backup.isEncrypted
+                                    ? Icons.lock
+                                    : Icons.description,
                                 color: backup.isEncrypted
                                     ? AppColors.emerald500
                                     : AppColors.amber500,
@@ -594,34 +634,42 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 ),
                               ),
                               IconButton(
-                                icon: const Icon(Icons.delete_outline, color: AppColors.rose500),
+                                icon: const Icon(Icons.delete_outline,
+                                    color: AppColors.rose500),
                                 onPressed: () async {
                                   final confirmed = await showDialog<bool>(
                                     context: context,
                                     builder: (dialog) => AlertDialog(
                                       backgroundColor: AppColors.slate900,
                                       title: const Text('Delete Backup?',
-                                          style: TextStyle(color: Colors.white)),
+                                          style:
+                                              TextStyle(color: Colors.white)),
                                       content: const Text(
                                           'This action cannot be undone.',
-                                          style: TextStyle(color: Colors.white70)),
+                                          style:
+                                              TextStyle(color: Colors.white70)),
                                       actions: [
                                         TextButton(
-                                          onPressed: () => Navigator.pop(dialog, false),
+                                          onPressed: () =>
+                                              Navigator.pop(dialog, false),
                                           child: const Text('CANCEL',
-                                              style: TextStyle(color: AppColors.slate400)),
+                                              style: TextStyle(
+                                                  color: AppColors.slate400)),
                                         ),
                                         TextButton(
-                                          onPressed: () => Navigator.pop(dialog, true),
+                                          onPressed: () =>
+                                              Navigator.pop(dialog, true),
                                           child: const Text('DELETE',
-                                              style: TextStyle(color: AppColors.rose500)),
+                                              style: TextStyle(
+                                                  color: AppColors.rose500)),
                                         ),
                                       ],
                                     ),
                                   );
-                                  
+
                                   if (confirmed == true) {
-                                    await backupService.deleteBackup(backup.path);
+                                    await backupService
+                                        .deleteBackup(backup.path);
                                     if (ctx.mounted) {
                                       Navigator.pop(ctx);
                                       _showBackupsDialog(context, ref);
