@@ -78,7 +78,11 @@ If your device supports biometrics:
 
 ## Local AI Setup (On-Device)
 
-The app now supports local RAG + llama.cpp inference via `llamadart`.
+The app now supports two local chat backends:
+- **Local GGUF (`llamadart`)**
+- **Android AICore (ML Kit Prompt API)**
+
+> Android note: AICore integration requires **API 26+**.
 
 ### 1) Import GGUF models in-app
 1. Go to **Profile**
@@ -88,9 +92,14 @@ The app now supports local RAG + llama.cpp inference via `llamadart`.
 
 ### 2) Configure runtime safely
 In **AI Model Settings**, tune:
+- Chat engine: `Local GGUF` or `Android AICore`
 - Backend: `Auto`, `CPU`, or `Vulkan`
 - Low-battery pause for embedding
 - Max output tokens
+
+If using **Android AICore**:
+- Tap **Check AICore** to view readiness
+- Tap **Download AICore** to request model download on-device
 
 ### 3) Open the AI assistant
 - Go to **Journal**

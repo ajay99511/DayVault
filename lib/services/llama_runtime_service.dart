@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:llamadart/llamadart.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:system_info2/system_info2.dart';
 
 import '../config/ai_constants.dart';
 import 'ai_runtime_policy_service.dart';
@@ -58,6 +60,9 @@ class LlamaRuntimeService {
     return models.isNotEmpty;
   }
 
+  /// Minimum free RAM (in bytes) required before loading a GGUF model.
+  static const int _minFreeRamBytes = 512 * 1024 * 1024; // 512 MB
+
   Future<void> ensureModelLoaded({
     required String modelPath,
     required AiRuntimePolicy policy,
@@ -66,6 +71,19 @@ class LlamaRuntimeService {
       final file = File(modelPath);
       if (!await file.exists()) {
         throw StateError('Model file not found at: $modelPath');
+      }
+
+      // Pre-flight RAM check to prevent OOM crash.
+      final freeRam = SysInfo.getFreePhysicalMemory();
+      if (freeRam < _minFreeRamBytes) {
+        debugPrint(
+          'GGUF load refused: only ${(freeRam / (1024 * 1024)).round()}MB free '
+          '(need ${(_minFreeRamBytes / (1024 * 1024)).round()}MB).',
+        );
+        throw StateError(
+          'Not enough free memory to load the model. '
+          'Close other apps and try again, or switch to Android AICore.',
+        );
       }
 
       final signature = _policySignature(policy);
@@ -79,24 +97,30 @@ class LlamaRuntimeService {
 
       await _disposeInternal();
 
-      var engine = LlamaEngine(LlamaBackend());
       try {
-        await engine.loadModel(modelPath, modelParams: policy.modelParams);
-      } catch (_) {
-        // Safety fallback if GPU/auto path fails on device drivers.
-        await engine.dispose();
-        engine = LlamaEngine(LlamaBackend());
-        final fallback = policy.modelParams.copyWith(
-          preferredBackend: GpuBackend.cpu,
-          gpuLayers: 0,
-        );
-        await engine.loadModel(modelPath, modelParams: fallback);
-      }
+        var engine = LlamaEngine(LlamaBackend());
+        try {
+          await engine.loadModel(modelPath, modelParams: policy.modelParams);
+        } catch (_) {
+          // Safety fallback if GPU/auto path fails on device drivers.
+          await engine.dispose();
+          engine = LlamaEngine(LlamaBackend());
+          final fallback = policy.modelParams.copyWith(
+            preferredBackend: GpuBackend.cpu,
+            gpuLayers: 0,
+          );
+          await engine.loadModel(modelPath, modelParams: fallback);
+        }
 
-      _engine = engine;
-      _loadedModelPath = modelPath;
-      _loadedPolicySignature = signature;
-      _touchIdleTimer();
+        _engine = engine;
+        _loadedModelPath = modelPath;
+        _loadedPolicySignature = signature;
+        _touchIdleTimer();
+      } catch (e, st) {
+        debugPrint('GGUF model load failed: $e\n$st');
+        await _disposeInternal();
+        rethrow;
+      }
     });
   }
 

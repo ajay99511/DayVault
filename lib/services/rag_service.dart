@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config/ai_constants.dart';
 import '../models/objectbox_models.dart';
+import '../services/android_aicore_service.dart';
 import '../services/ai_runtime_policy_service.dart';
 import '../services/encryption_service.dart';
 import '../services/llama_runtime_service.dart';
@@ -30,6 +31,7 @@ class RagAnswerContext {
 class RagService {
   final StorageService _storage;
   final AiRuntimePolicyService _policyService;
+  final AndroidAicoreService _aicoreService;
   final EncryptionService _encryption = EncryptionService();
   final LlamaRuntimeService _runtime = LlamaRuntimeService.instance;
 
@@ -37,7 +39,7 @@ class RagService {
   bool _processing = false;
   bool _started = false;
 
-  RagService(this._storage, this._policyService);
+  RagService(this._storage, this._policyService, this._aicoreService);
 
   void start() {
     if (_started) return;
@@ -224,11 +226,42 @@ class RagService {
   Stream<String> ask(String userQuery) async* {
     final contexts = await retrieveContext(userQuery);
     final ragPrompt = _buildPrompt(userQuery, contexts);
+    final runtimeConfig = await _storage.getAiRuntimeConfig();
+
+    if (runtimeConfig.chatEngineIndex == 1 && Platform.isAndroid) {
+      try {
+        final ready = await _aicoreService.ensureReady(
+          autoDownload: runtimeConfig.aicoreAutoDownload,
+        );
+        if (!ready) {
+          throw StateError(
+            'Android AICore model is not ready on this device. '
+            'Open AI Settings to check availability/download status.',
+          );
+        }
+
+        final text = await _aicoreService.generate(
+          ragPrompt,
+          temperature: 0.6,
+          topK: 32,
+          maxOutputTokens: runtimeConfig.maxGenerationTokens > 0
+              ? runtimeConfig.maxGenerationTokens
+              : AiConstants.chatMaxOutputTokens,
+        );
+        yield text;
+        return;
+      } catch (e, st) {
+        debugPrint('AICore generation failed, falling back to GGUF: $e\n$st');
+        // Fall through to GGUF runtime when available.
+      }
+    }
+
     final policy = await _policyService.buildPolicy(forEmbedding: false);
     final chatModelPath = await _resolveModelPath(0);
     if (chatModelPath == null) {
       throw StateError(
-          'No chat model available. Import and activate a chat GGUF model.');
+          'No chat model available. Import and activate a chat GGUF model, '
+          'or switch chat engine to Android AICore in AI Settings.');
     }
     yield* _runtime.generate(
       ragPrompt,
@@ -373,8 +406,11 @@ final ragServiceProvider = Provider<RagService>((ref) {
   final service = RagService(
     ref.read(storageServiceProvider),
     ref.read(aiRuntimePolicyServiceProvider),
+    ref.read(androidAicoreServiceProvider),
   );
-  service.start();
+  // Lazy-start: worker only runs when explicitly triggered via start() or
+  // kickWorker(), NOT on app launch. This prevents background GGUF loads from
+  // causing OOM crashes. See GGUF_REFERENCE.md.
   ref.onDispose(() => service.dispose());
   return service;
 });

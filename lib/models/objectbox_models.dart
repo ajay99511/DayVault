@@ -225,8 +225,15 @@ class ObjectBoxAiRuntimeConfig {
   @Id()
   int id = 1;
 
+  /// 0 = local GGUF (llama.cpp), 1 = Android AICore
+  /// Default to AICore — GGUF retained as backup only (see GGUF_REFERENCE.md).
+  int chatEngineIndex = 1;
+
   /// 0 = auto, 1 = cpu, 2 = vulkan
   int backendIndex = 0;
+
+  /// If true and AICore is selectable, request model download automatically.
+  bool aicoreAutoDownload = true;
 
   bool autoPolicy = true;
   bool pauseEmbeddingOnLowBattery = true;

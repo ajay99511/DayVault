@@ -30,7 +30,7 @@ dependencies:
   share_plus: ^7.2.2
   uuid: ^4.3.3
   permission_handler: ^11.3.0
-  llamadart: ^0.6.7
+  llamadart: ^0.6.7 # GGUF backup path only — not exposed in UI. See GGUF_REFERENCE.md
   file_picker: ^10.3.2
   photo_manager: ^3.6.0
   cached_network_image: ^3.4.1

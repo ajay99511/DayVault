@@ -406,7 +406,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(7, 145200524995731987),
     name: 'ObjectBoxAiRuntimeConfig',
-    lastPropertyId: const obx_int.IdUid(9, 6143100621495716399),
+    lastPropertyId: const obx_int.IdUid(11, 3935307197206660791),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -461,6 +461,18 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(9, 6143100621495716399),
         name: 'maxGenerationTokens',
         type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(10, 1598783131671612557),
+        name: 'chatEngineIndex',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(11, 3935307197206660791),
+        name: 'aicoreAutoDownload',
+        type: 1,
         flags: 0,
       ),
     ],
@@ -538,9 +550,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final entryIdOffset = fbb.writeString(object.entryId);
         final headlineOffset = fbb.writeString(object.headline);
         final contentOffset = fbb.writeString(object.content);
-        final feelingOffset = object.feeling == null
-            ? null
-            : fbb.writeString(object.feeling!);
+        final feelingOffset =
+            object.feeling == null ? null : fbb.writeString(object.feeling!);
         final tagsJsonOffset = fbb.writeString(object.tagsJson);
         final locationJsonOffset = object.locationJson == null
             ? null
@@ -623,56 +634,56 @@ obx_int.ModelDefinition getObjectBoxModel() {
     ),
     ObjectBoxRankingCategory:
         obx_int.EntityDefinition<ObjectBoxRankingCategory>(
-          model: _entities[1],
-          toOneRelations: (ObjectBoxRankingCategory object) => [],
-          toManyRelations: (ObjectBoxRankingCategory object) => {},
-          getId: (ObjectBoxRankingCategory object) => object.id,
-          setId: (ObjectBoxRankingCategory object, int id) {
-            object.id = id;
-          },
-          objectToFB: (ObjectBoxRankingCategory object, fb.Builder fbb) {
-            final categoryIdOffset = fbb.writeString(object.categoryId);
-            final titleOffset = fbb.writeString(object.title);
-            final iconNameOffset = fbb.writeString(object.iconName);
-            final itemsJsonOffset = fbb.writeString(object.itemsJson);
-            fbb.startTable(7);
-            fbb.addInt64(0, object.id);
-            fbb.addOffset(1, categoryIdOffset);
-            fbb.addOffset(2, titleOffset);
-            fbb.addOffset(3, iconNameOffset);
-            fbb.addOffset(4, itemsJsonOffset);
-            fbb.addBool(5, object.isFavorite);
-            fbb.finish(fbb.endTable());
-            return object.id;
-          },
-          objectFromFB: (obx.Store store, ByteData fbData) {
-            final buffer = fb.BufferContext(fbData);
-            final rootOffset = buffer.derefObject(0);
+      model: _entities[1],
+      toOneRelations: (ObjectBoxRankingCategory object) => [],
+      toManyRelations: (ObjectBoxRankingCategory object) => {},
+      getId: (ObjectBoxRankingCategory object) => object.id,
+      setId: (ObjectBoxRankingCategory object, int id) {
+        object.id = id;
+      },
+      objectToFB: (ObjectBoxRankingCategory object, fb.Builder fbb) {
+        final categoryIdOffset = fbb.writeString(object.categoryId);
+        final titleOffset = fbb.writeString(object.title);
+        final iconNameOffset = fbb.writeString(object.iconName);
+        final itemsJsonOffset = fbb.writeString(object.itemsJson);
+        fbb.startTable(7);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, categoryIdOffset);
+        fbb.addOffset(2, titleOffset);
+        fbb.addOffset(3, iconNameOffset);
+        fbb.addOffset(4, itemsJsonOffset);
+        fbb.addBool(5, object.isFavorite);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
 
-            final object = ObjectBoxRankingCategory()
-              ..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0)
-              ..categoryId = const fb.StringReader(
-                asciiOptimization: true,
-              ).vTableGet(buffer, rootOffset, 6, '')
-              ..title = const fb.StringReader(
-                asciiOptimization: true,
-              ).vTableGet(buffer, rootOffset, 8, '')
-              ..iconName = const fb.StringReader(
-                asciiOptimization: true,
-              ).vTableGet(buffer, rootOffset, 10, '')
-              ..itemsJson = const fb.StringReader(
-                asciiOptimization: true,
-              ).vTableGet(buffer, rootOffset, 12, '')
-              ..isFavorite = const fb.BoolReader().vTableGet(
-                buffer,
-                rootOffset,
-                14,
-                false,
-              );
+        final object = ObjectBoxRankingCategory()
+          ..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0)
+          ..categoryId = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 6, '')
+          ..title = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 8, '')
+          ..iconName = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 10, '')
+          ..itemsJson = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 12, '')
+          ..isFavorite = const fb.BoolReader().vTableGet(
+            buffer,
+            rootOffset,
+            14,
+            false,
+          );
 
-            return object;
-          },
-        ),
+        return object;
+      },
+    ),
     ObjectBoxUserSettings: obx_int.EntityDefinition<ObjectBoxUserSettings>(
       model: _entities[2],
       toOneRelations: (ObjectBoxUserSettings object) => [],
@@ -929,85 +940,99 @@ obx_int.ModelDefinition getObjectBoxModel() {
     ),
     ObjectBoxAiRuntimeConfig:
         obx_int.EntityDefinition<ObjectBoxAiRuntimeConfig>(
-          model: _entities[6],
-          toOneRelations: (ObjectBoxAiRuntimeConfig object) => [],
-          toManyRelations: (ObjectBoxAiRuntimeConfig object) => {},
-          getId: (ObjectBoxAiRuntimeConfig object) => object.id,
-          setId: (ObjectBoxAiRuntimeConfig object, int id) {
-            object.id = id;
-          },
-          objectToFB: (ObjectBoxAiRuntimeConfig object, fb.Builder fbb) {
-            fbb.startTable(10);
-            fbb.addInt64(0, object.id);
-            fbb.addInt64(1, object.backendIndex);
-            fbb.addBool(2, object.autoPolicy);
-            fbb.addBool(3, object.pauseEmbeddingOnLowBattery);
-            fbb.addInt64(4, object.lowBatteryThreshold);
-            fbb.addInt64(5, object.forcedContextSize);
-            fbb.addInt64(6, object.forcedThreads);
-            fbb.addInt64(7, object.forcedGpuLayers);
-            fbb.addInt64(8, object.maxGenerationTokens);
-            fbb.finish(fbb.endTable());
-            return object.id;
-          },
-          objectFromFB: (obx.Store store, ByteData fbData) {
-            final buffer = fb.BufferContext(fbData);
-            final rootOffset = buffer.derefObject(0);
+      model: _entities[6],
+      toOneRelations: (ObjectBoxAiRuntimeConfig object) => [],
+      toManyRelations: (ObjectBoxAiRuntimeConfig object) => {},
+      getId: (ObjectBoxAiRuntimeConfig object) => object.id,
+      setId: (ObjectBoxAiRuntimeConfig object, int id) {
+        object.id = id;
+      },
+      objectToFB: (ObjectBoxAiRuntimeConfig object, fb.Builder fbb) {
+        fbb.startTable(12);
+        fbb.addInt64(0, object.id);
+        fbb.addInt64(1, object.backendIndex);
+        fbb.addBool(2, object.autoPolicy);
+        fbb.addBool(3, object.pauseEmbeddingOnLowBattery);
+        fbb.addInt64(4, object.lowBatteryThreshold);
+        fbb.addInt64(5, object.forcedContextSize);
+        fbb.addInt64(6, object.forcedThreads);
+        fbb.addInt64(7, object.forcedGpuLayers);
+        fbb.addInt64(8, object.maxGenerationTokens);
+        fbb.addInt64(9, object.chatEngineIndex);
+        fbb.addBool(10, object.aicoreAutoDownload);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
 
-            final object = ObjectBoxAiRuntimeConfig()
-              ..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0)
-              ..backendIndex = const fb.Int64Reader().vTableGet(
-                buffer,
-                rootOffset,
-                6,
-                0,
-              )
-              ..autoPolicy = const fb.BoolReader().vTableGet(
-                buffer,
-                rootOffset,
-                8,
-                false,
-              )
-              ..pauseEmbeddingOnLowBattery = const fb.BoolReader().vTableGet(
-                buffer,
-                rootOffset,
-                10,
-                false,
-              )
-              ..lowBatteryThreshold = const fb.Int64Reader().vTableGet(
-                buffer,
-                rootOffset,
-                12,
-                0,
-              )
-              ..forcedContextSize = const fb.Int64Reader().vTableGet(
-                buffer,
-                rootOffset,
-                14,
-                0,
-              )
-              ..forcedThreads = const fb.Int64Reader().vTableGet(
-                buffer,
-                rootOffset,
-                16,
-                0,
-              )
-              ..forcedGpuLayers = const fb.Int64Reader().vTableGet(
-                buffer,
-                rootOffset,
-                18,
-                0,
-              )
-              ..maxGenerationTokens = const fb.Int64Reader().vTableGet(
-                buffer,
-                rootOffset,
-                20,
-                0,
-              );
+        final object = ObjectBoxAiRuntimeConfig()
+          ..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0)
+          ..backendIndex = const fb.Int64Reader().vTableGet(
+            buffer,
+            rootOffset,
+            6,
+            0,
+          )
+          ..autoPolicy = const fb.BoolReader().vTableGet(
+            buffer,
+            rootOffset,
+            8,
+            false,
+          )
+          ..pauseEmbeddingOnLowBattery = const fb.BoolReader().vTableGet(
+            buffer,
+            rootOffset,
+            10,
+            false,
+          )
+          ..lowBatteryThreshold = const fb.Int64Reader().vTableGet(
+            buffer,
+            rootOffset,
+            12,
+            0,
+          )
+          ..forcedContextSize = const fb.Int64Reader().vTableGet(
+            buffer,
+            rootOffset,
+            14,
+            0,
+          )
+          ..forcedThreads = const fb.Int64Reader().vTableGet(
+            buffer,
+            rootOffset,
+            16,
+            0,
+          )
+          ..forcedGpuLayers = const fb.Int64Reader().vTableGet(
+            buffer,
+            rootOffset,
+            18,
+            0,
+          )
+          ..maxGenerationTokens = const fb.Int64Reader().vTableGet(
+            buffer,
+            rootOffset,
+            20,
+            0,
+          )
+          ..chatEngineIndex = const fb.Int64Reader().vTableGet(
+            buffer,
+            rootOffset,
+            22,
+            0,
+          )
+          ..aicoreAutoDownload = const fb.BoolReader().vTableGet(
+            buffer,
+            rootOffset,
+            24,
+            false,
+          );
 
-            return object;
-          },
-        ),
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -1068,8 +1093,8 @@ class ObjectBoxJournalEntry_ {
   /// See [ObjectBoxJournalEntry.timeBucketIndex].
   static final timeBucketIndex =
       obx.QueryIntegerProperty<ObjectBoxJournalEntry>(
-        _entities[0].properties[10],
-      );
+    _entities[0].properties[10],
+  );
 
   /// See [ObjectBoxJournalEntry.imagesJson].
   static final imagesJson = obx.QueryStringProperty<ObjectBoxJournalEntry>(
@@ -1125,8 +1150,8 @@ class ObjectBoxUserSettings_ {
   /// See [ObjectBoxUserSettings.securityEnabled].
   static final securityEnabled =
       obx.QueryBooleanProperty<ObjectBoxUserSettings>(
-        _entities[2].properties[1],
-      );
+    _entities[2].properties[1],
+  );
 
   /// See [ObjectBoxUserSettings.username].
   static final username = obx.QueryStringProperty<ObjectBoxUserSettings>(
@@ -1217,8 +1242,8 @@ class ObjectBoxJournalChunk_ {
   /// See [ObjectBoxJournalChunk.embeddingModelId].
   static final embeddingModelId =
       obx.QueryStringProperty<ObjectBoxJournalChunk>(
-        _entities[4].properties[6],
-      );
+    _entities[4].properties[6],
+  );
 
   /// See [ObjectBoxJournalChunk.embedding].
   static final embedding = obx.QueryHnswProperty<ObjectBoxJournalChunk>(
@@ -1304,8 +1329,8 @@ class ObjectBoxAiRuntimeConfig_ {
   /// See [ObjectBoxAiRuntimeConfig.backendIndex].
   static final backendIndex =
       obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
-        _entities[6].properties[1],
-      );
+    _entities[6].properties[1],
+  );
 
   /// See [ObjectBoxAiRuntimeConfig.autoPolicy].
   static final autoPolicy = obx.QueryBooleanProperty<ObjectBoxAiRuntimeConfig>(
@@ -1315,36 +1340,48 @@ class ObjectBoxAiRuntimeConfig_ {
   /// See [ObjectBoxAiRuntimeConfig.pauseEmbeddingOnLowBattery].
   static final pauseEmbeddingOnLowBattery =
       obx.QueryBooleanProperty<ObjectBoxAiRuntimeConfig>(
-        _entities[6].properties[3],
-      );
+    _entities[6].properties[3],
+  );
 
   /// See [ObjectBoxAiRuntimeConfig.lowBatteryThreshold].
   static final lowBatteryThreshold =
       obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
-        _entities[6].properties[4],
-      );
+    _entities[6].properties[4],
+  );
 
   /// See [ObjectBoxAiRuntimeConfig.forcedContextSize].
   static final forcedContextSize =
       obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
-        _entities[6].properties[5],
-      );
+    _entities[6].properties[5],
+  );
 
   /// See [ObjectBoxAiRuntimeConfig.forcedThreads].
   static final forcedThreads =
       obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
-        _entities[6].properties[6],
-      );
+    _entities[6].properties[6],
+  );
 
   /// See [ObjectBoxAiRuntimeConfig.forcedGpuLayers].
   static final forcedGpuLayers =
       obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
-        _entities[6].properties[7],
-      );
+    _entities[6].properties[7],
+  );
 
   /// See [ObjectBoxAiRuntimeConfig.maxGenerationTokens].
   static final maxGenerationTokens =
       obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
-        _entities[6].properties[8],
-      );
+    _entities[6].properties[8],
+  );
+
+  /// See [ObjectBoxAiRuntimeConfig.chatEngineIndex].
+  static final chatEngineIndex =
+      obx.QueryIntegerProperty<ObjectBoxAiRuntimeConfig>(
+    _entities[6].properties[9],
+  );
+
+  /// See [ObjectBoxAiRuntimeConfig.aicoreAutoDownload].
+  static final aicoreAutoDownload =
+      obx.QueryBooleanProperty<ObjectBoxAiRuntimeConfig>(
+    _entities[6].properties[10],
+  );
 }

@@ -333,7 +333,7 @@
     },
     {
       "id": "7:145200524995731987",
-      "lastPropertyId": "9:6143100621495716399",
+      "lastPropertyId": "11:3935307197206660791",
       "name": "ObjectBoxAiRuntimeConfig",
       "properties": [
         {
@@ -381,6 +381,16 @@
           "id": "9:6143100621495716399",
           "name": "maxGenerationTokens",
           "type": 6
+        },
+        {
+          "id": "10:1598783131671612557",
+          "name": "chatEngineIndex",
+          "type": 6
+        },
+        {
+          "id": "11:3935307197206660791",
+          "name": "aicoreAutoDownload",
+          "type": 1
         }
       ],
       "relations": []

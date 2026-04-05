@@ -5,12 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../config/constants.dart';
-import '../services/ai_model_registry_service.dart';
-import '../services/llama_runtime_service.dart';
+import '../services/android_aicore_service.dart';
 import '../services/rag_service.dart';
 import '../widgets/glass_widgets.dart';
 import 'ai_settings_screen.dart';
 
+/// AI Assistant screen — AICore-focused chat interface.
+///
+/// GGUF model status checks have been removed from the user-facing UI.
+/// The chat backend defaults to Android AICore (Gemini Nano).
+/// See GGUF_REFERENCE.md for the original GGUF-aware implementation.
 class AiAssistantScreen extends ConsumerStatefulWidget {
   const AiAssistantScreen({super.key});
 
@@ -24,45 +28,26 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   bool _isGenerating = false;
   String? _error;
   StreamSubscription<String>? _activeSub;
-  bool _hasModels = false;
-  bool _hasChatModel = false;
-  bool _hasEmbeddingModel = false;
-  String? _chatModelPath;
-  String? _embeddingModelPath;
-  String? _chatModelName;
-  String? _embeddingModelName;
+  bool _aicoreReady = false;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadModelStatus();
+    _loadStatus();
   }
 
-  Future<void> _loadModelStatus() async {
-    final runtime = LlamaRuntimeService.instance;
-    final has = await runtime.hasAnyModel();
-    final modelDir = await runtime.getModelDirectory();
-    final chatPath = '${modelDir.path}/chat_*.gguf';
-    final embedPath = '${modelDir.path}/embed_*.gguf';
-    final chatModel =
-        await ref.read(aiModelRegistryServiceProvider).getModels(roleIndex: 0);
-    final embedModel =
-        await ref.read(aiModelRegistryServiceProvider).getModels(roleIndex: 1);
-    final activeChatCandidates = chatModel.where((m) => m.isActive);
-    final activeEmbedCandidates = embedModel.where((m) => m.isActive);
-    final activeChat =
-        activeChatCandidates.isNotEmpty ? activeChatCandidates.first : null;
-    final activeEmbed =
-        activeEmbedCandidates.isNotEmpty ? activeEmbedCandidates.first : null;
+  Future<void> _loadStatus() async {
+    setState(() => _loading = true);
+
+    final aicoreStatus =
+        await ref.read(androidAicoreServiceProvider).getStatus();
+
     if (!mounted) return;
     setState(() {
-      _hasModels = has;
-      _hasChatModel = activeChat != null;
-      _hasEmbeddingModel = activeEmbed != null;
-      _chatModelPath = chatPath;
-      _embeddingModelPath = embedPath;
-      _chatModelName = activeChat?.displayName;
-      _embeddingModelName = activeEmbed?.displayName;
+      // AICore is the default engine. Treat it as ready if model is available.
+      _aicoreReady = aicoreStatus.modelReady;
+      _loading = false;
     });
   }
 
@@ -105,7 +90,6 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
   @override
   void dispose() {
     _activeSub?.cancel();
-    LlamaRuntimeService.instance.cancelGeneration();
     _queryCtrl.dispose();
     super.dispose();
   }
@@ -127,7 +111,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    'Local AI',
+                    'AI Assistant',
                     style: GoogleFonts.outfit(
                       color: Colors.white,
                       fontSize: 24,
@@ -144,120 +128,104 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                           builder: (_) => const AiSettingsScreen(),
                         ),
                       );
-                      await _loadModelStatus();
+                      await _loadStatus();
                     },
                   ),
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: GlassContainer(
-                borderRadius: 16,
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Icon(
-                      _hasModels ? Icons.memory : Icons.warning_amber_rounded,
-                      color: _hasModels
-                          ? AppColors.emerald500
-                          : AppColors.amber500,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _hasModels
-                            ? 'Local GGUF model detected'
-                            : 'No local GGUF model found',
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 12),
+            // Status bar
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: LinearProgressIndicator(),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: GlassContainer(
+                  borderRadius: 16,
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _aicoreReady
+                            ? Icons.check_circle
+                            : Icons.cloud_download_outlined,
+                        color: _aicoreReady
+                            ? AppColors.emerald500
+                            : AppColors.amber500,
+                        size: 18,
                       ),
-                    ),
-                    TextButton(
-                      onPressed: _loadModelStatus,
-                      child: const Text('Refresh'),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _aicoreReady
+                              ? 'Gemini Nano ready — on-device & private'
+                              : 'AI model not ready. Open settings to download.',
+                          style: const TextStyle(
+                              color: Colors.white70, fontSize: 12),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _loadStatus,
+                        child: const Text('Refresh'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            if (!_hasModels)
+            if (!_aicoreReady && !_loading)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 child: GlassContainer(
                   borderRadius: 16,
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Place model files at:',
+                        'Setup Required',
                         style: TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold),
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        _chatModelPath ?? '',
-                        style: const TextStyle(
-                            color: AppColors.slate400, fontSize: 11),
+                      const Text(
+                        'Download the Google AI model to start chatting about your journal entries. '
+                        'All processing happens on-device — your data never leaves your phone.',
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _embeddingModelPath ?? '',
-                        style: const TextStyle(
-                            color: AppColors.slate400, fontSize: 11),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const AiSettingsScreen(),
+                              ),
+                            );
+                            await _loadStatus();
+                          },
+                          icon: const Icon(Icons.settings, size: 18),
+                          label: const Text('Open AI Settings'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.indigo500,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-            if (_hasModels)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                child: GlassContainer(
-                  borderRadius: 16,
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Chat: ${_chatModelName ?? "Not selected"}',
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 12),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Embedding: ${_embeddingModelName ?? "Not selected"}',
-                        style: const TextStyle(
-                            color: Colors.white70, fontSize: 12),
-                      ),
-                      if (!_hasChatModel)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 8),
-                          child: Text(
-                            'Select an active chat model in AI Settings to start chatting.',
-                            style: TextStyle(
-                              color: AppColors.amber500,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                      if (!_hasEmbeddingModel)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 4),
-                          child: Text(
-                            'No active embedding model: answers will have reduced diary context.',
-                            style: TextStyle(
-                              color: AppColors.amber500,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
+            // Response area
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -282,6 +250,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                 ),
               ),
             ),
+            // Input area
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: GlassContainer(
@@ -307,7 +276,7 @@ class _AiAssistantScreenState extends ConsumerState<AiAssistantScreen> {
                     const SizedBox(width: 8),
                     IconButton(
                       onPressed:
-                          (_isGenerating || !_hasChatModel) ? null : _ask,
+                          (_isGenerating || !_aicoreReady) ? null : _ask,
                       icon: _isGenerating
                           ? const SizedBox(
                               width: 18,
