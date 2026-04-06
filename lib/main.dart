@@ -12,11 +12,21 @@ import 'widgets/glass_widgets.dart';
 import 'services/storage_service.dart';
 import 'services/objectbox_service.dart';
 import 'services/security_service.dart';
+import 'services/gemma_service.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
   await ObjectBoxService.init();
   await SecurityService().initialize();
+
+  // Initialize flutter_gemma. HuggingFace token is optional and injected via
+  // --dart-define-from-file=config.json (never hard-coded).
+  const hfToken = String.fromEnvironment('HUGGINGFACE_TOKEN');
+  GemmaService.initializeGlobal(
+    huggingFaceToken: hfToken.isNotEmpty ? hfToken : null,
+  );
+
   runApp(const ProviderScope(child: MemoryPalaceApp()));
 }
 

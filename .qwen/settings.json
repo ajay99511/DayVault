@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(flutter *)",
-      "Bash(dart *)"
+      "Bash(dart *)",
+      "Bash(remove-item *)",
+      "Bash(del *)",
+      "Bash(findstr *)"
     ]
   },
   "$version": 3

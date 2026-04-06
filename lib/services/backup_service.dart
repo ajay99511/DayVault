@@ -107,6 +107,7 @@ class BackupService {
       await file.writeAsString(content);
 
       // Share the file
+      // ignore: deprecated_member_use
       final shareResult = await Share.shareXFiles(
         [XFile(filePath)],
         subject: 'Memory Palace Backup',

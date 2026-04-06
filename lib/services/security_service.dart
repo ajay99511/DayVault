@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -29,8 +30,9 @@ class SecurityService {
 
   /// Generate a random salt for PIN hashing
   String _generateSalt() {
-    final random = DateTime.now().millisecondsSinceEpoch.toString();
-    return sha256.convert(utf8.encode(random)).toString().substring(0, 16);
+    final random = Random.secure();
+    final saltBytes = List<int>.generate(16, (_) => random.nextInt(256));
+    return base64Encode(saltBytes);
   }
 
   /// Hash PIN using PBKDF2 with SHA-256
@@ -48,10 +50,14 @@ class SecurityService {
   /// Generate encryption key from PIN
   Future<Uint8List> _deriveEncryptionKey(String pin) async {
     final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
-    final hash = await _hashPin(pin, salt);
-    // Use first 32 bytes for encryption key
-    final keyBytes = utf8.encode(hash).take(32).toList();
-    return Uint8List.fromList(keyBytes);
+    
+    // Use proper key derivation with full binary output (32 bytes)
+    final derivedKeyList = await compute(
+      _deriveKeyBinary,
+      {'pin': pin, 'salt': salt, 'iterations': 10000},
+    );
+    
+    return Uint8List.fromList(derivedKeyList);
   }
 
   /// Initialize security service - creates salt if not exists
@@ -319,9 +325,27 @@ String _pbkdf2Hash(Map<String, dynamic> params) {
     final digest = hmac.convert(utf8.encode(derivedKey));
     derivedKey = digest.toString();
   }
-  
+
   // Final hash
   final hmac = Hmac(sha256, utf8.encode(pin));
   final digest = hmac.convert(utf8.encode(derivedKey + pin));
   return digest.toString();
+}
+
+// Isolate function for proper binary key derivation (32 bytes of entropy)
+List<int> _deriveKeyBinary(Map<String, dynamic> params) {
+  final pin = params['pin'] as String;
+  final salt = params['salt'] as String;
+  final iterations = params['iterations'] as int;
+  
+  // PBKDF2-like with full binary output (not hex string)
+  List<int> derivedKey = utf8.encode(salt);
+  
+  for (int i = 0; i < iterations; i++) {
+    final hmac = Hmac(sha256, utf8.encode(pin));
+    final digest = hmac.convert(derivedKey);
+    derivedKey = digest.bytes;
+  }
+  
+  return derivedKey; // 32 bytes of entropy as List<int>
 }

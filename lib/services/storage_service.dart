@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../models/objectbox_models.dart';
@@ -494,6 +495,16 @@ class StorageService {
   /// Save entry draft for auto-save functionality
   Future<void> saveDraft(String draftId, String draftData) async {
     await _draftStorage.write(key: 'draft_$draftId', value: draftData);
+    
+    // Track this draft ID for bulk operations
+    final existingDrafts = await getAllDraftIds();
+    if (!existingDrafts.contains(draftId)) {
+      existingDrafts.add(draftId);
+      await _draftStorage.write(
+        key: '_draft_keys_', 
+        value: existingDrafts.join(','),
+      );
+    }
   }
 
   /// Get saved draft by ID
@@ -504,20 +515,37 @@ class StorageService {
   /// Delete draft by ID
   Future<void> deleteDraft(String draftId) async {
     await _draftStorage.delete(key: 'draft_$draftId');
+    
+    // Remove from tracking
+    final existingDrafts = await getAllDraftIds();
+    existingDrafts.remove(draftId);
+    await _draftStorage.write(
+      key: '_draft_keys_', 
+      value: existingDrafts.join(','),
+    );
   }
 
   /// Get all draft IDs
   Future<List<String>> getAllDraftIds() async {
-    final drafts = <String>[];
-    // Read all keys and filter for draft keys
-    // Note: flutter_secure_storage doesn't have a getAllKeys method,
-    // so we track draft IDs separately if needed
-    return drafts;
+    final draftKeysJson = await _draftStorage.read(key: '_draft_keys_');
+    if (draftKeysJson == null || draftKeysJson.isEmpty) {
+      return [];
+    }
+    
+    try {
+      return draftKeysJson.split(',').where((id) => id.isNotEmpty).toList();
+    } catch (e) {
+      debugPrint('Failed to parse draft keys: $e');
+      return [];
+    }
   }
 
   /// Clear all drafts (useful after successful save or user logout)
   Future<void> clearAllDrafts() async {
-    // Implementation depends on tracking draft IDs
-    // For now, drafts are cleared individually after save
+    final draftIds = await getAllDraftIds();
+    for (final id in draftIds) {
+      await _draftStorage.delete(key: 'draft_$id');
+    }
+    await _draftStorage.delete(key: '_draft_keys_');
   }
 }

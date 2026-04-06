@@ -53,6 +53,10 @@ app.*.map.json
 *.pem
 *.p12
 *.key
+config.json
+
+# Temporary build outputs
+analyze_output.txt
 
 # OS System Files
 Thumbs.db

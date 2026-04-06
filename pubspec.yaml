@@ -27,14 +27,15 @@ dependencies:
   system_info2: ^4.1.0
   crypto: ^3.0.3
   image_picker: ^1.0.7
-  share_plus: ^7.2.2
+  share_plus: ^12.0.2
   uuid: ^4.3.3
   permission_handler: ^11.3.0
-  llamadart: ^0.6.7 # GGUF backup path only — not exposed in UI. See GGUF_REFERENCE.md
   file_picker: ^10.3.2
   photo_manager: ^3.6.0
   cached_network_image: ^3.4.1
   http: ^1.2.0
+  flutter_gemma: ^0.12.8 # Primary AI engine — local Gemma inference via LiteRT-LM
+  encrypt: ^5.0.3 # AES-256-GCM encryption for journal data
 
 dev_dependencies:
   flutter_test:
@@ -48,3 +49,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+dependency_overrides:
+  # Override to satisfy both encrypt and objectbox_generator
+  pointycastle: ^4.0.0
