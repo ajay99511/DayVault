@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import '../config/constants.dart';
 import '../services/security_service.dart';
+import 'pin_setup_screen.dart';
+import 'forgot_pin_screen.dart';
 
 class LockScreen extends StatefulWidget {
   final VoidCallback onUnlock;
@@ -178,6 +180,18 @@ class _LockScreenState extends State<LockScreen>
       );
     }
 
+    // If PIN is not set, show setup screen
+    if (!isPinSet) {
+      return PinSetupScreen(
+        onSetupComplete: () {
+          setState(() {
+            isPinSet = true;
+          });
+          widget.onUnlock();
+        },
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.slate950,
       body: Stack(
@@ -345,7 +359,37 @@ class _LockScreenState extends State<LockScreen>
                     ],
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 24),
+
+                // Forgot PIN button
+                TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ForgotPinScreen(
+                          onPinReset: () {
+                            Navigator.pop(context);
+                            setState(() {
+                              pin = '';
+                              isError = false;
+                              errorMessage = null;
+                            });
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Text(
+                    'Forgot PIN?',
+                    style: TextStyle(
+                      color: AppColors.amber500,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
                 
                 // Security status
                 const Row(

@@ -11,6 +11,7 @@ import '../models/types.dart';
 import '../config/constants.dart';
 import '../widgets/glass_widgets.dart';
 import 'ai_settings_screen.dart';
+import 'pin_management_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -384,6 +385,43 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
+                  // PIN & Security Management
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.fuchsia500.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.security,
+                        color: AppColors.fuchsia500,
+                        size: 24,
+                      ),
+                    ),
+                    title: const Text(
+                      'PIN & Security',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'Manage PIN, security questions & biometrics',
+                      style: TextStyle(color: AppColors.slate400, fontSize: 11),
+                    ),
+                    trailing: const Icon(Icons.chevron_right,
+                        color: AppColors.slate400),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PinManagementScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  Divider(color: Colors.white.withValues(alpha: 0.1)),
                   _backupTile(
                     context,
                     ref,

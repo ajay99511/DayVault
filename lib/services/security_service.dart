@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart' show compute;
+import 'package:local_auth/local_auth.dart';
+import '../config/security_questions.dart';
 
 /// Security service handling PIN hashing, rate limiting, and data encryption.
 ///
@@ -30,6 +32,14 @@ class SecurityService {
   static const String _attemptCountKey = 'attempt_count';
   static const String _lockoutUntilKey = 'lockout_until';
   static const String _encryptionKey = 'encryption_key';
+  
+  // Security questions storage keys
+  static const String _securityQuestionsKey = 'security_questions';
+  static const String _securityAnswersKey = 'security_answers';
+  static const String _biometricEnabledKey = 'biometric_enabled';
+  
+  // Biometric authentication
+  final LocalAuthentication _localAuth = LocalAuthentication();
 
   /// Generate a random salt for PIN hashing
   String _generateSalt() {
@@ -277,6 +287,213 @@ class SecurityService {
     final result = await _checkLockout();
     return !result.success && result.remainingLockoutSeconds != null;
   }
+
+  // ==================== SECURITY QUESTIONS ====================
+
+  /// Check if security questions are set up
+  Future<bool> areSecurityQuestionsSet() async {
+    final questions = await _storage.read(key: _securityQuestionsKey);
+    return questions != null && questions.isNotEmpty;
+  }
+
+  /// Set security questions and hashed answers
+  /// 
+  /// [questions] - List of 3 question strings
+  /// [answers] - List of 3 answer strings (will be normalized and hashed)
+  Future<bool> setSecurityQuestions(List<String> questions, List<String> answers) async {
+    if (questions.length != 3 || answers.length != 3) {
+      return false;
+    }
+
+    // Hash each answer
+    final hashedAnswers = <String>[];
+    for (final answer in answers) {
+      final normalizedAnswer = SecurityQuestions.normalizeAnswer(answer);
+      final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
+      final hashedAnswer = await _hashPin(normalizedAnswer, salt);
+      hashedAnswers.add(hashedAnswer);
+    }
+
+    // Store questions and hashed answers
+    final questionsJson = jsonEncode(questions);
+    final answersJson = jsonEncode(hashedAnswers);
+
+    await _storage.write(key: _securityQuestionsKey, value: questionsJson);
+    await _storage.write(key: _securityAnswersKey, value: answersJson);
+
+    return true;
+  }
+
+  /// Verify security questions answers
+  /// 
+  /// Returns [SecurityQuestionsResult] with verification status
+  Future<SecurityQuestionsResult> verifySecurityQuestions(List<String> answers) async {
+    if (answers.length != 3) {
+      return SecurityQuestionsResult(
+        success: false,
+        error: 'Must provide exactly 3 answers',
+      );
+    }
+
+    final questionsJson = await _storage.read(key: _securityQuestionsKey);
+    final answersJson = await _storage.read(key: _securityAnswersKey);
+
+    if (questionsJson == null || answersJson == null) {
+      return SecurityQuestionsResult(
+        success: false,
+        error: 'Security questions not configured',
+      );
+    }
+
+    final List<dynamic> storedHashes = jsonDecode(answersJson);
+    final salt = await _storage.read(key: _saltKey) ?? '';
+
+    int correctCount = 0;
+    for (int i = 0; i < answers.length; i++) {
+      final normalizedAnswer = SecurityQuestions.normalizeAnswer(answers[i]);
+      final hashedAnswer = await _hashPin(normalizedAnswer, salt);
+      
+      if (hashedAnswer == storedHashes[i]) {
+        correctCount++;
+      }
+    }
+
+    // Require at least 2 out of 3 correct
+    if (correctCount >= 2) {
+      return SecurityQuestionsResult(success: true);
+    } else {
+      return SecurityQuestionsResult(
+        success: false,
+        error: '$correctCount/3 answers correct. At least 2 required.',
+        correctCount: correctCount,
+      );
+    }
+  }
+
+  /// Get stored security questions (for display in forgot PIN flow)
+  Future<List<String>> getSecurityQuestions() async {
+    final questionsJson = await _storage.read(key: _securityQuestionsKey);
+    if (questionsJson == null) return [];
+
+    try {
+      final List<dynamic> questions = jsonDecode(questionsJson);
+      return questions.cast<String>();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Reset PIN using security questions verification
+  /// 
+  /// [answers] - User's answers to security questions
+  /// [newPin] - New PIN to set
+  Future<PinVerificationResult> resetPinViaSecurityQuestions(
+    List<String> answers,
+    String newPin,
+  ) async {
+    // Verify security questions first
+    final questionsResult = await verifySecurityQuestions(answers);
+    if (!questionsResult.success) {
+      return PinVerificationResult(
+        success: false,
+        error: questionsResult.error ?? 'Security questions verification failed',
+      );
+    }
+
+    // Validate new PIN
+    if (!_isValidPin(newPin)) {
+      return PinVerificationResult(
+        success: false,
+        error: 'Invalid PIN format',
+      );
+    }
+
+    // Reset PIN
+    await _storage.delete(key: _pinHashKey);
+    final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
+    final hash = await _hashPin(newPin, salt);
+    await _storage.write(key: _pinHashKey, value: hash);
+
+    // Reset lockout and attempts
+    await _resetAttempts();
+
+    return PinVerificationResult(success: true);
+  }
+
+  // ==================== BIOMETRIC AUTH FOR PIN RESET ====================
+
+  /// Check if biometric authentication is available
+  Future<bool> isBiometricAvailable() async {
+    try {
+      final canCheckBiometrics = await _localAuth.canCheckBiometrics;
+      final isDeviceSupported = await _localAuth.isDeviceSupported();
+      return canCheckBiometrics || isDeviceSupported;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Authenticate with biometrics and reset PIN
+  /// 
+  /// This allows users with registered biometrics to reset their PIN
+  Future<PinVerificationResult> resetPinViaBiometric(String newPin) async {
+    if (!_isValidPin(newPin)) {
+      return PinVerificationResult(
+        success: false,
+        error: 'Invalid PIN format',
+      );
+    }
+
+    try {
+      final canAuthenticate = await isBiometricAvailable();
+      if (!canAuthenticate) {
+        return PinVerificationResult(
+          success: false,
+          error: 'Biometric authentication not available',
+        );
+      }
+
+      final didAuthenticate = await _localAuth.authenticate(
+        localizedReason: 'Authenticate to reset your PIN',
+      );
+
+      if (didAuthenticate) {
+        // Reset PIN
+        await _storage.delete(key: _pinHashKey);
+        final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
+        final hash = await _hashPin(newPin, salt);
+        await _storage.write(key: _pinHashKey, value: hash);
+
+        // Reset lockout and attempts
+        await _resetAttempts();
+
+        return PinVerificationResult(success: true);
+      } else {
+        return PinVerificationResult(
+          success: false,
+          error: 'Biometric authentication cancelled',
+        );
+      }
+    } catch (e) {
+      return PinVerificationResult(
+        success: false,
+        error: 'Biometric authentication failed: ${e.toString()}',
+      );
+    }
+  }
+
+  /// Get biometric enrollment status
+  Future<String> getBiometricStatus() async {
+    try {
+      final isAvailable = await isBiometricAvailable();
+      if (!isAvailable) {
+        return 'Not available - Set up biometrics in device settings';
+      }
+      return 'Available - Use fingerprint to reset PIN';
+    } catch (e) {
+      return 'Error checking biometric status';
+    }
+  }
 }
 
 /// Result of PIN verification attempt
@@ -291,6 +508,19 @@ class PinVerificationResult {
     this.error,
     this.remainingAttempts,
     this.remainingLockoutSeconds,
+  });
+}
+
+/// Result of security questions verification
+class SecurityQuestionsResult {
+  final bool success;
+  final String? error;
+  final int? correctCount;
+
+  SecurityQuestionsResult({
+    required this.success,
+    this.error,
+    this.correctCount,
   });
 }
 
