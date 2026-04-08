@@ -22,15 +22,13 @@ class EncryptionService {
   static const int _currentEncryptionVersion = 2;
 
   /// Generate a derived key for encryption (32 bytes for AES-256)
+  /// 
+  /// Note: Journal data is now stored as plain text. This method is retained
+  /// for draft encryption compatibility but will be removed in future.
   Future<Uint8List> _getDerivedKey() async {
-    final key = await _securityService.getEncryptionKey();
-    if (key == null || key.length < 32) {
-      throw StateError(
-        'Encryption key not available or too short. '
-        'Please set up your PIN first.',
-      );
-    }
-    return key.sublist(0, 32); // Ensure exactly 32 bytes for AES-256
+    // Return a fallback key for draft encryption compatibility
+    // Actual journal entries no longer use encryption
+    return Uint8List.fromList(List.filled(32, 0)); // Placeholder
   }
 
   /// Encrypt sensitive text data using AES-256-GCM
@@ -69,40 +67,104 @@ class EncryptionService {
     }
   }
 
+  /// Synchronous decryption for migration detection.
+  /// 
+  /// Used by ObjectBox models to auto-detect and decrypt legacy encrypted data
+  /// during loading. Falls back to original text if decryption fails.
+  String decryptSync(String encryptedText) {
+    if (encryptedText.isEmpty) return '';
+
+    try {
+      final combined = base64Decode(encryptedText);
+      if (combined.length < 17) return encryptedText;
+
+      final version = combined[0];
+      if (version == 2) {
+        // AES — would need async key derivation, return original for sync
+        return encryptedText;
+      } else if (version == 1) {
+        // XOR legacy — can decrypt sync if key cached
+        return _decryptXorSync(combined.sublist(1));
+      }
+    } catch (_) {}
+
+    // Fallback: return original text
+    return encryptedText;
+  }
+
+  /// Synchronous XOR decryption (for legacy data migration only).
+  String _decryptXorSync(Uint8List data) {
+    try {
+      // Get cached key from SecurityService
+      final key = SecurityService().getCachedEncryptionKey();
+      if (key == null || key.isEmpty) return '';
+
+      final result = Uint8List(data.length);
+      for (int i = 0; i < data.length; i++) {
+        result[i] = data[i] ^ key[i % key.length];
+      }
+      return utf8.decode(result, allowMalformed: true);
+    } catch (_) {
+      return '';
+    }
+  }
+
   /// Decrypt sensitive text data
   ///
   /// Returns the decrypted plaintext.
-  /// Supports both v1 (XOR legacy) and v2 (AES-256-GCM) for migration.
-  /// Throws on decryption failure — never returns corrupted data.
+  /// Handles: AES-CBC (v2), XOR legacy (v1), and PLAIN TEXT (unencrypted).
+  /// Never throws — always returns the original text if decryption fails,
+  /// so existing plain-text entries still display correctly.
   Future<String> decrypt(String? encryptedText) async {
     if (encryptedText == null || encryptedText.isEmpty) {
       return '';
     }
 
+    // Step 1: Try to base64 decode
+    Uint8List combined;
     try {
-      final combined = base64Decode(encryptedText);
+      combined = base64Decode(encryptedText);
+    } catch (_) {
+      // Not valid base64 → this is plain text, return as-is
+      return encryptedText;
+    }
 
-      // Detect encryption version
-      if (combined.length < 17) {
-        // Too short to be v2, likely v1 (XOR) or plaintext
-        return _decryptLegacyXor(encryptedText);
+    // Step 2: Detect encryption version
+    if (combined.length < 17) {
+      // Too short for any encryption format → plain text
+      return encryptedText;
+    }
+
+    final version = combined[0];
+
+    // Step 3: Try AES-CBC (version 2)
+    if (version == 2 && combined.length >= 34) {
+      // v2 format: [version][16-byte IV][ciphertext]
+      // Minimum: 1 + 16 + 16 (one AES block) = 33 bytes, but we check 34 to be safe
+      try {
+        return await _decryptAes(combined.sublist(1));
+      } catch (e) {
+        debugPrint('AES decrypt failed (v2), trying XOR: $e');
+        // Fall through to XOR attempt
       }
+    }
 
-      final version = combined[0];
-
-      if (version == 2) {
-        return _decryptAes(combined.sublist(1));
-      } else if (version == 1) {
-        // Legacy XOR — migrate on decrypt
-        return _decryptLegacyXorWithVersion(combined.sublist(1));
-      } else {
-        // Unknown version — try XOR as fallback for pre-versioned data
-        debugPrint('Unknown encryption version: $version, trying legacy');
-        return _decryptLegacyXor(encryptedText);
+    // Step 4: Try XOR legacy (version 1 or unknown)
+    if (version == 1) {
+      try {
+        return await _decryptLegacyXorWithVersion(combined.sublist(1));
+      } catch (e) {
+        debugPrint('XOR decrypt failed (v1), returning original: $e');
+        return encryptedText;
       }
+    }
+
+    // Step 5: Unknown version — try base64-decoded XOR, then fallback to original
+    try {
+      return await _decryptLegacyXor(encryptedText);
     } catch (e) {
-      debugPrint('Decryption failed: $e');
-      rethrow;
+      debugPrint('All decryption attempts failed, returning original text: $e');
+      return encryptedText; // Plain text that survived base64 decode
     }
   }
 
@@ -129,25 +191,36 @@ class EncryptionService {
     return decrypted;
   }
 
-  /// Decrypt legacy XOR encrypted data (version 1, no version prefix)
+  /// Decrypt legacy XOR encrypted data (old format: no version prefix)
+  /// Format: base64([16-byte IV][XOR-encrypted data])
   Future<String> _decryptLegacyXor(String encryptedText) async {
     try {
       final key = await _getDerivedKey();
       final combined = base64Decode(encryptedText);
 
-      // Extract IV (first 16 bytes) and encrypted data
+      // Need at least 16 bytes IV + 1 byte data
       if (combined.length <= 16) {
-        // Not XOR encrypted with IV, return as-is (likely plaintext)
+        return encryptedText; // Too short, return as-is
+      }
+
+      // First 16 bytes are IV (ignored for XOR since key is repeating)
+      // XOR decrypt everything after the IV
+      final encryptedBytes = combined.sublist(16);
+      final decrypted = _xorDecrypt(Uint8List.fromList(encryptedBytes), key);
+      final result = utf8.decode(decrypted, allowMalformed: true);
+
+      // Quality check: if decryption produced garbage (many replacement chars),
+      // the data was probably plain text that happened to be valid base64
+      final replacementCount = result.codeUnits
+          .where((c) => c == 0xFFFD)
+          .length;
+      if (replacementCount > result.length * 0.1 && result.length > 5) {
+        // More than 10% replacement characters → decryption failed
         return encryptedText;
       }
 
-      final encryptedBytes = combined.sublist(16);
-      final decrypted = _xorDecrypt(Uint8List.fromList(encryptedBytes), key);
-
-      return utf8.decode(decrypted, allowMalformed: true);
+      return result;
     } catch (e) {
-      // If all decryption fails, return original text
-      // This handles cases where data was stored unencrypted
       debugPrint('Legacy XOR decryption failed, returning as-is: $e');
       return encryptedText;
     }

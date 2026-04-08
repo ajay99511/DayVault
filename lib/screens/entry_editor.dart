@@ -96,9 +96,9 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
   
   Future<void> _saveDraft() async {
     if (!_hasChanges || _isSaving) return;
-    
+
     setState(() => _isSaving = true);
-    
+
     try {
       final draftData = {
         'id': _draftId,
@@ -112,17 +112,14 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
         'images': images.map((img) => img.toJson()).toList(),
         'timestamp': DateTime.now().toIso8601String(),
       };
-      
+
       final draftJson = jsonEncode(draftData);
-      
-      // Optionally encrypt the draft
-      final encryptionService = EncryptionService();
-      final encryptedDraft = await encryptionService.encrypt(draftJson);
-      
+
+      // Store draft as plain text JSON (no encryption)
       await ref
           .read(storageServiceProvider)
-          .saveDraft(_draftId!, encryptedDraft ?? draftJson);
-          
+          .saveDraft(_draftId!, draftJson);
+
       if (mounted) {
         setState(() {
           _hasChanges = false;
@@ -136,22 +133,26 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
       }
     }
   }
-  
+
   Future<void> _loadDraft() async {
     if (_draftId == null) return;
-    
+
     try {
       final draftJson = await ref
           .read(storageServiceProvider)
           .getDraft(_draftId!);
-      
+
       if (draftJson != null) {
-        // Try to decrypt first
-        final encryptionService = EncryptionService();
-        final decryptedJson = await encryptionService.decrypt(draftJson);
-        
-        final draftData = jsonDecode(decryptedJson) as Map<String, dynamic>;
-        
+        // Try to decrypt in case old drafts were encrypted
+        String plainJson;
+        try {
+          plainJson = await EncryptionService().decrypt(draftJson);
+        } catch (_) {
+          plainJson = draftJson; // Not encrypted, use as-is
+        }
+
+        final draftData = jsonDecode(plainJson) as Map<String, dynamic>;
+
         if (mounted) {
           setState(() {
             type = EntryType.values[draftData['type'] as int];
@@ -162,7 +163,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
             selectedBucket = TimeBucket.values[draftData['timeBucket'] as int];
             images = _parseDraftImages(draftData['images'] as List?);
           });
-          
+
           // Show recovery message
           _showDraftRecoveredSnackbar();
         }

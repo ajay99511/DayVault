@@ -20,6 +20,7 @@ class JournalScreen extends ConsumerStatefulWidget {
 class _JournalScreenState extends ConsumerState<JournalScreen> {
   List<JournalEntry> entries = [];
   bool isLoading = true;
+  String? loadError;
 
   // Search state
   bool _isSearching = false;
@@ -39,13 +40,55 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
   }
 
   Future<void> _loadData() async {
-    final data = await ref.read(storageServiceProvider).getJournal();
-    if (mounted) {
-      setState(() {
-        entries = data;
-        isLoading = false;
-      });
+    try {
+      final data = await ref.read(storageServiceProvider).getJournal();
+      if (mounted) {
+        setState(() {
+          entries = data;
+          isLoading = false;
+          loadError = null;
+        });
+      }
+    } catch (e, st) {
+      debugPrint('Journal loading failed: $e\n$st');
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          loadError = e.toString();
+        });
+      }
     }
+  }
+
+  void _showErrorDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('Loading Failed', style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Failed to load journal entries. This could be due to:\n\n'
+          '• Encryption key unavailable (PIN not entered)\n'
+          '• Corrupted data\n'
+          '• Timeout (too many entries)\n\n'
+          'Error: ${loadError ?? "Unknown"}',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Dismiss'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _loadData(); // Retry
+            },
+            child: const Text('Retry', style: TextStyle(color: Color(0xFF6366F1))),
+          ),
+        ],
+      ),
+    );
   }
 
   void _openEditor() {
@@ -227,15 +270,17 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
               Expanded(
                 child: isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : filteredEntries.isEmpty
-                        ? _buildEmptyState()
-                        : ListView.builder(
-                            padding:
-                                const EdgeInsets.only(bottom: 120, top: 20),
-                            itemCount: filteredEntries.length,
-                            itemBuilder: (ctx, i) =>
-                                _buildEntryItem(filteredEntries[i]),
-                          ),
+                    : loadError != null
+                        ? _buildErrorState()
+                        : filteredEntries.isEmpty
+                            ? _buildEmptyState()
+                            : ListView.builder(
+                                padding:
+                                    const EdgeInsets.only(bottom: 120, top: 20),
+                                itemCount: filteredEntries.length,
+                                itemBuilder: (ctx, i) =>
+                                    _buildEntryItem(filteredEntries[i]),
+                              ),
               ),
             ],
           ),
@@ -292,6 +337,53 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
             style: const TextStyle(color: Colors.white24),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Colors.red.withValues(alpha: 0.6),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              "Failed to Load Memories",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "There was a problem loading your journal entries.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white54),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6366F1),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

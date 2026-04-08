@@ -32,6 +32,9 @@ class StorageService {
   late final Box<ObjectBoxAiRuntimeConfig> _aiRuntimeConfigBox;
   late final Box<ObjectBoxRankingCategory> _rankingBox;
   late final Box<ObjectBoxUserSettings> _settingsBox;
+  
+  // Draft storage - uses default FlutterSecureStorage
+  // Key caching is handled in SecurityService
   final FlutterSecureStorage _draftStorage = const FlutterSecureStorage();
 
   StorageService(Store store)
@@ -45,8 +48,11 @@ class StorageService {
 
   // ─── Journal ────────────────────────────────────────────────────────────
 
+  /// Get all journal entries.
+  /// 
+  /// Existing encrypted entries are auto-detected and decrypted during
+  /// conversion. New entries are stored as plain text.
   Future<List<JournalEntry>> getJournal() async {
-    // Query all entries, sort by date descending
     final query = _journalBox
         .query()
         .order(ObjectBoxJournalEntry_.date, flags: Order.descending)

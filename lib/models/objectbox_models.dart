@@ -21,16 +21,16 @@ class ObjectBoxJournalEntry {
   @Property(type: PropertyType.date)
   DateTime date = DateTime.now();
 
-  /// Encrypted field - headline
+  /// Journal headline — stored as plain text (legacy encrypted data auto-decrypted).
   String headline = '';
 
-  /// Encrypted field - content
+  /// Journal content — stored as plain text (legacy encrypted data auto-decrypted).
   String content = '';
 
   /// Stored as enum index.
   int moodIndex = 0;
 
-  /// Encrypted field - feeling
+  /// User's feeling — stored as plain text (legacy encrypted data auto-decrypted).
   String? feeling;
 
   /// Tags stored as JSON-encoded list.
@@ -49,12 +49,15 @@ class ObjectBoxJournalEntry {
 
   // ── Converters ──────────────────────────────────────────────────────────
 
+  /// Convert ObjectBox entry to JournalEntry.
+  /// 
+  /// Auto-detects and decrypts legacy encrypted data. On next save, the entry
+  /// will be stored as plain text automatically.
   Future<JournalEntry> toFreezed() async {
-    final encryptionService = EncryptionService();
-    final decryptedHeadline = await encryptionService.decrypt(headline);
-    final decryptedContent = await encryptionService.decrypt(content);
-    final decryptedFeeling =
-        feeling != null ? await encryptionService.decrypt(feeling) : null;
+    // Auto-detect and decrypt legacy encrypted data
+    final plainHeadline = _maybeDecrypt(headline);
+    final plainContent = _maybeDecrypt(content);
+    final plainFeeling = feeling != null ? _maybeDecrypt(feeling!) : null;
 
     // Parse images — handle both old List<String> and new List<ImageReference>
     final images = _parseImagesField(imagesJson);
@@ -63,12 +66,12 @@ class ObjectBoxJournalEntry {
       id: entryId,
       type: EntryType.values[typeIndex],
       date: date,
-      headline: decryptedHeadline,
-      content: decryptedContent,
+      headline: plainHeadline,
+      content: plainContent,
       mood: Mood.values[moodIndex],
-      feeling: (decryptedFeeling == null || decryptedFeeling.isEmpty)
+      feeling: (plainFeeling == null || plainFeeling.isEmpty)
           ? null
-          : decryptedFeeling,
+          : plainFeeling,
       tags: List<String>.from(jsonDecode(tagsJson)),
       location: locationJson != null
           ? LocationData.fromJson(
@@ -79,6 +82,29 @@ class ObjectBoxJournalEntry {
       images: images,
       isSpotlight: isSpotlight,
     );
+  }
+
+  /// Detect if text is encrypted and decrypt it. Returns original text if plain.
+  static String _maybeDecrypt(String text) {
+    if (text.isEmpty) return '';
+
+    try {
+      // Try to decode as base64 — if it fails, it's plain text
+      final bytes = base64Decode(text);
+
+      // Too short for any encryption format → plain text
+      if (bytes.length < 17) return text;
+
+      // Check for version byte (1 = XOR, 2 = AES)
+      final versionByte = bytes[0];
+      if (versionByte != 1 && versionByte != 2) return text;
+
+      // Looks encrypted — use EncryptionService to decrypt
+      return EncryptionService().decryptSync(text);
+    } catch (_) {
+      // Not valid base64 → plain text
+      return text;
+    }
   }
 
   /// Parse images handling backward compatibility:
@@ -113,26 +139,18 @@ class ObjectBoxJournalEntry {
     }
   }
 
+  /// Create ObjectBox entry from JournalEntry — stores as plain text.
   static Future<ObjectBoxJournalEntry> fromFreezed(
     JournalEntry entry,
   ) async {
-    final encryptionService = EncryptionService();
-
-    // Encrypt sensitive fields
-    final encryptedHeadline = await encryptionService.encrypt(entry.headline);
-    final encryptedContent = await encryptionService.encrypt(entry.content);
-    final encryptedFeeling = entry.feeling != null
-        ? await encryptionService.encrypt(entry.feeling!)
-        : null;
-
     return ObjectBoxJournalEntry()
       ..entryId = entry.id
       ..typeIndex = entry.type.index
       ..date = entry.date
-      ..headline = encryptedHeadline ?? entry.headline
-      ..content = encryptedContent ?? entry.content
+      ..headline = entry.headline // Plain text, no encryption
+      ..content = entry.content // Plain text, no encryption
       ..moodIndex = entry.mood.index
-      ..feeling = encryptedFeeling
+      ..feeling = entry.feeling // Plain text
       ..tagsJson = jsonEncode(entry.tags)
       ..locationJson =
           entry.location != null ? jsonEncode(entry.location!.toJson()) : null

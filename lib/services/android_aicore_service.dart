@@ -4,6 +4,19 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// DEPRECATED: Android AICore Service
+///
+/// This service was designed to use Google's AICore (Gemini Nano) for on-device
+/// AI generation. The ML Kit dependency has been removed to reduce APK size.
+///
+/// Current AI functionality is provided via [GemmaService] which uses
+/// flutter_gemma for on-device inference.
+///
+/// To re-enable AICore:
+/// 1. Add `implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")` to build.gradle.kts
+/// 2. Remove this deprecation notice
+/// 3. Integrate into the AI assistant screen
+@Deprecated('AICore removed to reduce APK size. Use GemmaService instead.')
 class AicoreStatus {
   static const int unavailable = 0;
   static const int downloadable = 1;

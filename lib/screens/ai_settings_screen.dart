@@ -4,17 +4,15 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../config/constants.dart';
 import '../services/gemma_service.dart';
-import '../services/android_aicore_service.dart';
 import '../widgets/glass_widgets.dart';
 
 /// AI Settings screen — Gemma-powered with model management.
 ///
 /// Users can choose a Gemma model preset, download it from Hugging Face,
-/// and manage the installed model. AICore status is shown as a secondary
-/// indicator for devices that support it.
+/// and manage the installed model.
 ///
-/// GGUF model management has been removed from the user-facing UI.
-/// See GGUF_REFERENCE.md for restoration instructions.
+/// Note: AICore (Google's on-device AI) has been removed to reduce APK size.
+/// All AI functionality now uses flutter_gemma exclusively.
 class AiSettingsScreen extends ConsumerStatefulWidget {
   const AiSettingsScreen({super.key});
 
@@ -26,7 +24,6 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
   final _hfTokenCtrl = TextEditingController();
   bool _showToken = false;
   int _selectedPresetIndex = 0;
-  AicoreStatus? _aicoreStatus;
 
   @override
   void initState() {
@@ -37,11 +34,6 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
   Future<void> _refreshAll() async {
     final gemmaNotifier = ref.read(gemmaServiceProvider.notifier);
     await gemmaNotifier.refreshStatus();
-
-    // Also check AICore in background (for informational badge).
-    final aicoreStatus =
-        await ref.read(androidAicoreServiceProvider).getStatus();
-    if (mounted) setState(() => _aicoreStatus = aicoreStatus);
   }
 
   Future<void> _downloadModel() async {
@@ -126,14 +118,6 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
                   _sectionTitle(isReady ? 'MANAGE MODEL' : 'DOWNLOAD'),
                   const SizedBox(height: 8),
                   _actionCard(state, isReady, isDownloading),
-                  const SizedBox(height: 20),
-
-                  // ── AICore info ──
-                  if (_aicoreStatus != null) ...[
-                    _sectionTitle('AICORE (BONUS)'),
-                    const SizedBox(height: 8),
-                    _aicoreInfoCard(),
-                  ],
                 ],
               ),
             ),
@@ -473,40 +457,6 @@ class _AiSettingsScreenState extends ConsumerState<AiSettingsScreen> {
   }
 
   // ──────────────────────────────────────────────────────────────────
-  // AICore informational badge
-  // ──────────────────────────────────────────────────────────────────
-  Widget _aicoreInfoCard() {
-    final status = _aicoreStatus!;
-    final isAvailable = status.modelReady;
-
-    return GlassContainer(
-      borderRadius: 16,
-      padding: const EdgeInsets.all(14),
-      child: Row(
-        children: [
-          Icon(
-            isAvailable ? Icons.auto_awesome : Icons.info_outlined,
-            color: isAvailable ? AppColors.amber500 : Colors.white38,
-            size: 18,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              isAvailable
-                  ? 'Google AICore (Gemini Nano) is also available on this device as an enhanced option.'
-                  : 'Google AICore (Gemini Nano) is not available on this device. '
-                      'It requires flagship hardware (Pixel 8+, Samsung S24+).',
-              style: TextStyle(
-                color: isAvailable ? Colors.white70 : Colors.white38,
-                fontSize: 11,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _sectionTitle(String title) {
     return Text(
       title,

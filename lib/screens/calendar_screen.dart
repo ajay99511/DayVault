@@ -19,6 +19,8 @@ class CalendarScreen extends ConsumerStatefulWidget {
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime _currentDate = DateTime.now();
   List<JournalEntry> _entries = [];
+  bool _isLoading = true;
+  String? _loadError;
 
   // To simulate infinite calendar scrolling (page 1200 = current month when initialized)
   static const int _initialPage = 1200;
@@ -38,11 +40,23 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   Future<void> _loadData() async {
-    final data = await ref.read(storageServiceProvider).getJournal();
-    if (mounted) {
-      setState(() {
-        _entries = data;
-      });
+    try {
+      final data = await ref.read(storageServiceProvider).getJournal();
+      if (mounted) {
+        setState(() {
+          _entries = data;
+          _isLoading = false;
+          _loadError = null;
+        });
+      }
+    } catch (e, st) {
+      debugPrint('Calendar loading failed: $e\n$st');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _loadError = e.toString();
+        });
+      }
     }
   }
 

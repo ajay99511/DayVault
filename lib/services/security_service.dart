@@ -6,18 +6,21 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart' show compute;
 
 /// Security service handling PIN hashing, rate limiting, and data encryption.
-/// 
+///
 /// Security Features:
 /// - PIN hashing using PBKDF2 with SHA-256
 /// - Rate limiting with exponential backoff
 /// - Account lockout after failed attempts
-/// - Encrypted storage using derived keys
 class SecurityService {
   static final SecurityService _instance = SecurityService._internal();
   factory SecurityService() => _instance;
   SecurityService._internal();
 
+  // Use FlutterSecureStorage for PIN storage
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+
+  // Cache encryption key in memory after PIN verification (for decrypting existing data)
+  Uint8List? _cachedEncryptionKey;
 
   // Security constants
   static const int _maxAttempts = 5;
@@ -47,19 +50,6 @@ class SecurityService {
     return key;
   }
 
-  /// Generate encryption key from PIN
-  Future<Uint8List> _deriveEncryptionKey(String pin) async {
-    final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
-    
-    // Use proper key derivation with full binary output (32 bytes)
-    final derivedKeyList = await compute(
-      _deriveKeyBinary,
-      {'pin': pin, 'salt': salt, 'iterations': 10000},
-    );
-    
-    return Uint8List.fromList(derivedKeyList);
-  }
-
   /// Initialize security service - creates salt if not exists
   Future<void> initialize() async {
     final salt = await _storage.read(key: _saltKey);
@@ -70,6 +60,26 @@ class SecurityService {
     
     // Reset attempt count on app start (optional - can be removed for stricter security)
     await _resetAttempts();
+  }
+
+  /// Derive encryption key from PIN and cache it in memory.
+  /// Used to decrypt existing journal data after successful PIN verification.
+  Future<void> _deriveAndCacheEncryptionKey(String pin) async {
+    final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
+    
+    // Derive key using HMAC-SHA256 iterations
+    final derivedKeyList = await compute(
+      _deriveKeyBinary,
+      {'pin': pin, 'salt': salt, 'iterations': 10000},
+    );
+
+    _cachedEncryptionKey = Uint8List.fromList(derivedKeyList);
+  }
+
+  /// Get the cached encryption key (for decrypting existing journal data).
+  /// Returns null if not cached (PIN not verified).
+  Uint8List? getCachedEncryptionKey() {
+    return _cachedEncryptionKey;
   }
 
   /// Check if PIN is set
@@ -99,19 +109,12 @@ class SecurityService {
 
     final hash = await _hashPin(pin, salt);
     await _storage.write(key: _pinHashKey, value: hash);
-    
-    // Derive and store encryption key
-    final encryptionKey = await _deriveEncryptionKey(pin);
-    await _storage.write(
-      key: _encryptionKey, 
-      value: base64Encode(encryptionKey),
-    );
 
     return true;
   }
 
   /// Verify PIN with rate limiting
-  /// 
+  ///
   /// Returns [PinVerificationResult] with status and any error message
   Future<PinVerificationResult> verifyPin(String pin) async {
     // Check if locked out
@@ -140,8 +143,9 @@ class SecurityService {
     final inputHash = await _hashPin(pin, salt);
 
     if (inputHash == storedHash) {
-      // Success - reset attempts
+      // Success - reset attempts and derive encryption key
       await _resetAttempts();
+      await _deriveAndCacheEncryptionKey(pin); // Cache key for decrypting existing data
       return PinVerificationResult(success: true);
     } else {
       // Failed - increment attempts
@@ -231,21 +235,13 @@ class SecurityService {
       return verifyResult;
     }
 
-    // Delete old PIN hash and encryption key
+    // Delete old PIN hash
     await _storage.delete(key: _pinHashKey);
-    await _storage.delete(key: _encryptionKey);
 
     // Set new PIN
     final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
     final hash = await _hashPin(newPin, salt);
     await _storage.write(key: _pinHashKey, value: hash);
-
-    // Derive and store new encryption key
-    final encryptionKey = await _deriveEncryptionKey(newPin);
-    await _storage.write(
-      key: _encryptionKey, 
-      value: base64Encode(encryptionKey),
-    );
 
     return PinVerificationResult(success: true);
   }
@@ -258,23 +254,10 @@ class SecurityService {
     }
 
     await _storage.delete(key: _pinHashKey);
-    await _storage.delete(key: _encryptionKey);
     await _storage.delete(key: _saltKey);
     await _resetAttempts();
 
     return PinVerificationResult(success: true);
-  }
-
-  /// Get encryption key for data encryption
-  Future<Uint8List?> getEncryptionKey() async {
-    final keyStr = await _storage.read(key: _encryptionKey);
-    if (keyStr == null) return null;
-    
-    try {
-      return base64Decode(keyStr);
-    } catch (e) {
-      return null;
-    }
   }
 
   /// Validate PIN format (4-6 digits only)
@@ -333,6 +316,7 @@ String _pbkdf2Hash(Map<String, dynamic> params) {
 }
 
 // Isolate function for proper binary key derivation (32 bytes of entropy)
+// Used to derive encryption key from PIN for decrypting existing journal data
 List<int> _deriveKeyBinary(Map<String, dynamic> params) {
   final pin = params['pin'] as String;
   final salt = params['salt'] as String;
