@@ -433,10 +433,10 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
                       color: AppColors.indigo500.withValues(alpha: 0.3),
                     ),
                   ),
-                  child: Row(
+                  child: const Row(
                     children: [
-                      const Icon(Icons.fingerprint, color: AppColors.indigo500, size: 32),
-                      const SizedBox(width: 12),
+                      Icon(Icons.fingerprint, color: AppColors.indigo500, size: 32),
+                      SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'You will authenticate with your fingerprint to reset your PIN',
@@ -562,9 +562,9 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Scaffold(
+      return const Scaffold(
         backgroundColor: AppColors.slate950,
-        body: const Center(
+        body: Center(
           child: CircularProgressIndicator(color: AppColors.indigo500),
         ),
       );

@@ -107,8 +107,8 @@ class _LockScreenState extends State<LockScreen>
 
   Future<void> handleTap(String val) async {
     if (isLoading) return;
-    
-    if (pin.length < 6) {
+
+    if (pin.length < 4) {
       setState(() {
         pin += val;
         isError = false;
@@ -300,7 +300,7 @@ class _LockScreenState extends State<LockScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: List.generate(
-                      6,
+                      4,
                       (index) => AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
                         margin: const EdgeInsets.symmetric(horizontal: 8),

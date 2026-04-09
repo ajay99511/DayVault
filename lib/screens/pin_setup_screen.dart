@@ -81,7 +81,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
   }
 
   Future<void> _handlePinEntry(String digit) async {
-    if (_pin.length < 6) {
+    if (_pin.length < 4) {
       setState(() {
         _pin += digit;
       });
@@ -97,7 +97,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
   }
 
   Future<void> _handleConfirmPinEntry(String digit) async {
-    if (_confirmPin.length < 6) {
+    if (_confirmPin.length < 4) {
       setState(() {
         _confirmPin += digit;
       });
@@ -359,7 +359,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
         // PIN dots
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(6, (index) {
+          children: List.generate(4, (index) {
             return AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               margin: const EdgeInsets.symmetric(horizontal: 8),

@@ -107,7 +107,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
   }
 
   Future<void> _handlePinEntry(String digit) async {
-    if (_newPin.length < 6) {
+    if (_newPin.length < 4) {
       setState(() {
         _newPin += digit;
       });
@@ -121,7 +121,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
   }
 
   Future<void> _handleConfirmPinEntry(String digit) async {
-    if (_confirmPin.length < 6) {
+    if (_confirmPin.length < 4) {
       setState(() {
         _confirmPin += digit;
       });
@@ -194,9 +194,9 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading && _questions.isEmpty) {
-      return Scaffold(
+      return const Scaffold(
         backgroundColor: AppColors.slate950,
-        body: const Center(
+        body: Center(
           child: CircularProgressIndicator(color: AppColors.indigo500),
         ),
       );
@@ -614,7 +614,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
         // PIN dots
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(6, (index) {
+          children: List.generate(4, (index) {
             return AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               margin: const EdgeInsets.symmetric(horizontal: 8),

@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
 import '../objectbox.g.dart';
 
 /// Singleton wrapper that initialises and exposes the ObjectBox Store.
