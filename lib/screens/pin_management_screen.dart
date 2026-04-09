@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../config/constants.dart';
-import '../config/security_questions.dart';
 import '../services/security_service.dart';
 import '../widgets/glass_widgets.dart';
 
@@ -164,16 +162,19 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
                 setDialogState(() {
                   if (result.success) {
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('PIN changed successfully'),
-                        backgroundColor: AppColors.emerald500,
-                      ),
-                    );
                   } else {
                     error = result.error ?? 'Failed to change PIN';
                   }
                 });
+
+                if (result.success && ctx.mounted) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(
+                      content: Text('PIN changed successfully'),
+                      backgroundColor: AppColors.emerald500,
+                    ),
+                  );
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.indigo500,
@@ -192,8 +193,8 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
   Future<void> _showResetPinViaQuestionsDialog() async {
     if (!_securityQuestionsSet) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Security questions not set up'),
+        const SnackBar(
+          content: Text('Security questions not set up'),
           backgroundColor: AppColors.amber500,
         ),
       );
@@ -201,6 +202,7 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
     }
 
     final questions = await _securityService.getSecurityQuestions();
+    if (!mounted) return;
     final answerControllers = List.generate(
       questions.length,
       (_) => TextEditingController(),
@@ -362,13 +364,15 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
                   );
 
                   if (result.success) {
-                    Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('PIN reset successfully'),
-                        backgroundColor: AppColors.emerald500,
-                      ),
-                    );
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(
+                          content: Text('PIN reset successfully'),
+                          backgroundColor: AppColors.emerald500,
+                        ),
+                      );
+                    }
                     await _loadSecurityStatus();
                   } else {
                     setDialogState(() {
@@ -394,8 +398,8 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
   Future<void> _resetPinViaBiometric() async {
     if (!_biometricAvailable) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Biometric authentication not available'),
+        const SnackBar(
+          content: Text('Biometric authentication not available'),
           backgroundColor: AppColors.amber500,
         ),
       );
@@ -431,7 +435,7 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.fingerprint, color: AppColors.indigo500, size: 32),
+                      const Icon(Icons.fingerprint, color: AppColors.indigo500, size: 32),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -527,9 +531,9 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
                 if (result.success) {
                   if (ctx.mounted) {
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('PIN reset successfully'),
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(
+                        content: Text('PIN reset successfully'),
                         backgroundColor: AppColors.emerald500,
                       ),
                     );
@@ -602,7 +606,7 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'PIN Status',
                               style: TextStyle(
                                 color: AppColors.slate400,
@@ -641,7 +645,7 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'Security Questions',
                               style: TextStyle(
                                 color: AppColors.slate400,
@@ -682,7 +686,7 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+                            const Text(
                               'Biometric Authentication',
                               style: TextStyle(
                                 color: AppColors.slate400,
@@ -837,11 +841,11 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  const Row(
                     children: [
                       Icon(Icons.info_outline, color: AppColors.indigo500, size: 20),
-                      const SizedBox(width: 8),
-                      const Text(
+                      SizedBox(width: 8),
+                      Text(
                         'Security Information',
                         style: TextStyle(
                           color: Colors.white,
@@ -870,7 +874,7 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         text,
-        style: TextStyle(
+        style: const TextStyle(
           color: AppColors.slate400,
           fontSize: 11,
         ),

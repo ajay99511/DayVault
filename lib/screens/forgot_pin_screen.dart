@@ -151,7 +151,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
     });
 
     try {
-      late final result;
+      PinVerificationResult result;
       
       if (_resetMethod == 0) {
         // Security questions verification already done, just reset PIN
@@ -257,7 +257,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
                             : _pinStep == 1
                                 ? 'Enter new PIN'
                                 : 'Confirm new PIN',
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: AppColors.slate400,
                           fontSize: 14,
                         ),
@@ -292,7 +292,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Text(
                                   '$_correctAnswers/3 answers correct',
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     color: AppColors.slate400,
                                     fontSize: 10,
                                   ),
@@ -483,15 +483,15 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
                 color: Colors.white.withValues(alpha: 0.1),
               ),
             ),
-            child: Column(
+            child: const Column(
               children: [
                 Icon(
                   Icons.fingerprint,
                   color: AppColors.indigo500,
                   size: 64,
                 ),
-                const SizedBox(height: 16),
-                const Text(
+                SizedBox(height: 16),
+                Text(
                   'Fingerprint Reset',
                   style: TextStyle(
                     color: Colors.white,
@@ -499,7 +499,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 Text(
                   'You will authenticate with your fingerprint to reset your PIN',
                   style: TextStyle(
@@ -525,15 +525,15 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
           color: AppColors.rose500.withValues(alpha: 0.3),
         ),
       ),
-      child: Column(
+      child: const Column(
         children: [
           Icon(
             Icons.warning,
             color: AppColors.rose500,
             size: 48,
           ),
-          const SizedBox(height: 16),
-          const Text(
+          SizedBox(height: 16),
+          Text(
             'No Recovery Methods Available',
             style: TextStyle(
               color: AppColors.rose500,
@@ -541,7 +541,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Text(
             'Please set up security questions or biometrics in your device settings to enable PIN recovery.',
             style: TextStyle(
@@ -585,11 +585,11 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
                 style: const TextStyle(color: Colors.white, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'Your answer',
-                  hintStyle: TextStyle(color: AppColors.slate600),
+                  hintStyle: const TextStyle(color: AppColors.slate600),
                   filled: true,
                   fillColor: AppColors.slate800.withValues(alpha: 0.5),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                  border: const OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(8)),
                     borderSide: BorderSide.none,
                   ),
                   contentPadding: const EdgeInsets.symmetric(
@@ -720,7 +720,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
               },
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                side: BorderSide(color: AppColors.slate600),
+                side: const BorderSide(color: AppColors.slate600),
               ),
               child: const Text(
                 'BACK',

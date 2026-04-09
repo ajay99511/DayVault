@@ -8,7 +8,6 @@ import '../widgets/image_widgets.dart';
 import '../config/constants.dart';
 import 'entry_editor.dart';
 import 'journal_viewer_screen.dart';
-import 'ai_assistant_screen.dart';
 
 class JournalScreen extends ConsumerStatefulWidget {
   const JournalScreen({super.key});
@@ -58,37 +57,6 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
         });
       }
     }
-  }
-
-  void _showErrorDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Loading Failed', style: TextStyle(color: Colors.white)),
-        content: Text(
-          'Failed to load journal entries. This could be due to:\n\n'
-          '• Encryption key unavailable (PIN not entered)\n'
-          '• Corrupted data\n'
-          '• Timeout (too many entries)\n\n'
-          'Error: ${loadError ?? "Unknown"}',
-          style: const TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Dismiss'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _loadData(); // Retry
-            },
-            child: const Text('Retry', style: TextStyle(color: Color(0xFF6366F1))),
-          ),
-        ],
-      ),
-    );
   }
 
   void _openEditor() {
@@ -208,34 +176,6 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                                 ),
                               ),
                             ),
-                          const SizedBox(width: 12),
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const AiAssistantScreen(),
-                                ),
-                              );
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color:
-                                    AppColors.indigo500.withValues(alpha: 0.2),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: AppColors.indigo500
-                                      .withValues(alpha: 0.4),
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.auto_awesome,
-                                color: AppColors.indigo500,
-                                size: 20,
-                              ),
-                            ),
-                          ),
                           const SizedBox(width: 12),
                           GestureDetector(
                             onTap: () {

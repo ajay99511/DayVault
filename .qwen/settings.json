@@ -5,7 +5,8 @@
       "Bash(dart *)",
       "Bash(remove-item *)",
       "Bash(del *)",
-      "Bash(findstr *)"
+      "Bash(findstr *)",
+      "Bash(powershell *)"
     ]
   },
   "$version": 3

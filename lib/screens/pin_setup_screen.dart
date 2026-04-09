@@ -21,7 +21,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
   
   // Questions selection
   List<String> _availableQuestions = [];
-  List<String> _selectedQuestions = [];
+  final List<String> _selectedQuestions = [];
   
   // PIN entry
   String _pin = '';
@@ -212,7 +212,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
                             color: AppColors.indigo500.withValues(alpha: 0.3),
                           ),
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.security,
                           color: AppColors.indigo500,
                           size: 40,
@@ -241,7 +241,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
                                 : _currentStep == 2
                                     ? 'Confirm your PIN'
                                     : 'Answer your security questions',
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: AppColors.slate400,
                           fontSize: 14,
                         ),
@@ -476,11 +476,11 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
                 style: const TextStyle(color: Colors.white, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: 'Your answer',
-                  hintStyle: TextStyle(color: AppColors.slate600),
+                  hintStyle: const TextStyle(color: AppColors.slate600),
                   filled: true,
                   fillColor: AppColors.slate800.withValues(alpha: 0.5),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                  border: const OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(8)),
                     borderSide: BorderSide.none,
                   ),
                   contentPadding: const EdgeInsets.symmetric(
@@ -517,7 +517,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
               },
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
-                side: BorderSide(color: AppColors.slate600),
+                side: const BorderSide(color: AppColors.slate600),
               ),
               child: const Text(
                 'BACK',

@@ -10,7 +10,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../config/constants.dart';
 import '../widgets/glass_widgets.dart';
-import 'ai_settings_screen.dart';
 import 'pin_management_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -440,42 +439,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     icon: Icons.file_download,
                     iconColor: AppColors.amber500,
                     encrypted: false,
-                  ),
-                  Divider(color: Colors.white.withValues(alpha: 0.1)),
-                  ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.indigo500.withValues(alpha: 0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.auto_awesome,
-                        color: AppColors.indigo500,
-                        size: 20,
-                      ),
-                    ),
-                    title: const Text(
-                      'AI Model Settings',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    subtitle: const Text(
-                      'Import GGUF models and tune runtime policy',
-                      style: TextStyle(color: AppColors.slate400, fontSize: 11),
-                    ),
-                    trailing: const Icon(Icons.chevron_right,
-                        color: AppColors.slate400),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AiSettingsScreen(),
-                        ),
-                      );
-                    },
                   ),
                   Divider(color: Colors.white.withValues(alpha: 0.1)),
                   _manageBackupsTile(context, ref),

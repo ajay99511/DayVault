@@ -31,13 +31,11 @@ class SecurityService {
   static const String _pinHashKey = 'pin_hash';
   static const String _attemptCountKey = 'attempt_count';
   static const String _lockoutUntilKey = 'lockout_until';
-  static const String _encryptionKey = 'encryption_key';
-  
+
   // Security questions storage keys
   static const String _securityQuestionsKey = 'security_questions';
   static const String _securityAnswersKey = 'security_answers';
-  static const String _biometricEnabledKey = 'biometric_enabled';
-  
+
   // Biometric authentication
   final LocalAuthentication _localAuth = LocalAuthentication();
 

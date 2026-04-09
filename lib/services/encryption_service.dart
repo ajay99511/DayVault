@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:encrypt/encrypt.dart' as encrypt_lib;
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
@@ -18,7 +17,6 @@ class EncryptionService {
   factory EncryptionService() => _instance;
   EncryptionService._internal();
 
-  final SecurityService _securityService = SecurityService();
   static const int _currentEncryptionVersion = 2;
 
   /// Generate a derived key for encryption (32 bytes for AES-256)
@@ -172,7 +170,7 @@ class EncryptionService {
   Future<String> _decryptAes(Uint8List data) async {
     // Minimum size: 16 (IV) + 1 (min ciphertext) = 17 bytes
     if (data.length < 17) {
-      throw FormatException('Encrypted data too short');
+      throw const FormatException('Encrypted data too short');
     }
 
     final ivBytes = data.sublist(0, 16);
@@ -231,7 +229,7 @@ class EncryptionService {
     final key = await _getDerivedKey();
 
     if (data.length <= 16) {
-      throw FormatException('XOR encrypted data too short');
+      throw const FormatException('XOR encrypted data too short');
     }
 
     final encryptedBytes = data.sublist(16);

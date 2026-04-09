@@ -34,7 +34,6 @@ dependencies:
   photo_manager: ^3.6.0
   cached_network_image: ^3.4.1
   http: ^1.2.0
-  flutter_gemma: ^0.12.8 # Primary AI engine — local Gemma inference via LiteRT-LM
   encrypt: ^5.0.3 # AES-256-GCM encryption for journal data
 
 dev_dependencies:

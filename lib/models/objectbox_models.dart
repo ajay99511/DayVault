@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:objectbox/objectbox.dart';
 import 'types.dart';
 import '../services/encryption_service.dart';
-import '../config/ai_constants.dart';
 
 // ─── Entities ────────────────────────────────────────────────────────────────
 
@@ -158,113 +157,6 @@ class ObjectBoxJournalEntry {
       ..imagesJson = jsonEncode(entry.images)
       ..isSpotlight = entry.isSpotlight;
   }
-}
-
-@Entity()
-class ObjectBoxJournalChunk {
-  @Id()
-  int id = 0;
-
-  @Unique()
-  String chunkId = ''; // `${entryId}:${chunkIndex}:${modelIdHash}`
-
-  @Index()
-  String entryId = '';
-
-  int chunkIndex = 0;
-  int tokenEstimate = 0;
-
-  /// Encrypted chunk text (at-rest privacy).
-  String chunkText = '';
-
-  String embeddingModelId = AiConstants.embeddingModelId;
-
-  @Property(type: PropertyType.floatVector)
-  @HnswIndex(
-    dimensions: AiConstants.embeddingDimensions,
-    distanceType: VectorDistanceType.cosine,
-    vectorCacheHintSizeKB: AiConstants.vectorCacheHintSizeKB,
-  )
-  List<double> embedding = const [];
-
-  @Property(type: PropertyType.date)
-  DateTime updatedAt = DateTime.now();
-}
-
-@Entity()
-class ObjectBoxEmbeddingJob {
-  @Id()
-  int id = 0;
-
-  @Unique()
-  String jobKey = ''; // `${entryId}:upsert|delete`
-
-  String entryId = '';
-  int opType = 0; // 0 = upsert, 1 = delete
-  int attempts = 0;
-  String? lastError;
-
-  @Property(type: PropertyType.date)
-  DateTime createdAt = DateTime.now();
-
-  @Property(type: PropertyType.date)
-  DateTime updatedAt = DateTime.now();
-}
-
-@Entity()
-class ObjectBoxAiModel {
-  @Id()
-  int id = 0;
-
-  @Unique()
-  String modelId = '';
-
-  /// 0 = chat, 1 = embedding
-  int roleIndex = 0;
-
-  String displayName = '';
-  String filePath = '';
-  String checksum = '';
-  int fileSizeBytes = 0;
-  bool isActive = false;
-  bool isUsable = true;
-  String? lastError;
-
-  @Property(type: PropertyType.date)
-  DateTime importedAt = DateTime.now();
-
-  @Property(type: PropertyType.date)
-  DateTime updatedAt = DateTime.now();
-}
-
-@Entity()
-class ObjectBoxAiRuntimeConfig {
-  /// Single-row pattern: we always use id = 1.
-  @Id()
-  int id = 1;
-
-  /// 0 = local GGUF (llama.cpp), 1 = Android AICore
-  /// Default to AICore — GGUF retained as backup only (see GGUF_REFERENCE.md).
-  int chatEngineIndex = 1;
-
-  /// 0 = auto, 1 = cpu, 2 = vulkan
-  int backendIndex = 0;
-
-  /// If true and AICore is selectable, request model download automatically.
-  bool aicoreAutoDownload = true;
-
-  bool autoPolicy = true;
-  bool pauseEmbeddingOnLowBattery = true;
-  int lowBatteryThreshold = 20;
-
-  /// 0 means auto-tuned by device profile.
-  int forcedContextSize = 0;
-  int forcedThreads = 0;
-
-  /// -1 means auto, 0 means CPU-only.
-  int forcedGpuLayers = -1;
-
-  int maxGenerationTokens = AiConstants.chatMaxOutputTokens;
 }
 
 @Entity()

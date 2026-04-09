@@ -12,26 +12,27 @@ import 'widgets/glass_widgets.dart';
 import 'services/storage_service.dart';
 import 'services/objectbox_service.dart';
 import 'services/security_service.dart';
-import 'services/gemma_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
-  await ObjectBoxService.init();
-  await SecurityService().initialize();
 
-  // Initialize flutter_gemma. HuggingFace token is optional and injected via
-  // --dart-define-from-file=config.json (never hard-coded).
-  const hfToken = String.fromEnvironment('HUGGINGFACE_TOKEN');
-  GemmaService.initializeGlobal(
-    huggingFaceToken: hfToken.isNotEmpty ? hfToken : null,
-  );
+  String? initError;
+  try {
+    await ObjectBoxService.init();
+    await SecurityService().initialize();
+  } catch (e, st) {
+    debugPrint('Critical init failed: $e\n$st');
+    initError = e.toString();
+  }
 
-  runApp(const ProviderScope(child: MemoryPalaceApp()));
+  runApp(ProviderScope(child: MemoryPalaceApp(initError: initError)));
 }
 
 class MemoryPalaceApp extends StatelessWidget {
-  const MemoryPalaceApp({super.key});
+  final String? initError;
+
+  const MemoryPalaceApp({super.key, this.initError});
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +42,6 @@ class MemoryPalaceApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: AppColors.slate950,
-        // Match the "Outfit" font from the web version
         textTheme:
             GoogleFonts.outfitTextTheme(ThemeData.dark().textTheme).apply(
           bodyColor: Colors.white,
@@ -49,7 +49,55 @@ class MemoryPalaceApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: const RootOrchestrator(),
+      home: initError != null
+          ? _ErrorScreen(error: initError!)
+          : const RootOrchestrator(),
+    );
+  }
+}
+
+class _ErrorScreen extends StatelessWidget {
+  final String error;
+  const _ErrorScreen({required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.slate950,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 64),
+              const SizedBox(height: 24),
+              const Text(
+                'Initialization Failed',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                error,
+                style: const TextStyle(color: Colors.white70),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                onPressed: () {
+                  // Restart the app
+                  main();
+                },
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
