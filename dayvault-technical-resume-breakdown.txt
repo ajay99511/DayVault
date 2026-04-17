@@ -1,0 +1,343 @@
+# DayVault (Memory Palace) — Resume Technical Breakdown
+
+## Project Overview
+**Quantified Self Journal & Identity Snapshot OS** — An offline-first personal journaling and identity-tracking mobile application built with Flutter, featuring enterprise-grade security, multi-layer data persistence, and a glassmorphic UI. Designed to capture, organize, and reflect on personal memories while tracking how user preferences evolve over time ("Preference Drift").
+
+**Repository:** github.com/[username]/dayvault
+**Role:** Lead Flutter Developer & Architect
+**Platform:** Android (primary), iOS, Windows/macOS/Linux (via Flutter desktop support)
+
+---
+
+## Technologies & Frameworks
+
+### Core Stack
+- **Flutter SDK** — Cross-platform UI framework with Material 3, dark theme
+- **Dart SDK >=3.2.0 <4.0.0** — Null-safe, AOT/JIT compiled language
+- **Riverpod 3.x (flutter_riverpod ^3.2.1)** — Compile-time safe dependency injection and state management with code generation (riverpod_annotation ^4.0.2, riverpod_generator ^4.0.3)
+
+### Data Persistence
+- **ObjectBox ^5.2.0** — High-performance NoSQL embedded object database with FlatBuffers serialization; offline-first architecture
+- **Flutter Secure Storage ^10.0.0** — Platform-native secure keystore (Android Keystore / iOS Keychain) for PIN hashes, salts, encryption keys, and draft data
+
+### Data Modeling & Serialization
+- **Freezed ^3.2.5** — Immutable union types with code-generated copyWith, ==, hashCode, toString, and pattern matching
+- **JSON Serializable ^6.13.0** — Automated fromJson/toJson code generation via json_annotation ^4.11.0
+- **Build Runner ^2.11.1** — Build system orchestrator for all code generation pipelines
+
+### Security & Cryptography
+- **Encrypt ^5.0.3** — AES-256-CBC encryption with random IV generation; version-prefixed ciphertext format for backward compatibility
+- **Crypto ^3.0.3** — SHA-256 hashing, HMAC-SHA256 for PBKDF2-like key derivation, data integrity verification
+- **Local Auth ^3.0.0** — Platform biometric authentication (fingerprint, Face ID)
+- **PointyCastle ^4.0.0** — Cryptographic primitives (dependency override for cross-package compatibility)
+
+### Media & File Handling
+- **Image Picker ^1.0.7** — Camera and gallery image capture
+- **Photo Manager ^3.6.0** — Gallery asset access by persistent ID (avoids file duplication)
+- **Cached Network Image ^3.4.1** — LRU-cached network image loading with automatic expiration
+- **File Picker ^10.3.2** — Cross-platform file system picker
+- **Permission Handler ^11.3.0** — Runtime permission management for camera, storage, and media
+
+### UI & Typography
+- **Google Fonts ^6.1.0** — Outfit (UI headlines, labels) + Libre Baskerville (journal content, italic prompts)
+- **Intl ^0.19.0** — Internationalization and date/time formatting
+- **Lucide Icons ^0.257.0** — Icon library (with Material Icons fallback)
+
+### System Diagnostics
+- **Device Info Plus ^12.3.0** — Cross-platform device and OS information
+- **Battery Plus ^7.0.0** — Real-time battery level and state monitoring
+- **System Info2 ^4.1.0** — RAM and memory statistics polling
+
+### Utilities
+- **UUID ^4.3.3** — UUID v4 generation for entry and draft IDs
+- **Share Plus ^12.0.2** — Native share sheet integration for encrypted backup export
+- **HTTP ^1.2.0** — HTTP HEAD requests for remote image URL validation (Content-Type, Content-Length verification)
+
+---
+
+## Architecture
+
+### Pattern: Layered Architecture with Service-Repository Pattern
+
+```
+main.dart (App Entry + Async Initialization)
+    │
+    ▼
+RootOrchestrator (Authentication Gate)
+    │  ├── LockScreen (PIN / Biometric)
+    │  └── MainShell (Tab Navigator)
+    │
+    ├── Screens Layer (Presentation)
+    │   ├── JournalScreen, CalendarScreen, IdentityScreen, ProfileScreen
+    │   ├── EntryEditor, JournalViewerScreen
+    │   └── LockScreen, PinSetupScreen, PinManagementScreen, ForgotPinScreen
+    │
+    ├── Services Layer (Business Logic + Data Access)
+    │   ├── ObjectBoxService — Database singleton, query builders
+    │   ├── StorageService — Repository pattern, CRUD abstraction
+    │   ├── EncryptionService — AES-256, XOR legacy, version-prefixed ciphertext
+    │   ├── SecurityService — PIN, biometric, rate limiting, security questions
+    │   ├── BackupService — Encrypted JSON export/import with SHA-256 integrity
+    │   └── ImageService — URL validation, domain allowlist, size limits
+    │
+    ├── Models Layer (Domain Entities)
+    │   ├── Freezed types (JournalEntry, RankingCategory, UserSettings, ImageReference)
+    │   └── ObjectBox entities (adapter pattern with toFreezed/fromFreezed)
+    │
+    └── Widgets Layer (Reusable UI)
+        ├── GlassContainer — BackdropFilter blur + gradient overlay
+        ├── AnimatedOrb — Floating ambient gradient orbs
+        └── ImageThumbnailWidget — Multi-source image rendering strategy
+```
+
+### Key Architectural Decisions
+- **Offline-First:** All core data stored locally in ObjectBox; zero network dependency for primary functionality
+- **Adapter/Converter Pattern:** Clean separation between ObjectBox database entities and Freezed domain models via bidirectional static conversion methods (toFreezed(), fromFreezed())
+- **Singleton Services:** ObjectBoxService, SecurityService, and EncryptionService implement the Singleton pattern with private constructors and factory accessors
+- **Riverpod as DI Container:** Provider-based dependency injection for StorageService and BackupService, enabling testability and loose coupling
+- **Single-Row Settings Pattern:** UserSettings persisted as a single database row (id = 1) for global application configuration
+
+---
+
+## Design Patterns
+
+| Pattern | Implementation |
+|---------|---------------|
+| **Singleton** | ObjectBoxService, SecurityService, EncryptionService with private constructors and static instance accessors |
+| **Adapter/Converter** | Bidirectional ObjectBox ↔ Freezed model conversion isolating persistence from domain logic |
+| **Repository** | StorageService abstracts ObjectBox box operations behind clean CRUD interfaces |
+| **Strategy** | ImageSourceType enum drives different rendering strategies (gallery asset, web URL, file path) |
+| **Chain of Responsibility** | Decryption pipeline: base64 decode → AES v2 → XOR v1 → plaintext fallback, each step catching and delegating to the next |
+| **Factory** | Freezed-generated immutable object factories with @Default annotations |
+| **Observer** | TextField change listeners triggering debounced auto-save; Riverpod reactive providers |
+| **Decorator** | GlassContainer wraps arbitrary children with backdrop blur and glassmorphic styling |
+| **Isolate (Background Processing)** | compute() for PBKDF2 key derivation in separate Dart isolates, preventing UI thread blocking |
+| **Builder** | AnimatedBuilder (ambient orbs), FutureBuilder (async image loading), LayoutBuilder (responsive sizing) |
+| **Fail-Safe / Graceful Degradation** | Auto-detect encrypted vs plaintext fields, database corruption recovery with deletion and recreation, mounted checks preventing memory leaks |
+| **Single Responsibility** | Each service handles exactly one domain: encryption, security, database, backup, images |
+
+---
+
+## Data Models
+
+### JournalEntry (Freezed)
+- Immutable entity with UUID v4 ID, date, headline, description, mood (14 enum values), feeling tracking, location, spotlight flag
+- ImageReferences: union type supporting galleryAsset (persistent ID), webUrl (validated remote URL), or filePath
+- EntryType classification: "story" (daily reflection) or "event" (specific moment with time bucket)
+- Auto-generated copyWith, ==, hashCode, toString, and fromJson/toJson via Freezed + JSON Serializable
+
+### RankingCategory (Freezed)
+- Immutable category with name, list of ranked items (0-5 star ratings), personal notes, favorite flag
+- Supports drag-to-reorder operations and preference drift tracking over time
+
+### UserSettings (Freezed)
+- Security enabled/disabled flag, selected security questions (25-question pool), encryption toggle
+- Single-row persistence pattern with fixed id = 1
+
+### ObjectBox Entities
+- @Entity classes with @Id annotations, @Index for frequently queried fields
+- To-One/To-Many relations managed by ObjectBox's relation system
+- Code-generated cursor classes for type-safe database operations
+
+---
+
+## Security Implementation
+
+### Multi-Layer Security Stack
+1. **PIN Authentication (4-6 digits)**
+   - PBKDF2-like key derivation using HMAC-SHA256 with 100,000 iterations
+   - 16-byte cryptographically random salt stored in Flutter Secure Storage
+   - Binary key derivation producing 32 bytes of entropy
+   - Isolate-based computation via compute() to prevent main-thread blocking
+
+2. **Rate Limiting & Lockout**
+   - Maximum 5 failed attempts before enforced lockout
+   - 30-second cooldown period with real-time countdown display
+   - Attempt counter and lockout timer persisted in secure storage
+   - Auto-reset on application restart
+
+3. **Biometric Authentication**
+   - Local Auth integration for fingerprint and Face ID
+   - Available on both lock screen and PIN reset flows
+   - Graceful fallback to PIN entry on biometric failure
+
+4. **Security Questions Recovery**
+   - 25-question pool, user selects 3 during initial setup
+   - Answers normalized (lowercase + trimmed) then PBKDF2-hashed with same salt
+   - 2-of-3 correct answer threshold for PIN reset authorization
+
+5. **Field-Level Encryption**
+   - AES-256-CBC with random 16-byte initialization vector
+   - Legacy XOR cipher support (version 1) for backward compatibility during migration
+   - Version-prefixed ciphertext format: [version_byte][IV_16 bytes][ciphertext]
+   - Auto-detection in _maybeDecrypt(): attempts base64 decode, validates version byte, falls back to plaintext
+
+6. **Data Integrity Verification**
+   - SHA-256 hash generation and verification methods in EncryptionService
+   - Unique constraints on ObjectBox entity IDs preventing data collision
+
+7. **Image URL Validation Pipeline**
+   - Domain allowlist verification (Unsplash, Wikipedia, Imgur, and trusted sources)
+   - HTTP HEAD request validates Content-Type header and Content-Length
+   - 10MB maximum file size enforcement
+   - User-approval bypass option for whitelisted domains
+
+---
+
+## UI/UX Design
+
+### Design Language: Glassmorphism with Ambient Animation
+- **Color Palette:** Slate-950 background (#020617) with Indigo-500, Emerald-500, Fuchsia-500, Rose-500, and Amber-500 accent colors
+- **Typography:** Google Fonts — Outfit for UI elements and headlines; Libre Baskerville for journal content and italic prompts
+- **GlassContainer:** BackdropFilter blur (sigma 12) combined with semi-transparent white gradient overlay and subtle border rendering
+- **AnimatedOrbs:** Three floating gradient orbs animated via AnimationController with 10-second oscillation cycle, driving ambient background atmosphere
+- **Haptic Feedback:** HapticFeedback.lightImpact() on keypress, mediumImpact() on error, heavyImpact() on success
+
+### Screen-Specific Patterns
+- **Journal:** Timeline layout with vertical connecting lines, colored dots per entry type, glass cards with image headers, dual-mode entry creation (Story Mode vs Event Mode)
+- **Calendar:** Infinite horizontal page view with PageController initialized at page 1200 (simulating extensive history), day cells with heatmap-style indicator dots (indigo = story, emerald = event), year picker for rapid navigation, jumpToPage optimization for >12 month differences
+- **Identity:** Category tab bar with ranked list, drag-to-reorder functionality, star ratings (0-5), gradient badges for top-3 ranked items, personal notes per item
+- **Profile:** Real-time device diagnostics cards (battery, RAM via 5-second polling intervals), cross-platform device information header, settings list rendered in glass containers
+- **Lock Screen:** 4-dot PIN indicator with glow effects, shake animation on authentication error, numeric keypad rendered in circular glass containers
+
+### Responsive Techniques
+- LayoutBuilder for dynamic image carousel heights (9:16 aspect ratio, clamped 120-250px thumbnails, 200-400px full viewer)
+- IntrinsicHeight for timeline cards ensuring equal row heights across variable content
+- AnimatedSwitcher with 300ms transition duration for screen navigation
+
+---
+
+## Performance Optimizations
+
+1. **ObjectBox NoSQL Database** — High-performance embedded database with zero ORM overhead, FlatBuffers-based serialization
+2. **Isolate-Based Cryptography** — PBKDF2 key derivation executes via compute() in background Dart isolates, preventing main-thread blocking during PIN verification
+3. **Debounced Auto-Save** — 3-second Timer debounce on text change events prevents excessive draft write operations to secure storage
+4. **Cached Network Images** — cached_network_image package provides automatic LRU cache with configurable expiration for URL-sourced images
+5. **Photo Manager Asset ID References** — Gallery images referenced by persistent asset ID rather than copied to application storage, reducing memory footprint
+6. **PageController Jump Optimization** — Calendar jumpToToday() calculates page distance and uses jumpToPage for differences exceeding 12 months, avoiding rendering of thousands of intermediate frames
+7. **Future.wait for Batch Conversion** — Journal loading leverages Future.wait() for parallel asynchronous decryption of all entries simultaneously
+8. **Shared Animation Controller** — MainShell uses SingleTickerProviderStateMixin with a single AnimationController driving three separate AnimatedBuilder orb animations, reducing ticker overhead
+9. **Gapless Playback** — Image.memory widgets configured with gaplessPlayback: true to prevent visual flicker during widget rebuilds
+10. **Mounted Checks** — All asynchronous setState calls verify if (mounted) before execution to prevent memory leaks from disposed widgets
+
+---
+
+## Best Practices Incorporated
+
+- **Clean Layered Architecture** — Strict separation of config/, models/, screens/, services/, and widgets/ directories with clear dependency flow
+- **Immutability by Default** — All domain models are Freezed-generated with immutable fields, copyWith pattern, and value equality
+- **Backward Compatibility** — _maybeDecrypt() auto-detects encrypted versus plaintext fields; _parseImagesField() handles both legacy List<String> and modern List<ImageReference> formats
+- **Comprehensive Error Handling** — Try-catch blocks with debugPrint logging at every layer; graceful fallbacks ensuring application never crashes on data corruption
+- **Full Null Safety** — Complete Dart null safety enforcement with @Default annotations on Freezed fields eliminating nullable type proliferation
+- **Code Generation Pipeline** — Freezed + JSON Serializable + ObjectBox generator eliminating manual serialization boilerplate, reducing bugs and maintenance burden
+- **Resource Lifecycle Management** — Proper dispose() calls for all TextEditingControllers, Timers, and AnimationControllers preventing memory leaks
+- **Platform-Aware Branching** — Platform.isAndroid and Platform.isIOS conditional logic for platform-specific device information and permission handling
+- **Separation of Concerns** — Encryption logic isolated in EncryptionService, authentication in SecurityService, database operations in ObjectBoxService, UI logic in screen widgets
+- **Secure-by-Default Configuration** — PIN required on first application launch, security questions mandatory for account recovery, no plaintext credential storage
+- **UUID v4 for Unique Identifiers** — Cryptographically unique identifiers for journal entries and drafts preventing collision in distributed scenarios
+- **Version-Prefixed Encryption** — Ciphertext format includes version byte enabling seamless algorithm migration without data loss
+
+---
+
+## Business Functionality
+
+### Core Modules
+
+**1. Journal System**
+- Dual-mode entry creation: Story Mode (daily reflection with mood and feeling tracking) and Event Mode (specific moment logging with time bucket classification)
+- Auto-save drafts with 3-second debounce to Flutter Secure Storage
+- Multi-source image attachments (gallery capture, remote URL, file picker)
+- Mood tracking across 14 distinct emotional states, location tagging, spotlight flag for highlighting significant entries
+- Full-text search across all journal entries
+
+**2. Calendar Recall**
+- Monthly calendar view with infinite horizontal scroll via PageController
+- Visual heatmap indicators showing entry density and type distribution
+- Day detail bottom sheets for quick entry review
+- Year picker for rapid historical navigation across extensive journal history
+
+**3. Identity / Preference Drift**
+- Personal ranking system across predefined categories (Movies, Restaurants, Places, People, Books) and custom user-defined categories
+- 0-5 star rating system with personal notes per ranked item
+- Drag-to-reorder functionality for manual priority adjustment
+- Favorite category flagging and tracking of preference evolution over time ("Preference Drift")
+
+**4. Security Suite**
+- PIN lock with 4-6 digit codes, PBKDF2-hardened key derivation (100,000 HMAC-SHA256 iterations)
+- Biometric unlock via fingerprint and Face ID integration
+- Security questions recovery with 25-question pool and 2-of-3 correct answer threshold
+- Rate limiting with 5-attempt maximum and 30-second enforced lockout
+- Encrypted and unencrypted backup export with SHA-256 integrity verification
+
+**5. Profile & System Diagnostics**
+- Real-time device health monitoring (battery level/state, RAM usage via 5-second polling intervals)
+- Cross-platform device information display (model, OS version, hardware specifications)
+- Neural encryption toggle for future field-level encryption activation
+- Backup management interface with list, delete, and export capabilities
+
+---
+
+## Resume Bullet Points (Ready to Use)
+
+### Project Summary
+- **Architected and developed DayVault**, an offline-first personal journaling and identity-tracking mobile application built with Flutter and Dart, featuring enterprise-grade security, multi-layer data persistence via ObjectBox NoSQL database, and a glassmorphic UI with ambient animations.
+
+### Technical Architecture
+- Designed a **layered architecture** with Service-Repository pattern, implementing clean separation between presentation (screens), business logic (services), domain models (Freezed immutable types), and data persistence (ObjectBox entities) using an **Adapter/Converter pattern** for bidirectional model transformation.
+- Implemented **Riverpod 3.x** as a compile-time safe dependency injection container, providing Provider-based service injection for StorageService and BackupService with loose coupling and testability.
+- Engineered a **Singleton-based service layer** (ObjectBoxService, SecurityService, EncryptionService) with private constructors and factory accessors ensuring single-instance guarantees across the application lifecycle.
+
+### Data Persistence & Modeling
+- Integrated **ObjectBox ^5.2.0 NoSQL embedded database** with FlatBuffers serialization for high-performance offline-first data persistence, utilizing @Entity annotations, @Index optimization, and type-safe generated cursors.
+- Implemented **Freezed ^3.2.5 immutable union types** with code-generated copyWith, value equality (==, hashCode), pattern matching, and JSON serialization via json_serializable ^6.13.0, eliminating manual serialization boilerplate and runtime null-safety bugs.
+- Designed **bidirectional adapter pattern** (toFreezed() / fromFreezed()) between ObjectBox database entities and Freezed domain models, isolating persistence layer concerns from business domain logic.
+
+### Security Implementation
+- Built a **multi-layer security stack** featuring PBKDF2-like key derivation (HMAC-SHA256, 100,000 iterations, 16-byte cryptographic salt, 32-byte binary key), PIN authentication (4-6 digits), biometric unlock (fingerprint/Face ID via Local Auth), and security questions recovery (25-question pool, 2-of-3 threshold).
+- Implemented **isolate-based cryptographic computation** using Dart's compute() function to execute PBKDF2 key derivation in background isolates, preventing UI thread blocking during PIN verification.
+- Designed **version-prefixed AES-256-CBC field-level encryption** with random 16-byte IV, legacy XOR cipher backward compatibility, and an auto-detection decryption pipeline (Chain of Responsibility pattern) that gracefully handles encrypted, legacy, and plaintext data.
+- Configured **rate limiting and lockout mechanisms** with 5-attempt maximum, 30-second enforced cooldown with real-time countdown, and secure storage persistence for attempt counters and lockout timers.
+
+### UI/UX Engineering
+- Developed a **glassmorphic design system** using BackdropFilter blur (sigma 12), semi-transparent gradient overlays, and animated ambient gradient orbs driven by a shared AnimationController with SingleTickerProviderStateMixin.
+- Implemented **responsive UI patterns** using LayoutBuilder for dynamic image carousel heights (9:16 aspect ratio, clamped dimensions), IntrinsicHeight for equal-row timeline cards, and AnimatedSwitcher with 300ms transitions for screen navigation.
+- Built a **custom bottom tab navigation** with glass container styling, active tab color indication, and Google Fonts typography (Outfit for UI labels, Libre Baskerville for journal content).
+
+### Performance Optimization
+- Optimized **calendar navigation performance** by implementing distance-aware PageController jumping (jumpToPage for >12 month differences), avoiding rendering of thousands of intermediate calendar frames.
+- Implemented **Future.wait for parallel batch processing** of journal entry decryption, enabling simultaneous asynchronous decryption of all entries during journal load operations.
+- Reduced **memory footprint** by referencing gallery images via Photo Manager persistent asset IDs instead of copying files to application storage, and configured gaplessPlayback: true on Image.memory widgets to prevent rebuild flicker.
+
+### Error Handling & Reliability
+- Engineered a **graceful degradation pipeline** at every system layer: auto-detection of encrypted vs plaintext fields, database corruption recovery with automatic deletion and recreation, mounted checks preventing memory leaks from disposed async operations.
+- Implemented **comprehensive resource lifecycle management** with proper dispose() calls for all TextEditingControllers, Timers, and AnimationControllers, preventing memory leaks in long-running application sessions.
+
+### Media & File Handling
+- Built a **multi-source image handling system** supporting gallery capture (Image Picker), remote URL loading (Cached Network Image with LRU cache), and file system picking (File Picker), with a Strategy pattern driving context-appropriate rendering.
+- Implemented an **image URL validation pipeline** using HTTP HEAD requests to verify Content-Type headers, Content-Length limits (10MB maximum), and domain allowlist verification against trusted sources (Unsplash, Wikipedia, Imgur).
+
+### Code Quality & Best Practices
+- Established a **code generation pipeline** using Build Runner orchestrating Freezed, JSON Serializable, and ObjectBox generators, eliminating manual serialization boilerplate and reducing bug surface area.
+- Enforced **full Dart null safety** with @Default annotations on Freezed fields, complete nullable type coverage, and compiler-enforced null-check guarantees across the entire codebase.
+- Applied **design patterns systematically**: Singleton, Adapter, Repository, Strategy, Chain of Responsibility, Factory, Observer, Decorator, Isolate, Builder, and Fail-Safe patterns across appropriate architectural layers.
+
+---
+
+## Skills Demonstrated
+
+| Category | Skills |
+|----------|--------|
+| **Languages** | Dart (null-safe, AOT/JIT), SQL-like query patterns |
+| **Frameworks** | Flutter, Riverpod 3.x, Freezed, ObjectBox |
+| **State Management** | Riverpod (Provider, ConsumerStatefulWidget), setState, AnimationController |
+| **Databases** | ObjectBox NoSQL, FlatBuffers, embedded offline databases |
+| **Security** | AES-256-CBC, PBKDF2, HMAC-SHA256, SHA-256, biometric auth, secure keychain storage, rate limiting |
+| **Architecture** | Layered architecture, Service-Repository pattern, Adapter pattern, Singleton, DI container |
+| **Design Patterns** | Singleton, Adapter, Repository, Strategy, Chain of Responsibility, Factory, Observer, Decorator, Builder, Isolate |
+| **UI/UX** | Glassmorphism, Material 3, custom animations, responsive design, haptic feedback, ambient animations |
+| **Dev Tools** | Build Runner, code generation, Flutter DevTools, debugging |
+| **Platforms** | Android, iOS, Windows, macOS, Linux (via Flutter) |
+
+---
+
+*This document was generated from the DayVault (Memory Palace) source code analysis for resume purposes. All technical details, patterns, and implementations are derived from the actual codebase.*
