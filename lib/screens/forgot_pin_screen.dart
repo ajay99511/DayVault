@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:local_auth/local_auth.dart';
 import '../config/constants.dart';
 import '../services/security_service.dart';
 
@@ -14,6 +15,7 @@ class ForgotPinScreen extends StatefulWidget {
 
 class _ForgotPinScreenState extends State<ForgotPinScreen> {
   final _securityService = SecurityService();
+  final LocalAuthentication _localAuth = LocalAuthentication();
   
   // Reset method: 0 = security questions, 1 = biometric
   int _resetMethod = 0;
@@ -102,8 +104,39 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
-      _pinStep = 1;
     });
+
+    try {
+      final available = await _securityService.isBiometricAvailable();
+      if (!available) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Biometric authentication not available on this device';
+        });
+        return;
+      }
+
+      final didAuthenticate = await _localAuth.authenticate(
+        localizedReason: 'Authenticate to reset your PIN',
+      );
+
+      if (didAuthenticate) {
+        setState(() {
+          _isLoading = false;
+          _pinStep = 1;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Biometric authentication cancelled';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Biometric error: ${e.toString()}';
+      });
+    }
   }
 
   Future<void> _handlePinEntry(String digit) async {
@@ -158,8 +191,8 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
         final answers = _answerControllers.map((c) => c.text.trim()).toList();
         result = await _securityService.resetPinViaSecurityQuestions(answers, _newPin);
       } else {
-        // Biometric reset
-        result = await _securityService.resetPinViaBiometric(_newPin);
+        // Biometric already verified in _resetViaBiometric() — no second prompt
+        result = await _securityService.resetPinDirectly(_newPin);
       }
 
       setState(() {

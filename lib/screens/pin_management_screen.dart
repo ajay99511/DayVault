@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:local_auth/local_auth.dart';
 import '../config/constants.dart';
+import '../models/types.dart';
 import '../services/security_service.dart';
+import '../services/storage_service.dart';
 import '../widgets/glass_widgets.dart';
+import '../config/security_questions.dart';
 
-class PinManagementScreen extends StatefulWidget {
+class PinManagementScreen extends ConsumerStatefulWidget {
   const PinManagementScreen({super.key});
 
   @override
-  State<PinManagementScreen> createState() => _PinManagementScreenState();
+  ConsumerState<PinManagementScreen> createState() => _PinManagementScreenState();
 }
 
-class _PinManagementScreenState extends State<PinManagementScreen> {
+class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
   final _securityService = SecurityService();
   
   bool _isLoading = true;
@@ -18,6 +23,7 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
   bool _securityQuestionsSet = false;
   bool _biometricAvailable = false;
   String _biometricStatus = '';
+  late UserSettings _settings;
 
   @override
   void initState() {
@@ -30,14 +36,177 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
     final questionsSet = await _securityService.areSecurityQuestionsSet();
     final bioAvailable = await _securityService.isBiometricAvailable();
     final bioStatus = await _securityService.getBiometricStatus();
+    _settings = ref.read(storageServiceProvider).getSettings();
 
+    if (mounted) {
+      setState(() {
+        _pinIsSet = pinSet;
+        _securityQuestionsSet = questionsSet;
+        _biometricAvailable = bioAvailable;
+        _biometricStatus = bioStatus;
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _toggleBiometrics(bool value) async {
+    if (value) {
+      try {
+        final didAuthenticate = await LocalAuthentication().authenticate(
+          localizedReason: 'Authenticate to enable biometric login',
+        );
+        if (!didAuthenticate) return;
+      } catch (e) {
+        debugPrint('Biometric error: $e');
+        return;
+      }
+    }
+
+    final newSettings = _settings.copyWith(biometricsEnabled: value);
+    await ref.read(storageServiceProvider).saveSettings(newSettings);
     setState(() {
-      _pinIsSet = pinSet;
-      _securityQuestionsSet = questionsSet;
-      _biometricAvailable = bioAvailable;
-      _biometricStatus = bioStatus;
-      _isLoading = false;
+      _settings = newSettings;
     });
+  }
+
+  Future<void> _showUpdateQuestionsDialog() async {
+    final available = SecurityQuestions.getRandomQuestions(count: 8);
+    final selected = <String>[];
+    final answerControllers = List.generate(3, (_) => TextEditingController());
+    String? error;
+    int step = 0; // 0 = select, 1 = answer
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.slate900,
+          title: Text(
+            step == 0 ? 'Select Recovery Questions' : 'Provide Answers',
+            style: const TextStyle(color: Colors.white),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (error != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(error!, style: const TextStyle(color: AppColors.rose500, fontSize: 12)),
+                  ),
+                if (step == 0)
+                  ...available.map((q) {
+                    final isSelected = selected.contains(q);
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(q, style: TextStyle(color: isSelected ? Colors.white : AppColors.slate400, fontSize: 13)),
+                      leading: Icon(isSelected ? Icons.check_circle : Icons.radio_button_unchecked, color: isSelected ? AppColors.indigo500 : AppColors.slate600),
+                      onTap: () => setDialogState(() {
+                        if (isSelected) selected.remove(q);
+                        else if (selected.length < 3) selected.add(q);
+                      }),
+                    );
+                  })
+                else
+                  ...List.generate(3, (i) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: TextField(
+                      controller: answerControllers[i],
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: selected[i], 
+                        labelStyle: const TextStyle(color: AppColors.slate400, fontSize: 12),
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                  )),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL', style: TextStyle(color: AppColors.slate400))),
+            ElevatedButton(
+              onPressed: () async {
+                if (step == 0) {
+                  if (selected.length != 3) {
+                    setDialogState(() => error = 'Select exactly 3 questions');
+                    return;
+                  }
+                  setDialogState(() { step = 1; error = null; });
+                } else {
+                  final answers = answerControllers.map((c) => c.text.trim()).toList();
+                  if (answers.any((a) => a.isEmpty)) {
+                    setDialogState(() => error = 'All answers required');
+                    return;
+                  }
+                  final success = await _securityService.setSecurityQuestions(selected, answers);
+                  if (success) {
+                    Navigator.pop(ctx);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Security questions updated'), backgroundColor: AppColors.emerald500));
+                      _loadSecurityStatus();
+                    }
+                  } else {
+                    setDialogState(() => error = 'Failed to update questions');
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.indigo500),
+              child: Text(step == 0 ? 'NEXT' : 'UPDATE', style: const TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showDisableSecurityDialog() async {
+    final pinController = TextEditingController();
+    String? error;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.slate900,
+          title: const Text('Disable All Security', style: TextStyle(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('This will remove your PIN and disable all protection. Enter PIN to confirm.', style: TextStyle(color: AppColors.slate400, fontSize: 12)),
+              const SizedBox(height: 16),
+              if (error != null) Text(error!, style: const TextStyle(color: AppColors.rose500, fontSize: 12)),
+              TextField(
+                controller: pinController, 
+                obscureText: true, 
+                keyboardType: TextInputType.number, 
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(labelText: 'Confirm PIN', labelStyle: TextStyle(color: AppColors.slate400)),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL', style: TextStyle(color: AppColors.slate400))),
+            ElevatedButton(
+              onPressed: () async {
+                final result = await _securityService.removePin(pinController.text);
+                if (result.success) {
+                  final storage = ref.read(storageServiceProvider);
+                  await storage.saveSettings(_settings.copyWith(securityEnabled: false, biometricsEnabled: false));
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) Navigator.pop(context); // Go back to profile
+                } else {
+                  setDialogState(() => error = result.error ?? 'Verification failed');
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.rose500),
+              child: const Text('DISABLE', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _showChangePinDialog() async {
@@ -51,138 +220,46 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: AppColors.slate900,
-          title: const Text(
-            'Change PIN',
-            style: TextStyle(color: Colors.white),
-          ),
+          title: const Text('Change PIN', style: TextStyle(color: Colors.white)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (error != null)
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.rose500.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.rose500.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Text(
-                      error!,
-                      style: const TextStyle(
-                        color: AppColors.rose500,
-                        fontSize: 12,
-                      ),
-                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(error!, style: const TextStyle(color: AppColors.rose500, fontSize: 12)),
                   ),
-                TextField(
-                  controller: oldPinController,
-                  obscureText: true,
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    labelText: 'Current PIN',
-                    labelStyle: TextStyle(color: AppColors.slate400),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: newPinController,
-                  obscureText: true,
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    labelText: 'New PIN',
-                    labelStyle: TextStyle(color: AppColors.slate400),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: confirmPinController,
-                  obscureText: true,
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    labelText: 'Confirm New PIN',
-                    labelStyle: TextStyle(color: AppColors.slate400),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+                TextField(controller: oldPinController, obscureText: true, keyboardType: TextInputType.number, maxLength: 6, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Current PIN', labelStyle: TextStyle(color: AppColors.slate400))),
+                const SizedBox(height: 8),
+                TextField(controller: newPinController, obscureText: true, keyboardType: TextInputType.number, maxLength: 6, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'New PIN', labelStyle: TextStyle(color: AppColors.slate400))),
+                const SizedBox(height: 8),
+                TextField(controller: confirmPinController, obscureText: true, keyboardType: TextInputType.number, maxLength: 6, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Confirm New PIN', labelStyle: TextStyle(color: AppColors.slate400))),
               ],
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text(
-                'CANCEL',
-                style: TextStyle(color: AppColors.slate400),
-              ),
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL', style: TextStyle(color: AppColors.slate400))),
             ElevatedButton(
               onPressed: () async {
-                if (oldPinController.text.length < 4) {
-                  setDialogState(() {
-                    error = 'Enter your current PIN';
-                  });
-                  return;
-                }
-
                 if (newPinController.text.length < 4) {
-                  setDialogState(() {
-                    error = 'New PIN must be at least 4 digits';
-                  });
+                  setDialogState(() => error = 'New PIN too short');
                   return;
                 }
-
                 if (newPinController.text != confirmPinController.text) {
-                  setDialogState(() {
-                    error = 'New PINs do not match';
-                  });
+                  setDialogState(() => error = 'New PINs do not match');
                   return;
                 }
-
-                setDialogState(() {
-                  error = null;
-                });
-
-                final result = await _securityService.changePin(
-                  oldPinController.text,
-                  newPinController.text,
-                );
-
-                setDialogState(() {
-                  if (result.success) {
-                    Navigator.pop(ctx);
-                  } else {
-                    error = result.error ?? 'Failed to change PIN';
-                  }
-                });
-
-                if (result.success && ctx.mounted) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(
-                      content: Text('PIN changed successfully'),
-                      backgroundColor: AppColors.emerald500,
-                    ),
-                  );
+                final result = await _securityService.changePin(oldPinController.text, newPinController.text);
+                if (result.success) {
+                  Navigator.pop(ctx);
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PIN changed successfully'), backgroundColor: AppColors.emerald500));
+                } else {
+                  setDialogState(() => error = result.error ?? 'Failed to change PIN');
                 }
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.indigo500,
-              ),
-              child: const Text(
-                'CHANGE',
-                style: TextStyle(color: Colors.white),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.indigo500),
+              child: const Text('CHANGE', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -191,367 +268,59 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
   }
 
   Future<void> _showResetPinViaQuestionsDialog() async {
-    if (!_securityQuestionsSet) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Security questions not set up'),
-          backgroundColor: AppColors.amber500,
-        ),
-      );
-      return;
-    }
-
+    if (!_securityQuestionsSet) return;
     final questions = await _securityService.getSecurityQuestions();
-    if (!mounted) return;
-    final answerControllers = List.generate(
-      questions.length,
-      (_) => TextEditingController(),
-    );
+    final answerControllers = List.generate(questions.length, (_) => TextEditingController());
     final newPinController = TextEditingController();
-    final confirmPinController = TextEditingController();
     String? error;
-    int step = 0; // 0 = answer questions, 1 = enter new PIN
+    int step = 0;
 
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: AppColors.slate900,
-          title: Text(
-            step == 0 ? 'Answer Security Questions' : 'Set New PIN',
-            style: const TextStyle(color: Colors.white),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: step == 0
-                  ? [
-                      if (error != null)
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: AppColors.rose500.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: AppColors.rose500.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Text(
-                            error!,
-                            style: const TextStyle(
-                              color: AppColors.rose500,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ...List.generate(questions.length, (index) {
-                        return Column(
-                          children: [
-                            Text(
-                              'Q${index + 1}: ${questions[index]}',
-                              style: const TextStyle(
-                                color: AppColors.slate300,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: answerControllers[index],
-                              style: const TextStyle(color: Colors.white),
-                              decoration: const InputDecoration(
-                                hintText: 'Your answer',
-                                hintStyle: TextStyle(color: AppColors.slate600),
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-                        );
-                      }),
-                    ]
-                  : [
-                      if (error != null)
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: AppColors.rose500.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: AppColors.rose500.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Text(
-                            error!,
-                            style: const TextStyle(
-                              color: AppColors.rose500,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      TextField(
-                        controller: newPinController,
-                        obscureText: true,
-                        keyboardType: TextInputType.number,
-                        maxLength: 6,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
-                          labelText: 'New PIN',
-                          labelStyle: TextStyle(color: AppColors.slate400),
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: confirmPinController,
-                        obscureText: true,
-                        keyboardType: TextInputType.number,
-                        maxLength: 6,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
-                          labelText: 'Confirm New PIN',
-                          labelStyle: TextStyle(color: AppColors.slate400),
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ],
-            ),
+          title: Text(step == 0 ? 'Identity Recovery' : 'Set New PIN', style: const TextStyle(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (error != null) Text(error!, style: const TextStyle(color: AppColors.rose500, fontSize: 12)),
+              if (step == 0)
+                ...List.generate(questions.length, (i) => TextField(
+                  controller: answerControllers[i], 
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(labelText: questions[i], labelStyle: const TextStyle(color: AppColors.slate400, fontSize: 12)),
+                ))
+              else
+                TextField(
+                  controller: newPinController, 
+                  obscureText: true, 
+                  keyboardType: TextInputType.number, 
+                  maxLength: 6, 
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(labelText: 'New PIN', labelStyle: TextStyle(color: AppColors.slate400)),
+                ),
+            ],
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text(
-                'CANCEL',
-                style: TextStyle(color: AppColors.slate400),
-              ),
-            ),
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL', style: TextStyle(color: AppColors.slate400))),
             ElevatedButton(
               onPressed: () async {
                 if (step == 0) {
-                  // Verify answers
-                  final answers = answerControllers.map((c) => c.text.trim()).toList();
-                  final result = await _securityService.verifySecurityQuestions(answers);
-
-                  setDialogState(() {
-                    if (result.success) {
-                      step = 1;
-                      error = null;
-                    } else {
-                      error = result.error ?? 'Verification failed';
-                    }
-                  });
+                  final result = await _securityService.verifySecurityQuestions(answerControllers.map((c) => c.text).toList());
+                  if (result.success) setDialogState(() => step = 1);
+                  else setDialogState(() => error = result.error ?? 'Verification failed');
                 } else {
-                  // Reset PIN
-                  if (newPinController.text.length < 4) {
-                    setDialogState(() {
-                      error = 'PIN must be at least 4 digits';
-                    });
-                    return;
-                  }
-
-                  if (newPinController.text != confirmPinController.text) {
-                    setDialogState(() {
-                      error = 'PINs do not match';
-                    });
-                    return;
-                  }
-
-                  final answers = answerControllers.map((c) => c.text.trim()).toList();
-                  final result = await _securityService.resetPinViaSecurityQuestions(
-                    answers,
-                    newPinController.text,
-                  );
-
+                  final result = await _securityService.resetPinViaSecurityQuestions(answerControllers.map((c) => c.text).toList(), newPinController.text);
                   if (result.success) {
-                    if (ctx.mounted) {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(ctx).showSnackBar(
-                        const SnackBar(
-                          content: Text('PIN reset successfully'),
-                          backgroundColor: AppColors.emerald500,
-                        ),
-                      );
-                    }
-                    await _loadSecurityStatus();
-                  } else {
-                    setDialogState(() {
-                      error = result.error ?? 'Failed to reset PIN';
-                    });
-                  }
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.indigo500,
-              ),
-              child: Text(
-                step == 0 ? 'VERIFY' : 'RESET PIN',
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _resetPinViaBiometric() async {
-    if (!_biometricAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Biometric authentication not available'),
-          backgroundColor: AppColors.amber500,
-        ),
-      );
-      return;
-    }
-
-    final newPinController = TextEditingController();
-    final confirmPinController = TextEditingController();
-    String? error;
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: AppColors.slate900,
-          title: const Text(
-            'Reset PIN via Fingerprint',
-            style: TextStyle(color: Colors.white),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: AppColors.indigo500.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: AppColors.indigo500.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.fingerprint, color: AppColors.indigo500, size: 32),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'You will authenticate with your fingerprint to reset your PIN',
-                          style: TextStyle(
-                            color: AppColors.slate300,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (error != null)
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.rose500.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.rose500.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Text(
-                      error!,
-                      style: const TextStyle(
-                        color: AppColors.rose500,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                TextField(
-                  controller: newPinController,
-                  obscureText: true,
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    labelText: 'New PIN',
-                    labelStyle: TextStyle(color: AppColors.slate400),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: confirmPinController,
-                  obscureText: true,
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: const InputDecoration(
-                    labelText: 'Confirm New PIN',
-                    labelStyle: TextStyle(color: AppColors.slate400),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text(
-                'CANCEL',
-                style: TextStyle(color: AppColors.slate400),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (newPinController.text.length < 4) {
-                  setDialogState(() {
-                    error = 'PIN must be at least 4 digits';
-                  });
-                  return;
-                }
-
-                if (newPinController.text != confirmPinController.text) {
-                  setDialogState(() {
-                    error = 'PINs do not match';
-                  });
-                  return;
-                }
-
-                setDialogState(() {
-                  error = null;
-                });
-
-                final result = await _securityService.resetPinViaBiometric(
-                  newPinController.text,
-                );
-
-                if (result.success) {
-                  if (ctx.mounted) {
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(
-                        content: Text('PIN reset successfully'),
-                        backgroundColor: AppColors.emerald500,
-                      ),
-                    );
-                    await _loadSecurityStatus();
-                  }
-                } else {
-                  setDialogState(() {
-                    error = result.error ?? 'Failed to reset PIN';
-                  });
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PIN reset successfully'), backgroundColor: AppColors.emerald500));
+                    _loadSecurityStatus();
+                  } else setDialogState(() => error = result.error ?? 'Failed to reset');
                 }
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.indigo500,
-              ),
-              child: const Text(
-                'AUTHENTICATE & RESET',
-                style: TextStyle(color: Colors.white),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.indigo500),
+              child: Text(step == 0 ? 'VERIFY' : 'RESET', style: const TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -561,305 +330,60 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: AppColors.slate950,
-        body: Center(
-          child: CircularProgressIndicator(color: AppColors.indigo500),
-        ),
-      );
-    }
+    if (_isLoading) return const Scaffold(backgroundColor: AppColors.slate950, body: Center(child: CircularProgressIndicator(color: AppColors.indigo500)));
 
     return Scaffold(
       backgroundColor: AppColors.slate950,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text(
-          'PIN & Security',
-          style: TextStyle(color: Colors.white),
-        ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: const Text('PIN & Security', style: TextStyle(color: Colors.white)),
+        leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Security Status
+            // Status Header
             GlassContainer(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _pinIsSet ? Icons.verified_user : Icons.security,
-                        color: _pinIsSet ? AppColors.emerald500 : AppColors.amber500,
-                        size: 32,
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'PIN Status',
-                              style: TextStyle(
-                                color: AppColors.slate400,
-                                fontSize: 12,
-                              ),
-                            ),
-                            Text(
-                              _pinIsSet ? 'ACTIVE' : 'NOT SET',
-                              style: TextStyle(
-                                color: _pinIsSet
-                                    ? AppColors.emerald500
-                                    : AppColors.amber500,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                  _statusRow('Vault Status', _pinIsSet ? 'ENCRYPTED' : 'UNSECURED', _pinIsSet ? Icons.verified_user : Icons.security, _pinIsSet ? AppColors.emerald500 : AppColors.amber500),
                   const Divider(color: AppColors.slate800),
-                  Row(
-                    children: [
-                      Icon(
-                        _securityQuestionsSet
-                            ? Icons.check_circle
-                            : Icons.help_outline,
-                        color: _securityQuestionsSet
-                            ? AppColors.emerald500
-                            : AppColors.amber500,
-                        size: 32,
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Security Questions',
-                              style: TextStyle(
-                                color: AppColors.slate400,
-                                fontSize: 12,
-                              ),
-                            ),
-                            Text(
-                              _securityQuestionsSet
-                                  ? 'CONFIGURED'
-                                  : 'NOT SET UP',
-                              style: TextStyle(
-                                color: _securityQuestionsSet
-                                    ? AppColors.emerald500
-                                    : AppColors.amber500,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                  _statusRow('Recovery', _securityQuestionsSet ? 'CONFIGURED' : 'NOT SET', Icons.help_outline, _securityQuestionsSet ? AppColors.emerald500 : AppColors.amber500),
                   const Divider(color: AppColors.slate800),
-                  Row(
-                    children: [
-                      Icon(
-                        _biometricAvailable
-                            ? Icons.fingerprint
-                            : Icons.do_not_disturb_on,
-                        color: _biometricAvailable
-                            ? AppColors.emerald500
-                            : AppColors.slate600,
-                        size: 32,
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Biometric Authentication',
-                              style: TextStyle(
-                                color: AppColors.slate400,
-                                fontSize: 12,
-                              ),
-                            ),
-                            Text(
-                              _biometricStatus,
-                              style: TextStyle(
-                                color: _biometricAvailable
-                                    ? AppColors.emerald500
-                                    : AppColors.slate600,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                  _statusRow('Biometrics', _biometricAvailable ? 'AVAILABLE' : 'NOT SUPPORTED', Icons.fingerprint, _biometricAvailable ? AppColors.emerald500 : AppColors.slate600),
                 ],
               ),
             ),
             const SizedBox(height: 32),
 
-            // Actions
-            const Text(
-              'SECURITY ACTIONS',
-              style: TextStyle(
-                color: AppColors.slate400,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
-              ),
-            ),
+            const Text('SECURITY ACTIONS', style: TextStyle(color: AppColors.slate400, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 2)),
             const SizedBox(height: 16),
 
             GlassContainer(
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  // Change PIN
-                  if (_pinIsSet)
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.indigo500.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.lock_reset,
-                          color: AppColors.indigo500,
-                        ),
-                      ),
-                      title: const Text(
-                        'Change PIN',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: const Text(
-                        'Update your secure PIN',
-                        style: TextStyle(color: AppColors.slate400, fontSize: 11),
-                      ),
-                      trailing: const Icon(Icons.chevron_right,
-                          color: AppColors.slate400),
-                      onTap: _showChangePinDialog,
-                    ),
-                  if (_pinIsSet)
-                    Divider(color: Colors.white.withValues(alpha: 0.1)),
-
-                  // Reset PIN via Security Questions
-                  if (_pinIsSet)
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.amber500.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.help_outline,
-                          color: AppColors.amber500,
-                        ),
-                      ),
-                      title: const Text(
-                        'Reset PIN via Security Questions',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: const Text(
-                        'Answer your security questions to reset',
-                        style: TextStyle(color: AppColors.slate400, fontSize: 11),
-                      ),
-                      trailing: const Icon(Icons.chevron_right,
-                          color: AppColors.slate400),
-                      onTap: _showResetPinViaQuestionsDialog,
-                    ),
-                  if (_pinIsSet)
-                    Divider(color: Colors.white.withValues(alpha: 0.1)),
-
-                  // Reset PIN via Biometric
                   if (_pinIsSet && _biometricAvailable)
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: AppColors.fuchsia500.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.fingerprint,
-                          color: AppColors.fuchsia500,
-                        ),
-                      ),
-                      title: const Text(
-                        'Reset PIN via Fingerprint',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: const Text(
-                        'Use biometric authentication to reset',
-                        style: TextStyle(color: AppColors.slate400, fontSize: 11),
-                      ),
-                      trailing: const Icon(Icons.chevron_right,
-                          color: AppColors.slate400),
-                      onTap: _resetPinViaBiometric,
+                    SwitchListTile(
+                      value: _settings.biometricsEnabled,
+                      onChanged: _toggleBiometrics,
+                      secondary: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: AppColors.emerald500.withValues(alpha: 0.15), shape: BoxShape.circle), child: const Icon(Icons.fingerprint, color: AppColors.emerald500, size: 20)),
+                      title: const Text('Biometric Unlock', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                      subtitle: const Text('Use fingerprint for faster access', style: TextStyle(color: AppColors.slate400, fontSize: 11)),
+                      activeColor: AppColors.indigo500,
                     ),
-                  if (_pinIsSet && _biometricAvailable)
-                    Divider(color: Colors.white.withValues(alpha: 0.1)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 32),
+                  if (_pinIsSet && _biometricAvailable) Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
 
-            // Info
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: AppColors.slate900.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.1),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.info_outline, color: AppColors.indigo500, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Security Information',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _infoItem('• PIN is encrypted using PBKDF2 with 100,000 iterations'),
-                  _infoItem('• Security questions require 2/3 correct answers'),
-                  _infoItem('• Account locks for 30 seconds after 5 failed attempts'),
-                  _infoItem('• Biometric data never leaves your device'),
+                  _actionTile(Icons.lock_reset, AppColors.indigo500, 'Change PIN', 'Update your secure passkey', _showChangePinDialog),
+                  Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
+                  _actionTile(Icons.help_outline, AppColors.fuchsia500, 'Update Security Questions', 'Modify recovery methods', _showUpdateQuestionsDialog),
+                  Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
+                  _actionTile(Icons.history, AppColors.amber500, 'Recovery Reset', 'Reset PIN via security questions', _showResetPinViaQuestionsDialog),
+                  Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
+                  _actionTile(Icons.no_encryption, AppColors.rose500, 'Disable Security', 'Remove all protection (Caution)', _showDisableSecurityDialog, isDestructive: true),
                 ],
               ),
             ),
@@ -869,15 +393,31 @@ class _PinManagementScreenState extends State<PinManagementScreen> {
     );
   }
 
-  Widget _infoItem(String text) {
+  Widget _actionTile(IconData icon, Color color, String title, String subtitle, VoidCallback onTap, {bool isDestructive = false}) {
+    return ListTile(
+      leading: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle), child: Icon(icon, color: color, size: 20)),
+      title: Text(title, style: TextStyle(color: isDestructive ? AppColors.rose500 : Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+      subtitle: Text(subtitle, style: const TextStyle(color: AppColors.slate400, fontSize: 11)),
+      trailing: const Icon(Icons.chevron_right, color: AppColors.slate400, size: 18),
+      onTap: onTap,
+    );
+  }
+
+  Widget _statusRow(String label, String value, IconData icon, Color color) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: AppColors.slate400,
-          fontSize: 11,
-        ),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(width: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(color: AppColors.slate400, fontSize: 10)),
+              Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+        ],
       ),
     );
   }

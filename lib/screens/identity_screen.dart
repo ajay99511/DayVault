@@ -18,6 +18,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
   String activeId = 'movies';
   bool _showFavoritesOnly = false;
   bool _isLoading = true;
+  bool _isMasked = true; // PII masking state (R3.2)
 
   // Search state
   bool _isSearching = false;
@@ -539,7 +540,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                       ),
                     ),
                     child: Text(
-                      item.notes,
+                      _isMasked ? '••••••••••••••••' : item.notes,
                       style: GoogleFonts.outfit(
                         color: Colors.white70,
                         fontSize: 14,
@@ -752,6 +753,14 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                             ),
                           ),
                         if (!_isSearching) ...[
+                          IconButton(
+                            onPressed: () => setState(() => _isMasked = !_isMasked),
+                            icon: Icon(
+                              _isMasked ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              color: _isMasked ? AppColors.indigo500 : AppColors.slate400,
+                            ),
+                            tooltip: 'Toggle Privacy Mode',
+                          ),
                           IconButton(
                             onPressed: () {
                               setState(() =>
@@ -1003,6 +1012,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                               key: ValueKey(item.id),
                               index: i,
                               item: item,
+                              isMasked: _isMasked,
                               getRankGradient: _getRankGradient,
                               onTap: () {
                                 if (activeId != cat.id) {
@@ -1214,6 +1224,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
 class _RankedItemTile extends StatelessWidget {
   final int index;
   final RankedItem item;
+  final bool isMasked;
   final LinearGradient Function(int) getRankGradient;
   final VoidCallback onTap;
 
@@ -1221,6 +1232,7 @@ class _RankedItemTile extends StatelessWidget {
     super.key,
     required this.index,
     required this.item,
+    required this.isMasked,
     required this.getRankGradient,
     required this.onTap,
   });
@@ -1272,7 +1284,7 @@ class _RankedItemTile extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
                         child: Text(
-                          item.subtitle,
+                          isMasked ? '••••••••' : item.subtitle,
                           style: GoogleFonts.outfit(
                             color: AppColors.slate400,
                             fontSize: 12,

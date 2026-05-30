@@ -154,6 +154,7 @@ Map<String, dynamic> _$RankingCategoryToJson(_RankingCategory instance) =>
 _UserSettings _$UserSettingsFromJson(Map<String, dynamic> json) =>
     _UserSettings(
       securityEnabled: json['securityEnabled'] as bool? ?? false,
+      biometricsEnabled: json['biometricsEnabled'] as bool? ?? false,
       username: json['username'] as String? ?? 'Architect',
       theme: json['theme'] as String? ?? 'dark',
     );
@@ -161,6 +162,7 @@ _UserSettings _$UserSettingsFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$UserSettingsToJson(_UserSettings instance) =>
     <String, dynamic>{
       'securityEnabled': instance.securityEnabled,
+      'biometricsEnabled': instance.biometricsEnabled,
       'username': instance.username,
       'theme': instance.theme,
     };

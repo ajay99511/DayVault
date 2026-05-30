@@ -53,11 +53,19 @@ class ObjectBoxJournalEntry {
   /// Auto-detects and decrypts legacy encrypted data. On next save, the entry
   /// will be stored as plain text automatically.
   Future<JournalEntry> toFreezed() async {
-    // Auto-detect and decrypt legacy encrypted data
-    final plainHeadline = _maybeDecrypt(headline);
-    final plainContent = _maybeDecrypt(content);
-    final plainFeeling = feeling != null ? _maybeDecrypt(feeling!) : null;
+    final plainHeadline = await EncryptionService().decrypt(headline);
+    final plainContent = await EncryptionService().decrypt(content);
+    final plainFeeling = feeling != null ? await EncryptionService().decrypt(feeling!) : null;
 
+    return toFreezedFromDecrypted({
+      'headline': plainHeadline,
+      'content': plainContent,
+      'feeling': plainFeeling,
+    });
+  }
+
+  /// Convert ObjectBox entry to JournalEntry using pre-decrypted fields.
+  JournalEntry toFreezedFromDecrypted(Map<String, dynamic> decrypted) {
     // Parse images — handle both old List<String> and new List<ImageReference>
     final images = _parseImagesField(imagesJson);
 
@@ -65,12 +73,12 @@ class ObjectBoxJournalEntry {
       id: entryId,
       type: EntryType.values[typeIndex],
       date: date,
-      headline: plainHeadline,
-      content: plainContent,
+      headline: decrypted['headline'] as String? ?? headline,
+      content: decrypted['content'] as String? ?? content,
       mood: Mood.values[moodIndex],
-      feeling: (plainFeeling == null || plainFeeling.isEmpty)
+      feeling: (decrypted['feeling'] == null || (decrypted['feeling'] as String).isEmpty)
           ? null
-          : plainFeeling,
+          : decrypted['feeling'] as String,
       tags: List<String>.from(jsonDecode(tagsJson)),
       location: locationJson != null
           ? LocationData.fromJson(
@@ -83,27 +91,13 @@ class ObjectBoxJournalEntry {
     );
   }
 
-  /// Detect if text is encrypted and decrypt it. Returns original text if plain.
-  static String _maybeDecrypt(String text) {
-    if (text.isEmpty) return '';
-
-    try {
-      // Try to decode as base64 — if it fails, it's plain text
-      final bytes = base64Decode(text);
-
-      // Too short for any encryption format → plain text
-      if (bytes.length < 17) return text;
-
-      // Check for version byte (1 = XOR, 2 = AES)
-      final versionByte = bytes[0];
-      if (versionByte != 1 && versionByte != 2) return text;
-
-      // Looks encrypted — use EncryptionService to decrypt
-      return EncryptionService().decryptSync(text);
-    } catch (_) {
-      // Not valid base64 → plain text
-      return text;
-    }
+  Map<String, dynamic> toRawMap() {
+    return {
+      'entryId': entryId,
+      'headline': headline,
+      'content': content,
+      'feeling': feeling,
+    };
   }
 
   /// Parse images handling backward compatibility:
@@ -208,6 +202,7 @@ class ObjectBoxUserSettings {
   int id = 1;
 
   bool securityEnabled = false;
+  bool biometricsEnabled = false;
   String username = 'Architect';
   String theme = 'dark';
 
@@ -215,6 +210,7 @@ class ObjectBoxUserSettings {
 
   UserSettings toFreezed() => UserSettings(
         securityEnabled: securityEnabled,
+        biometricsEnabled: biometricsEnabled,
         username: username,
         theme: theme,
       );
@@ -222,6 +218,7 @@ class ObjectBoxUserSettings {
   static ObjectBoxUserSettings fromFreezed(UserSettings settings) {
     return ObjectBoxUserSettings()
       ..securityEnabled = settings.securityEnabled
+      ..biometricsEnabled = settings.biometricsEnabled
       ..username = settings.username
       ..theme = settings.theme;
   }

@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:system_info2/system_info2.dart';
+import 'package:local_auth/local_auth.dart';
 import '../services/storage_service.dart';
+import '../services/security_service.dart';
 import '../services/backup_service.dart';
+import 'pin_setup_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../config/constants.dart';
@@ -22,6 +25,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   UserSettings settings = const UserSettings();
   int totalMemories = 0;
+  int _streak = 0;
 
   // System Tracking
   final Battery _battery = Battery();
@@ -118,20 +122,140 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _load() async {
     final s = ref.read(storageServiceProvider).getSettings();
     final j = await ref.read(storageServiceProvider).getJournal();
+    final computedStreak = StorageService.computeStreak(j);
     setState(() {
       settings = s;
       totalMemories = j.length;
+      _streak = computedStreak;
     });
   }
 
-  void _toggleSecurity() {
-    final newSettings = UserSettings(
-      securityEnabled: !settings.securityEnabled,
-      username: settings.username,
-      theme: settings.theme,
+  void _toggleSecurity() async {
+    final securityService = SecurityService();
+    final storage = ref.read(storageServiceProvider);
+    
+    if (!settings.securityEnabled) {
+      // Turning ON
+      final pinSet = await securityService.isPinSet();
+      if (!pinSet) {
+        // Need to set up PIN first
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PinSetupScreen(
+              onSetupComplete: () {
+                Navigator.pop(context);
+                _load(); // Reload settings
+              },
+            ),
+          ),
+        );
+        return;
+      }
+      
+      // If PIN is set, just enable it
+      final newSettings = settings.copyWith(securityEnabled: true);
+      await storage.saveSettings(newSettings);
+      setState(() => settings = newSettings);
+    } else {
+      // Turning OFF - Require verification
+      _showDisableSecurityVerification();
+    }
+  }
+
+  Future<void> _showDisableSecurityVerification() async {
+    final securityService = SecurityService();
+    
+    // Try biometrics first if enabled
+    if (settings.biometricsEnabled) {
+      try {
+        final didAuthenticate = await LocalAuthentication().authenticate(
+          localizedReason: 'Authenticate to disable security',
+        );
+        if (didAuthenticate) {
+          _disableSecurityAction();
+          return;
+        }
+      } catch (e) {
+        debugPrint('Biometric error: $e');
+      }
+    }
+
+    // Fallback to PIN dialog
+    if (!mounted) return;
+    final pinController = TextEditingController();
+    String? error;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.slate900,
+          title: const Text('Verify PIN', style: TextStyle(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter your PIN to disable security features.',
+                style: TextStyle(color: AppColors.slate400, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              if (error != null)
+                Text(error!, style: const TextStyle(color: AppColors.rose500, fontSize: 12)),
+              TextField(
+                controller: pinController,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: 'PIN',
+                  labelStyle: TextStyle(color: AppColors.slate400),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('CANCEL', style: TextStyle(color: AppColors.slate400)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final result = await securityService.verifyPin(pinController.text);
+                if (result.success) {
+                  Navigator.pop(ctx);
+                  _disableSecurityAction();
+                } else {
+                  setDialogState(() => error = result.error ?? 'Incorrect PIN');
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.indigo500),
+              child: const Text('VERIFY', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
     );
-    ref.read(storageServiceProvider).saveSettings(newSettings);
-    setState(() => settings = newSettings);
+  }
+
+  Future<void> _disableSecurityAction() async {
+    final storage = ref.read(storageServiceProvider);
+    final newSettings = settings.copyWith(
+      securityEnabled: false,
+      biometricsEnabled: false,
+    );
+    await storage.saveSettings(newSettings);
+    if (mounted) {
+      setState(() => settings = newSettings);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Security disabled'),
+          backgroundColor: AppColors.slate800,
+        ),
+      );
+    }
   }
 
   @override
@@ -219,16 +343,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 const SizedBox(width: 12),
                 _statCard(
                   "Streak",
-                  "12",
+                  "$_streak",
                   Icons.local_fire_department,
                   AppColors.emerald500,
-                ),
-                const SizedBox(width: 12),
-                _statCard(
-                  "Clarity",
-                  "87%",
-                  Icons.psychology,
-                  AppColors.fuchsia500,
                 ),
               ],
             ),
@@ -309,11 +426,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                         ),
                         const SizedBox(width: 16),
-                        const Expanded(
+                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
+                              const Text(
                                 "Neural Encryption",
                                 style: TextStyle(
                                   color: Colors.white,
@@ -321,8 +438,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 ),
                               ),
                               Text(
-                                "Require biometrics on launch",
-                                style: TextStyle(
+                                settings.biometricsEnabled 
+                                  ? "Biometric Access Enrolled" 
+                                  : "Require security on launch",
+                                style: const TextStyle(
                                   color: AppColors.slate400,
                                   fontSize: 12,
                                 ),
@@ -343,17 +462,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       color: AppColors.indigo500.withValues(alpha: 0.1),
-                      child: const Row(
+                      child: Row(
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.lock,
                             size: 12,
                             color: AppColors.indigo500,
                           ),
-                          SizedBox(width: 8),
+                          const SizedBox(width: 8),
                           Text(
-                            "PASSKEY ACTIVE",
-                            style: TextStyle(
+                            settings.biometricsEnabled ? "BIOMETRICS + PASSKEY ACTIVE" : "PASSKEY ACTIVE",
+                            style: const TextStyle(
                               color: AppColors.indigo500,
                               fontSize: 10,
                               fontWeight: FontWeight.bold,

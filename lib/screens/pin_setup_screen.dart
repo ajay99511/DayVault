@@ -1,23 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/constants.dart';
 import '../config/security_questions.dart';
 import '../services/security_service.dart';
+import '../services/storage_service.dart';
 
-class PinSetupScreen extends StatefulWidget {
+class PinSetupScreen extends ConsumerStatefulWidget {
   final VoidCallback onSetupComplete;
   
   const PinSetupScreen({super.key, required this.onSetupComplete});
 
   @override
-  State<PinSetupScreen> createState() => _PinSetupScreenState();
+  ConsumerState<PinSetupScreen> createState() => _PinSetupScreenState();
 }
 
-class _PinSetupScreenState extends State<PinSetupScreen> {
+class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
   final _securityService = SecurityService();
   
   // Setup steps
-  int _currentStep = 0; // 0: Select questions, 1: Set PIN, 2: Confirm PIN, 3: Answer questions
+  int _currentStep = 0; // 0: Select questions, 1: Set PIN, 2: Confirm PIN, 3: Answer questions, 4: Biometrics
   
   // Questions selection
   List<String> _availableQuestions = [];
@@ -31,12 +33,21 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
   List<TextEditingController> _answerControllers = [];
   
   bool _isLoading = false;
+  bool _biometricAvailable = false;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
     _loadQuestions();
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    final available = await _securityService.isBiometricAvailable();
+    setState(() {
+      _biometricAvailable = available;
+    });
   }
 
   @override
@@ -128,14 +139,16 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
     HapticFeedback.lightImpact();
   }
 
-  Future<void> _completeSetup() async {
-    // Validate answers
-    for (int i = 0; i < _answerControllers.length; i++) {
-      if (_answerControllers[i].text.trim().isEmpty) {
-        setState(() {
-          _errorMessage = 'Please provide answers to all security questions';
-        });
-        return;
+  Future<void> _completeSetup({bool enableBiometrics = false}) async {
+    // Validate answers (step 3)
+    if (_currentStep == 3) {
+      for (int i = 0; i < _answerControllers.length; i++) {
+        if (_answerControllers[i].text.trim().isEmpty) {
+          setState(() {
+            _errorMessage = 'Please provide answers to all security questions';
+          });
+          return;
+        }
       }
     }
 
@@ -170,7 +183,14 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
         return;
       }
 
-      // Enable security
+      // Save Settings with security enabled
+      final storage = ref.read(storageServiceProvider);
+      final currentSettings = storage.getSettings();
+      await storage.saveSettings(currentSettings.copyWith(
+        securityEnabled: true,
+        biometricsEnabled: enableBiometrics,
+      ));
+
       setState(() {
         _isLoading = false;
       });
@@ -212,18 +232,18 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
                             color: AppColors.indigo500.withValues(alpha: 0.3),
                           ),
                         ),
-                        child: const Icon(
-                          Icons.security,
+                        child: Icon(
+                          _currentStep == 4 ? Icons.fingerprint : Icons.security,
                           color: AppColors.indigo500,
                           size: 40,
                         ),
                       ),
                     ),
                     const SizedBox(height: 24),
-                    const Center(
+                    Center(
                       child: Text(
-                        'SET UP SECURITY',
-                        style: TextStyle(
+                        _currentStep == 4 ? 'BIOMETRIC ACCESS' : 'SET UP SECURITY',
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -240,7 +260,9 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
                                 ? 'Enter your secure PIN'
                                 : _currentStep == 2
                                     ? 'Confirm your PIN'
-                                    : 'Answer your security questions',
+                                    : _currentStep == 3
+                                        ? 'Answer your security questions'
+                                        : 'Enable fingerprint access?',
                         style: const TextStyle(
                           color: AppColors.slate400,
                           fontSize: 14,
@@ -270,15 +292,11 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
                         ),
                       ),
 
-                    // Step 0: Select questions
+                    // Steps
                     if (_currentStep == 0) _buildQuestionsSelection(),
-
-                    // Step 1 & 2: PIN entry
-                    if (_currentStep == 1 || _currentStep == 2)
-                      _buildPinEntry(),
-
-                    // Step 3: Answer questions
+                    if (_currentStep == 1 || _currentStep == 2) _buildPinEntry(),
                     if (_currentStep == 3) _buildAnswersEntry(),
+                    if (_currentStep == 4) _buildBiometricSetup(),
 
                     const SizedBox(height: 40),
 
@@ -496,6 +514,36 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
     );
   }
 
+  Widget _buildBiometricSetup() {
+    return Column(
+      children: [
+        const Icon(
+          Icons.fingerprint,
+          color: AppColors.indigo500,
+          size: 64,
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Fast & Secure Access',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'Would you like to use biometric authentication (fingerprint/face) to unlock DayVault? You can always use your PIN as a backup.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: AppColors.slate400,
+            fontSize: 13,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildNavigationButtons() {
     return Row(
       children: [
@@ -504,7 +552,9 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
             child: OutlinedButton(
               onPressed: () {
                 setState(() {
-                  if (_currentStep == 3) {
+                  if (_currentStep == 4) {
+                    _currentStep = 3;
+                  } else if (_currentStep == 3) {
                     _currentStep = 2;
                   } else if (_currentStep == 2) {
                     _currentStep = 1;
@@ -532,7 +582,13 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
               if (_currentStep == 0) {
                 _proceedToPinSetup();
               } else if (_currentStep == 3) {
-                _completeSetup();
+                if (_biometricAvailable) {
+                  setState(() => _currentStep = 4);
+                } else {
+                  _completeSetup();
+                }
+              } else if (_currentStep == 4) {
+                _completeSetup(enableBiometrics: true);
               }
             },
             style: ElevatedButton.styleFrom(
@@ -540,7 +596,13 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
             child: Text(
-              _currentStep == 0 ? 'NEXT' : 'COMPLETE SETUP',
+              _currentStep == 0
+                  ? 'NEXT'
+                  : _currentStep == 4
+                      ? 'ENABLE & FINISH'
+                      : _currentStep == 3 && !_biometricAvailable
+                          ? 'COMPLETE SETUP'
+                          : 'NEXT',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
@@ -548,6 +610,18 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
             ),
           ),
         ),
+        if (_currentStep == 4) ...[
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextButton(
+              onPressed: () => _completeSetup(enableBiometrics: false),
+              child: const Text(
+                'SKIP',
+                style: TextStyle(color: AppColors.slate400),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

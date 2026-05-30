@@ -20,13 +20,12 @@ class EncryptionService {
   static const int _currentEncryptionVersion = 2;
 
   /// Generate a derived key for encryption (32 bytes for AES-256)
-  /// 
-  /// Note: Journal data is now stored as plain text. This method is retained
-  /// for draft encryption compatibility but will be removed in future.
   Future<Uint8List> _getDerivedKey() async {
-    // Return a fallback key for draft encryption compatibility
-    // Actual journal entries no longer use encryption
-    return Uint8List.fromList(List.filled(32, 0)); // Placeholder
+    final key = SecurityService().getCachedEncryptionKey();
+    if (key == null) {
+      throw StateError('Encryption key not available: PIN not verified');
+    }
+    return key;
   }
 
   /// Encrypt sensitive text data using AES-256-GCM
@@ -44,17 +43,19 @@ class EncryptionService {
       final iv = encrypt_lib.IV.fromSecureRandom(16);
 
       final encrypter = encrypt_lib.Encrypter(
-        encrypt_lib.AES(key, mode: encrypt_lib.AESMode.cbc),
+        encrypt_lib.AES(key, mode: encrypt_lib.AESMode.gcm),
       );
 
-      final encrypted = encrypter.encrypt(plainText, iv: iv);
+      final encrypted = encrypter.encryptBytes(
+        Uint8List.fromList(utf8.encode(plainText)),
+        iv: iv,
+      );
 
-      // Combine: version + IV + ciphertext + authentication tag
-      // Note: GCM mode doesn't include tag in encrypted.bytes, need to access it separately
+      // Combine: version + IV + ciphertext (includes GCM tag at the end)
       final combined = Uint8List.fromList([
         _currentEncryptionVersion, // Version byte (2)
         ...iv.bytes, // 16 bytes IV
-        ...encrypted.bytes, // Ciphertext
+        ...encrypted.bytes, // Ciphertext + GCM tag
       ]);
 
       return base64Encode(combined);
@@ -135,12 +136,12 @@ class EncryptionService {
 
     final version = combined[0];
 
-    // Step 3: Try AES-CBC (version 2)
+    // Step 3: Try AES-GCM (version 2)
     if (version == 2 && combined.length >= 34) {
-      // v2 format: [version][16-byte IV][ciphertext]
-      // Minimum: 1 + 16 + 16 (one AES block) = 33 bytes, but we check 34 to be safe
       try {
         return await _decryptAes(combined.sublist(1));
+      } on FormatException {
+        rethrow; // Authenticated encryption failure must be fatal (R2.5)
       } catch (e) {
         debugPrint('AES decrypt failed (v2), trying XOR: $e');
         // Fall through to XOR attempt
@@ -168,25 +169,31 @@ class EncryptionService {
 
   /// Decrypt AES encrypted data (version 2)
   Future<String> _decryptAes(Uint8List data) async {
-    // Minimum size: 16 (IV) + 1 (min ciphertext) = 17 bytes
+    // data = [16 bytes IV][N bytes ciphertext + 16 bytes GCM tag]
     if (data.length < 17) {
       throw const FormatException('Encrypted data too short');
     }
 
     final ivBytes = data.sublist(0, 16);
-    final cipherBytes = data.sublist(16);
+    final cipherWithTag = data.sublist(16);
 
     final iv = encrypt_lib.IV(ivBytes);
     final keyBytes = await _getDerivedKey();
     final key = encrypt_lib.Key(keyBytes);
 
     final encrypter = encrypt_lib.Encrypter(
-      encrypt_lib.AES(key, mode: encrypt_lib.AESMode.cbc),
+      encrypt_lib.AES(key, mode: encrypt_lib.AESMode.gcm),
     );
 
-    final encrypted = encrypt_lib.Encrypted(cipherBytes);
-    final decrypted = encrypter.decrypt(encrypted, iv: iv);
-    return decrypted;
+    try {
+      return encrypter.decrypt(
+        encrypt_lib.Encrypted(cipherWithTag),
+        iv: iv,
+      );
+    } catch (e) {
+      // pointycastle throws InvalidCipherTextException on GCM tag failure
+      throw FormatException('GCM tag verification failed: $e');
+    }
   }
 
   /// Decrypt legacy XOR encrypted data (old format: no version prefix)

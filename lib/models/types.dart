@@ -113,6 +113,7 @@ abstract class RankingCategory with _$RankingCategory {
 abstract class UserSettings with _$UserSettings {
   const factory UserSettings({
     @Default(false) bool securityEnabled,
+    @Default(false) bool biometricsEnabled,
     @Default('Architect') String username,
     @Default('dark') String theme,
   }) = _UserSettings;

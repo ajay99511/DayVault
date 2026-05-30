@@ -1,10 +1,15 @@
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
-import 'package:crypto/crypto.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter/foundation.dart' show compute;
+import 'package:flutter/foundation.dart' show compute, debugPrint, visibleForTesting;
+import 'package:meta/meta.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:pointycastle/key_derivators/pbkdf2.dart';
+import 'package:pointycastle/macs/hmac.dart';
+import 'package:pointycastle/digests/sha256.dart';
+import 'package:pointycastle/key_derivators/api.dart';
 import '../config/security_questions.dart';
 
 /// Security service handling PIN hashing, rate limiting, and data encryption.
@@ -14,12 +19,18 @@ import '../config/security_questions.dart';
 /// - Rate limiting with exponential backoff
 /// - Account lockout after failed attempts
 class SecurityService {
-  static final SecurityService _instance = SecurityService._internal();
+  static SecurityService _instance = SecurityService._internal(const FlutterSecureStorage());
   factory SecurityService() => _instance;
-  SecurityService._internal();
+  
+  @visibleForTesting
+  SecurityService.withStorage(FlutterSecureStorage storage) : _storage = storage {
+    _instance = this;
+  }
+
+  SecurityService._internal(this._storage);
 
   // Use FlutterSecureStorage for PIN storage
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final FlutterSecureStorage _storage;
 
   // Cache encryption key in memory after PIN verification (for decrypting existing data)
   Uint8List? _cachedEncryptionKey;
@@ -28,6 +39,7 @@ class SecurityService {
   static const int _maxAttempts = 5;
   static const int _lockoutDurationSeconds = 30;
   static const String _saltKey = 'security_salt';
+  static const String _encryptionSaltKey = 'encryption_salt';
   static const String _pinHashKey = 'pin_hash';
   static const String _attemptCountKey = 'attempt_count';
   static const String _lockoutUntilKey = 'lockout_until';
@@ -48,46 +60,53 @@ class SecurityService {
 
   /// Hash PIN using PBKDF2 with SHA-256
   /// 
-  /// Uses 100,000 iterations for security while maintaining performance
+  /// Uses 100,000 iterations for security
   Future<String> _hashPin(String pin, String salt) async {
-    // PBKDF2 with SHA-256, 100000 iterations
-    final key = await compute(
-      _pbkdf2Hash,
-      {'pin': pin, 'salt': salt, 'iterations': 100000},
-    );
-    return key;
+    final keyBytes = await compute(_pbkdf2Derive, {
+      'pin': pin,
+      'salt': salt,
+      'iterations': 100000,
+      'keyLength': 32,
+    });
+    return base64Encode(keyBytes);
   }
 
   /// Initialize security service - creates salt if not exists
   Future<void> initialize() async {
     final salt = await _storage.read(key: _saltKey);
     if (salt == null) {
-      final newSalt = _generateSalt();
-      await _storage.write(key: _saltKey, value: newSalt);
+      await _storage.write(key: _saltKey, value: _generateSalt());
     }
-    
-    // Reset attempt count on app start (optional - can be removed for stricter security)
-    await _resetAttempts();
   }
 
   /// Derive encryption key from PIN and cache it in memory.
-  /// Used to decrypt existing journal data after successful PIN verification.
+  /// Used to decrypt journal data after successful PIN verification.
   Future<void> _deriveAndCacheEncryptionKey(String pin) async {
-    final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
-    
-    // Derive key using HMAC-SHA256 iterations
-    final derivedKeyList = await compute(
-      _deriveKeyBinary,
-      {'pin': pin, 'salt': salt, 'iterations': 10000},
-    );
+    String? encSalt = await _storage.read(key: _encryptionSaltKey);
+    if (encSalt == null) {
+      encSalt = _generateSalt();
+      await _storage.write(key: _encryptionSaltKey, value: encSalt);
+    }
 
-    _cachedEncryptionKey = Uint8List.fromList(derivedKeyList);
+    final keyBytes = await compute(_pbkdf2Derive, {
+      'pin': pin,
+      'salt': encSalt,
+      'iterations': 100000,
+      'keyLength': 32,
+    });
+
+    _cachedEncryptionKey = keyBytes;
   }
 
-  /// Get the cached encryption key (for decrypting existing journal data).
+  /// Get the cached encryption key.
   /// Returns null if not cached (PIN not verified).
   Uint8List? getCachedEncryptionKey() {
     return _cachedEncryptionKey;
+  }
+
+  @visibleForTesting
+  void setCachedEncryptionKeyForTesting(Uint8List? key) {
+    _cachedEncryptionKey = key;
   }
 
   /// Check if PIN is set
@@ -100,24 +119,19 @@ class SecurityService {
   /// 
   /// Returns true if PIN was set successfully
   Future<bool> setPin(String pin) async {
-    // Validate PIN format - must be 4-6 digits
-    if (!_isValidPin(pin)) {
-      return false;
-    }
+    if (!_isValidPin(pin)) return false;
+    if (await isPinSet()) return false;
 
-    // Don't allow setting PIN if one already exists
-    if (await isPinSet()) {
-      return false;
-    }
+    // Generate PIN hash salt
+    final pinSalt = _generateSalt();
+    await _storage.write(key: _saltKey, value: pinSalt);
 
-    final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
-    if (await _storage.read(key: _saltKey) == null) {
-      await _storage.write(key: _saltKey, value: salt);
-    }
+    // Generate encryption key salt (independent)
+    final encSalt = _generateSalt();
+    await _storage.write(key: _encryptionSaltKey, value: encSalt);
 
-    final hash = await _hashPin(pin, salt);
+    final hash = await _hashPin(pin, pinSalt);
     await _storage.write(key: _pinHashKey, value: hash);
-
     return true;
   }
 
@@ -147,13 +161,23 @@ class SecurityService {
       );
     }
 
+    // Migration path: detect old hex hashes (64 chars)
+    if (storedHash.length == 64) {
+      await _storage.delete(key: _pinHashKey);
+      return PinVerificationResult(
+        success: false,
+        error: 'Security upgrade required. Please set a new PIN.',
+        requiresPinReset: true,
+      );
+    }
+
     final salt = await _storage.read(key: _saltKey) ?? '';
     final inputHash = await _hashPin(pin, salt);
 
     if (inputHash == storedHash) {
       // Success - reset attempts and derive encryption key
       await _resetAttempts();
-      await _deriveAndCacheEncryptionKey(pin); // Cache key for decrypting existing data
+      await _deriveAndCacheEncryptionKey(pin);
       return PinVerificationResult(success: true);
     } else {
       // Failed - increment attempts
@@ -254,6 +278,20 @@ class SecurityService {
     return PinVerificationResult(success: true);
   }
 
+  /// Reset PIN without biometric re-authentication.
+  /// Caller is responsible for having already authenticated the user.
+  Future<PinVerificationResult> resetPinDirectly(String newPin) async {
+    if (!_isValidPin(newPin)) {
+      return PinVerificationResult(success: false, error: 'Invalid PIN format');
+    }
+    await _storage.delete(key: _pinHashKey);
+    final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
+    final hash = await _hashPin(newPin, salt);
+    await _storage.write(key: _pinHashKey, value: hash);
+    await _resetAttempts();
+    return PinVerificationResult(success: true);
+  }
+
   /// Remove PIN (requires verification)
   Future<PinVerificationResult> removePin(String pin) async {
     final verifyResult = await verifyPin(pin);
@@ -263,6 +301,7 @@ class SecurityService {
 
     await _storage.delete(key: _pinHashKey);
     await _storage.delete(key: _saltKey);
+    await _storage.delete(key: _encryptionSaltKey);
     await _resetAttempts();
 
     return PinVerificationResult(success: true);
@@ -500,12 +539,14 @@ class PinVerificationResult {
   final String? error;
   final int? remainingAttempts;
   final int? remainingLockoutSeconds;
+  final bool requiresPinReset;
 
   PinVerificationResult({
     required this.success,
     this.error,
     this.remainingAttempts,
     this.remainingLockoutSeconds,
+    this.requiresPinReset = false,
   });
 }
 
@@ -522,42 +563,19 @@ class SecurityQuestionsResult {
   });
 }
 
-// Isolate function for key derivation using multiple rounds of HMAC-SHA256
-// This is a simplified PBKDF2-like approach since the crypto package doesn't expose PBKDF2
-String _pbkdf2Hash(Map<String, dynamic> params) {
+/// Top-level function for PBKDF2 key derivation.
+/// Must be outside the class for compute().
+Uint8List _pbkdf2Derive(Map<String, dynamic> params) {
   final pin = params['pin'] as String;
   final salt = params['salt'] as String;
   final iterations = params['iterations'] as int;
+  final keyLength = params['keyLength'] as int;
 
-  // Using multiple rounds of HMAC-SHA256 for key derivation
-  var derivedKey = salt;
-  for (int i = 0; i < (iterations ~/ 1000).clamp(1, 100); i++) {
-    final hmac = Hmac(sha256, utf8.encode(pin));
-    final digest = hmac.convert(utf8.encode(derivedKey));
-    derivedKey = digest.toString();
-  }
-
-  // Final hash
-  final hmac = Hmac(sha256, utf8.encode(pin));
-  final digest = hmac.convert(utf8.encode(derivedKey + pin));
-  return digest.toString();
-}
-
-// Isolate function for proper binary key derivation (32 bytes of entropy)
-// Used to derive encryption key from PIN for decrypting existing journal data
-List<int> _deriveKeyBinary(Map<String, dynamic> params) {
-  final pin = params['pin'] as String;
-  final salt = params['salt'] as String;
-  final iterations = params['iterations'] as int;
-  
-  // PBKDF2-like with full binary output (not hex string)
-  List<int> derivedKey = utf8.encode(salt);
-  
-  for (int i = 0; i < iterations; i++) {
-    final hmac = Hmac(sha256, utf8.encode(pin));
-    final digest = hmac.convert(derivedKey);
-    derivedKey = digest.bytes;
-  }
-  
-  return derivedKey; // 32 bytes of entropy as List<int>
+  final derivator = PBKDF2KeyDerivator(HMac(SHA256Digest(), 64));
+  derivator.init(Pbkdf2Parameters(
+    Uint8List.fromList(utf8.encode(salt)),
+    iterations,
+    keyLength,
+  ));
+  return derivator.process(Uint8List.fromList(utf8.encode(pin)));
 }

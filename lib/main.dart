@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,24 +16,45 @@ import 'services/security_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Global error boundary - must be set before runApp()
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details); // default Flutter error rendering
+    debugPrint('FlutterError: ${details.exceptionAsString()}');
+    // TODO: forward to crash reporting (e.g. Firebase Crashlytics) in release
+  };
+
+  PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    debugPrint('PlatformError: $error\n$stack');
+    // TODO: forward to crash reporting in release
+    return true; // returning true prevents the default crash
+  };
+
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
 
+  ObjectBoxInitOutcome? initOutcome;
   String? initError;
   try {
-    await ObjectBoxService.init();
+    initOutcome = await ObjectBoxService.init();
     await SecurityService().initialize();
   } catch (e, st) {
     debugPrint('Critical init failed: $e\n$st');
     initError = e.toString();
   }
 
-  runApp(ProviderScope(child: MemoryPalaceApp(initError: initError)));
+  runApp(ProviderScope(
+    child: MemoryPalaceApp(
+      initOutcome: initOutcome,
+      initError: initError,
+    ),
+  ));
 }
 
 class MemoryPalaceApp extends StatelessWidget {
+  final ObjectBoxInitOutcome? initOutcome;
   final String? initError;
 
-  const MemoryPalaceApp({super.key, this.initError});
+  const MemoryPalaceApp({super.key, this.initOutcome, this.initError});
 
   @override
   Widget build(BuildContext context) {
@@ -49,9 +71,9 @@ class MemoryPalaceApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
-      home: initError != null
-          ? _ErrorScreen(error: initError!)
-          : const RootOrchestrator(),
+      home: initError != null || (initOutcome != null && initOutcome!.result == InitResult.fatalError)
+          ? _ErrorScreen(error: initError ?? initOutcome!.errorMessage!)
+          : RootOrchestrator(initOutcome: initOutcome),
     );
   }
 }
@@ -103,28 +125,97 @@ class _ErrorScreen extends StatelessWidget {
 }
 
 class RootOrchestrator extends ConsumerStatefulWidget {
-  const RootOrchestrator({super.key});
+  final ObjectBoxInitOutcome? initOutcome;
+  const RootOrchestrator({super.key, this.initOutcome});
 
   @override
   ConsumerState<RootOrchestrator> createState() => _RootOrchestratorState();
 }
 
-class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
+class _RootOrchestratorState extends ConsumerState<RootOrchestrator>
+    with WidgetsBindingObserver {
   bool isAuthenticated = false;
   bool isLoading = true;
+  DateTime? _backgroundedAt;
+  static const _gracePeriod = Duration(seconds: 30);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    
+    // Check for migration requirement
+    if (widget.initOutcome?.result == InitResult.migrationRequired) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showMigrationDialog());
+    }
+    
     _checkSecurity();
   }
 
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _backgroundedAt = DateTime.now();
+    } else if (state == AppLifecycleState.resumed) {
+      final bg = _backgroundedAt;
+      if (bg != null && DateTime.now().difference(bg) > _gracePeriod) {
+        setState(() => isAuthenticated = false);
+      }
+    }
+  }
+
+  Future<void> _showMigrationDialog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Database Security Upgrade'),
+        content: Text(
+          'A security upgrade is required for your database. '
+          'Your existing data has been safely backed up to:\n\n'
+          '${widget.initOutcome!.backupPath}\n\n'
+          'The app will now start with a fresh database. Tap "OK" to proceed.'
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await ObjectBoxService.reinitializeAfterConsent(widget.initOutcome!.backupPath!);
+      _checkSecurity();
+    } else {
+      // If user cancels, they can't use the app
+      SystemNavigator.pop();
+    }
+  }
+
   Future<void> _checkSecurity() async {
-    final settings = ref.read(storageServiceProvider).getSettings();
-    setState(() {
-      isAuthenticated = !settings.securityEnabled; // If disabled, auto-auth
-      isLoading = false;
-    });
+    // If migration failed or cancelled, we might not have a storage provider ready
+    try {
+      final settings = ref.read(storageServiceProvider).getSettings();
+      setState(() {
+        isAuthenticated = !settings.securityEnabled; // If disabled, auto-auth
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint("Security check failed: $e");
+      setState(() => isLoading = false);
+    }
   }
 
   @override
@@ -150,17 +241,17 @@ class _MainShellState extends State<MainShell>
     with SingleTickerProviderStateMixin {
   int _idx = 0;
   late AnimationController _bgCtrl;
-
-  final List<Widget> _screens = [
-    const JournalScreen(),
-    const CalendarScreen(),
-    const IdentityScreen(),
-    const ProfileScreen(),
-  ];
+  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
+    _screens = const [
+      JournalScreen(),
+      CalendarScreen(),
+      IdentityScreen(),
+      ProfileScreen(),
+    ];
     _bgCtrl = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
@@ -217,16 +308,17 @@ class _MainShellState extends State<MainShell>
             },
           ),
 
-          // View Switcher
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: KeyedSubtree(key: ValueKey(_idx), child: _screens[_idx]),
+          // View Switcher - using IndexedStack to preserve state
+          IndexedStack(
+            index: _idx,
+            children: _screens,
           ),
         ],
       ),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
         child: GlassContainer(
+          useBackdropFilter: true, // Only for nav bar
           borderRadius: 32,
           padding: const EdgeInsets.symmetric(vertical: 16),
           child: Row(

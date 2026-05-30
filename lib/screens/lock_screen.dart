@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 import '../config/constants.dart';
 import '../services/security_service.dart';
+import '../services/storage_service.dart';
+import '../models/types.dart';
 import 'pin_setup_screen.dart';
 import 'forgot_pin_screen.dart';
 
-class LockScreen extends StatefulWidget {
+class LockScreen extends ConsumerStatefulWidget {
   final VoidCallback onUnlock;
   const LockScreen({super.key, required this.onUnlock});
 
   @override
-  State<LockScreen> createState() => _LockScreenState();
+  ConsumerState<LockScreen> createState() => _LockScreenState();
 }
 
-class _LockScreenState extends State<LockScreen>
+class _LockScreenState extends ConsumerState<LockScreen>
     with SingleTickerProviderStateMixin {
   final _securityService = SecurityService();
   final _auth = LocalAuthentication();
@@ -26,6 +29,7 @@ class _LockScreenState extends State<LockScreen>
   int? remainingLockoutSeconds;
   bool isLoading = true;
   bool isPinSet = false;
+  bool biometricAvailable = false;
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
 
@@ -51,11 +55,23 @@ class _LockScreenState extends State<LockScreen>
   Future<void> _initializeSecurity() async {
     await _securityService.initialize();
     final pinIsSet = await _securityService.isPinSet();
+    final bioAvailable = await _securityService.isBiometricAvailable();
+    
     if (mounted) {
       setState(() {
         isPinSet = pinIsSet;
+        biometricAvailable = bioAvailable;
         isLoading = false;
       });
+
+      // Auto-authenticate if enabled
+      final settings = ref.read(storageServiceProvider).getSettings();
+      if (pinIsSet && settings.biometricsEnabled && bioAvailable) {
+        // Delay slightly to allow UI to settle
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) _authenticateBiometric();
+        });
+      }
     }
   }
 
@@ -75,7 +91,6 @@ class _LockScreenState extends State<LockScreen>
       );
 
       if (didAuthenticate) {
-        await _securityService.initialize(); // Reset attempts on biometric success
         HapticFeedback.heavyImpact();
         widget.onUnlock();
       }
@@ -131,6 +146,14 @@ class _LockScreenState extends State<LockScreen>
     if (result.success) {
       HapticFeedback.heavyImpact();
       widget.onUnlock();
+    } else if (result.requiresPinReset) {
+      // Handle security upgrade
+      setState(() {
+        isPinSet = false;
+        isError = true;
+        errorMessage = result.error;
+      });
+      HapticFeedback.mediumImpact();
     } else {
       setState(() {
         isError = true;
@@ -353,7 +376,9 @@ class _LockScreenState extends State<LockScreen>
                     alignment: WrapAlignment.center,
                     children: [
                       ...List.generate(9, (i) => _buildKey('${i + 1}')),
-                      _buildKey('BIO', icon: Icons.fingerprint),
+                      biometricAvailable 
+                        ? _buildKey('BIO', icon: Icons.fingerprint)
+                        : const SizedBox(width: 70, height: 70),
                       _buildKey('0'),
                       _buildKey('DEL', icon: Icons.backspace_outlined),
                     ],

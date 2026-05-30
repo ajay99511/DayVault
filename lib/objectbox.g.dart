@@ -158,7 +158,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(3, 3031694957752151615),
     name: 'ObjectBoxUserSettings',
-    lastPropertyId: const obx_int.IdUid(4, 2538070599981820752),
+    lastPropertyId: const obx_int.IdUid(5, 8656880251404400912),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -183,6 +183,12 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(4, 2538070599981820752),
         name: 'theme',
         type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 8656880251404400912),
+        name: 'biometricsEnabled',
+        type: 1,
         flags: 0,
       ),
     ],
@@ -452,11 +458,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
       objectToFB: (ObjectBoxUserSettings object, fb.Builder fbb) {
         final usernameOffset = fbb.writeString(object.username);
         final themeOffset = fbb.writeString(object.theme);
-        fbb.startTable(5);
+        fbb.startTable(6);
         fbb.addInt64(0, object.id);
         fbb.addBool(1, object.securityEnabled);
         fbb.addOffset(2, usernameOffset);
         fbb.addOffset(3, themeOffset);
+        fbb.addBool(4, object.biometricsEnabled);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -477,7 +484,13 @@ obx_int.ModelDefinition getObjectBoxModel() {
           ).vTableGet(buffer, rootOffset, 8, '')
           ..theme = const fb.StringReader(
             asciiOptimization: true,
-          ).vTableGet(buffer, rootOffset, 10, '');
+          ).vTableGet(buffer, rootOffset, 10, '')
+          ..biometricsEnabled = const fb.BoolReader().vTableGet(
+            buffer,
+            rootOffset,
+            12,
+            false,
+          );
 
         return object;
       },
@@ -611,4 +624,10 @@ class ObjectBoxUserSettings_ {
   static final theme = obx.QueryStringProperty<ObjectBoxUserSettings>(
     _entities[2].properties[3],
   );
+
+  /// See [ObjectBoxUserSettings.biometricsEnabled].
+  static final biometricsEnabled =
+      obx.QueryBooleanProperty<ObjectBoxUserSettings>(
+        _entities[2].properties[4],
+      );
 }

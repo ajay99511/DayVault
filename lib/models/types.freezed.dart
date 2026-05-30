@@ -2188,6 +2188,7 @@ class __$RankingCategoryCopyWithImpl<$Res>
 /// @nodoc
 mixin _$UserSettings {
   bool get securityEnabled;
+  bool get biometricsEnabled;
   String get username;
   String get theme;
 
@@ -2209,6 +2210,8 @@ mixin _$UserSettings {
             other is UserSettings &&
             (identical(other.securityEnabled, securityEnabled) ||
                 other.securityEnabled == securityEnabled) &&
+            (identical(other.biometricsEnabled, biometricsEnabled) ||
+                other.biometricsEnabled == biometricsEnabled) &&
             (identical(other.username, username) ||
                 other.username == username) &&
             (identical(other.theme, theme) || other.theme == theme));
@@ -2216,12 +2219,12 @@ mixin _$UserSettings {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, securityEnabled, username, theme);
+  int get hashCode => Object.hash(
+      runtimeType, securityEnabled, biometricsEnabled, username, theme);
 
   @override
   String toString() {
-    return 'UserSettings(securityEnabled: $securityEnabled, username: $username, theme: $theme)';
+    return 'UserSettings(securityEnabled: $securityEnabled, biometricsEnabled: $biometricsEnabled, username: $username, theme: $theme)';
   }
 }
 
@@ -2231,7 +2234,11 @@ abstract mixin class $UserSettingsCopyWith<$Res> {
           UserSettings value, $Res Function(UserSettings) _then) =
       _$UserSettingsCopyWithImpl;
   @useResult
-  $Res call({bool securityEnabled, String username, String theme});
+  $Res call(
+      {bool securityEnabled,
+      bool biometricsEnabled,
+      String username,
+      String theme});
 }
 
 /// @nodoc
@@ -2247,6 +2254,7 @@ class _$UserSettingsCopyWithImpl<$Res> implements $UserSettingsCopyWith<$Res> {
   @override
   $Res call({
     Object? securityEnabled = null,
+    Object? biometricsEnabled = null,
     Object? username = null,
     Object? theme = null,
   }) {
@@ -2254,6 +2262,10 @@ class _$UserSettingsCopyWithImpl<$Res> implements $UserSettingsCopyWith<$Res> {
       securityEnabled: null == securityEnabled
           ? _self.securityEnabled
           : securityEnabled // ignore: cast_nullable_to_non_nullable
+              as bool,
+      biometricsEnabled: null == biometricsEnabled
+          ? _self.biometricsEnabled
+          : biometricsEnabled // ignore: cast_nullable_to_non_nullable
               as bool,
       username: null == username
           ? _self.username
@@ -2360,14 +2372,16 @@ extension UserSettingsPatterns on UserSettings {
 
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>(
-    TResult Function(bool securityEnabled, String username, String theme)?
+    TResult Function(bool securityEnabled, bool biometricsEnabled,
+            String username, String theme)?
         $default, {
     required TResult orElse(),
   }) {
     final _that = this;
     switch (_that) {
       case _UserSettings() when $default != null:
-        return $default(_that.securityEnabled, _that.username, _that.theme);
+        return $default(_that.securityEnabled, _that.biometricsEnabled,
+            _that.username, _that.theme);
       case _:
         return orElse();
     }
@@ -2388,13 +2402,15 @@ extension UserSettingsPatterns on UserSettings {
 
   @optionalTypeArgs
   TResult when<TResult extends Object?>(
-    TResult Function(bool securityEnabled, String username, String theme)
+    TResult Function(bool securityEnabled, bool biometricsEnabled,
+            String username, String theme)
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _UserSettings():
-        return $default(_that.securityEnabled, _that.username, _that.theme);
+        return $default(_that.securityEnabled, _that.biometricsEnabled,
+            _that.username, _that.theme);
       case _:
         throw StateError('Unexpected subclass');
     }
@@ -2414,13 +2430,15 @@ extension UserSettingsPatterns on UserSettings {
 
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>(
-    TResult? Function(bool securityEnabled, String username, String theme)?
+    TResult? Function(bool securityEnabled, bool biometricsEnabled,
+            String username, String theme)?
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _UserSettings() when $default != null:
-        return $default(_that.securityEnabled, _that.username, _that.theme);
+        return $default(_that.securityEnabled, _that.biometricsEnabled,
+            _that.username, _that.theme);
       case _:
         return null;
     }
@@ -2432,6 +2450,7 @@ extension UserSettingsPatterns on UserSettings {
 class _UserSettings implements UserSettings {
   const _UserSettings(
       {this.securityEnabled = false,
+      this.biometricsEnabled = false,
       this.username = 'Architect',
       this.theme = 'dark'});
   factory _UserSettings.fromJson(Map<String, dynamic> json) =>
@@ -2440,6 +2459,9 @@ class _UserSettings implements UserSettings {
   @override
   @JsonKey()
   final bool securityEnabled;
+  @override
+  @JsonKey()
+  final bool biometricsEnabled;
   @override
   @JsonKey()
   final String username;
@@ -2469,6 +2491,8 @@ class _UserSettings implements UserSettings {
             other is _UserSettings &&
             (identical(other.securityEnabled, securityEnabled) ||
                 other.securityEnabled == securityEnabled) &&
+            (identical(other.biometricsEnabled, biometricsEnabled) ||
+                other.biometricsEnabled == biometricsEnabled) &&
             (identical(other.username, username) ||
                 other.username == username) &&
             (identical(other.theme, theme) || other.theme == theme));
@@ -2476,12 +2500,12 @@ class _UserSettings implements UserSettings {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, securityEnabled, username, theme);
+  int get hashCode => Object.hash(
+      runtimeType, securityEnabled, biometricsEnabled, username, theme);
 
   @override
   String toString() {
-    return 'UserSettings(securityEnabled: $securityEnabled, username: $username, theme: $theme)';
+    return 'UserSettings(securityEnabled: $securityEnabled, biometricsEnabled: $biometricsEnabled, username: $username, theme: $theme)';
   }
 }
 
@@ -2493,7 +2517,11 @@ abstract mixin class _$UserSettingsCopyWith<$Res>
       __$UserSettingsCopyWithImpl;
   @override
   @useResult
-  $Res call({bool securityEnabled, String username, String theme});
+  $Res call(
+      {bool securityEnabled,
+      bool biometricsEnabled,
+      String username,
+      String theme});
 }
 
 /// @nodoc
@@ -2510,6 +2538,7 @@ class __$UserSettingsCopyWithImpl<$Res>
   @pragma('vm:prefer-inline')
   $Res call({
     Object? securityEnabled = null,
+    Object? biometricsEnabled = null,
     Object? username = null,
     Object? theme = null,
   }) {
@@ -2517,6 +2546,10 @@ class __$UserSettingsCopyWithImpl<$Res>
       securityEnabled: null == securityEnabled
           ? _self.securityEnabled
           : securityEnabled // ignore: cast_nullable_to_non_nullable
+              as bool,
+      biometricsEnabled: null == biometricsEnabled
+          ? _self.biometricsEnabled
+          : biometricsEnabled // ignore: cast_nullable_to_non_nullable
               as bool,
       username: null == username
           ? _self.username

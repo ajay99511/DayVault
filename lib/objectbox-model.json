@@ -122,7 +122,7 @@
     },
     {
       "id": "3:3031694957752151615",
-      "lastPropertyId": "4:2538070599981820752",
+      "lastPropertyId": "5:8656880251404400912",
       "name": "ObjectBoxUserSettings",
       "properties": [
         {
@@ -145,6 +145,11 @@
           "id": "4:2538070599981820752",
           "name": "theme",
           "type": 9
+        },
+        {
+          "id": "5:8656880251404400912",
+          "name": "biometricsEnabled",
+          "type": 1
         }
       ],
       "relations": []

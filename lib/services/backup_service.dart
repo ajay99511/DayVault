@@ -150,6 +150,15 @@ class BackupService {
 
       // Import journal entries
       final journalList = data['journal'] as List;
+
+      // Enforce maximum entries to prevent resource exhaustion
+      if (journalList.length > 10000) {
+        return BackupResult(
+          success: false,
+          error: 'Backup contains ${journalList.length} entries; maximum is 10,000',
+        );
+      }
+
       int importedEntries = 0;
       int skippedEntries = 0;
 
@@ -214,26 +223,42 @@ class BackupService {
     }
   }
 
-  /// Deserialize journal entry from export format
+  /// Deserialize journal entry from export format with validation
   JournalEntry _deserializeEntry(Map<String, dynamic> data) {
     return JournalEntry(
       id: data['id'] as String,
-      type: EntryType.values[data['type'] as int],
+      type: _safeEnumValue(EntryType.values, data['type'] as int?, 'type'),
       date: DateTime.parse(data['date'] as String),
-      headline: data['headline'] as String,
-      content: data['content'] as String,
-      mood: Mood.values[data['mood'] as int],
-      feeling: data['feeling'] as String?,
+      headline: _truncate(data['headline'] as String?) ?? '',
+      content: _truncate(data['content'] as String?) ?? '',
+      mood: _safeEnumValue(Mood.values, data['mood'] as int?, 'mood'),
+      feeling: _truncate(data['feeling'] as String?),
       tags: (data['tags'] as List?)?.map((e) => e as String).toList() ?? [],
       location: data['location'] != null
           ? LocationData.fromJson(data['location'] as Map<String, dynamic>)
           : null,
       timeBucket: data['timeBucket'] != null
-          ? TimeBucket.values[data['timeBucket'] as int]
+          ? _safeEnumValue(TimeBucket.values, data['timeBucket'] as int?, 'timeBucket')
           : null,
       images: _parseBackupImages(data['images'] as List?),
       isSpotlight: data['isSpotlight'] as bool? ?? false,
     );
+  }
+
+  /// Helper to safely get enum value from index with bounds checking
+  T _safeEnumValue<T>(List<T> values, int? index, String fieldName) {
+    if (index == null || index < 0 || index >= values.length) {
+      throw FormatException(
+        'Invalid $fieldName value: $index (valid range 0-${values.length - 1})'
+      );
+    }
+    return values[index];
+  }
+
+  /// Truncate long strings to prevent resource exhaustion attacks
+  String? _truncate(String? value, {int maxLength = 10000}) {
+    if (value == null) return null;
+    return value.length > maxLength ? value.substring(0, maxLength) : value;
   }
 
   /// Parse images from backup data (backward compatible).

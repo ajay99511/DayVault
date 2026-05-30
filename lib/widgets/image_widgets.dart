@@ -33,40 +33,25 @@ class ImageThumbnailWidget extends StatefulWidget {
 }
 
 class _ImageThumbnailWidgetState extends State<ImageThumbnailWidget> {
-  bool _isLoading = true;
-  bool _hasError = false;
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: widget.showTapToZoom
-          ? () => _openFullscreen(context)
-          : null,
+      onTap: widget.showTapToZoom ? () => _openFullscreen(context) : null,
       child: ClipRRect(
         borderRadius: widget.borderRadius ?? BorderRadius.zero,
-        child: widget.width != null && widget.height != null
-            ? SizedBox(
-                width: widget.width,
-                height: widget.height,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    _buildImage(),
-                    if (_isLoading) _buildLoadingIndicator(),
-                    if (_hasError) _buildErrorWidget(),
-                    if (widget.onDelete != null) _buildDeleteButton(),
-                  ],
-                ),
-              )
-            : Stack(
-                fit: StackFit.passthrough,
-                children: [
-                  _buildImage(),
-                  if (_isLoading) _buildLoadingIndicator(),
-                  if (_hasError) _buildErrorWidget(),
-                  if (widget.onDelete != null) _buildDeleteButton(),
-                ],
-              ),
+        child: SizedBox(
+          width: widget.width,
+          height: widget.height,
+          child: Stack(
+            fit: widget.width != null && widget.height != null
+                ? StackFit.expand
+                : StackFit.passthrough,
+            children: [
+              _buildImage(),
+              if (widget.onDelete != null) _buildDeleteButton(),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -87,20 +72,16 @@ class _ImageThumbnailWidgetState extends State<ImageThumbnailWidget> {
       future: _loadGalleryThumbnail(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox.shrink(); // Let loading indicator handle it
+          return _buildLoadingIndicator();
         }
         if (snapshot.hasData && snapshot.data != null) {
-          _isLoading = false;
-          _hasError = false;
           return Image.memory(
             snapshot.data!,
             fit: widget.fit,
             gaplessPlayback: true,
           );
         }
-        _isLoading = false;
-        _hasError = true;
-        return const SizedBox.shrink();
+        return _buildErrorWidget();
       },
     );
   }
@@ -108,58 +89,33 @@ class _ImageThumbnailWidgetState extends State<ImageThumbnailWidget> {
   Future<Uint8List?> _loadGalleryThumbnail() async {
     try {
       final asset = await AssetEntity.fromId(widget.imageRef.source);
-      if (asset == null) return null;
-
-      final thumbnailData = await asset.thumbnailData;
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-      return thumbnailData;
+      return await asset?.thumbnailData;
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _hasError = true;
-        });
-      }
       return null;
     }
   }
 
   Widget _buildUrlImage() {
-    _isLoading = false;
     return CachedNetworkImage(
       imageUrl: widget.imageRef.source,
       fit: widget.fit,
-      placeholder: (context, url) => const SizedBox.shrink(),
-      errorWidget: (context, url, error) {
-        if (mounted) {
-          setState(() => _hasError = true);
-        }
-        return const SizedBox.shrink();
-      },
+      placeholder: (context, url) => _buildLoadingIndicator(),
+      errorWidget: (context, url, error) => _buildErrorWidget(),
       fadeInDuration: const Duration(milliseconds: 200),
     );
   }
 
   Widget _buildFileImage() {
-    _isLoading = false;
     return Image.file(
       _toFile(widget.imageRef.source),
       fit: widget.fit,
-      errorBuilder: (context, error, stackTrace) {
-        if (mounted) {
-          setState(() => _hasError = true);
-        }
-        return const SizedBox.shrink();
-      },
+      errorBuilder: (context, error, stackTrace) => _buildErrorWidget(),
     );
   }
 
   File _toFile(String path) => File(path);
 
   Widget _buildLoadingIndicator() {
-    if (!_isLoading) return const SizedBox.shrink();
     return Container(
       color: AppColors.slate900.withAlpha(128),
       child: const Center(
@@ -176,7 +132,6 @@ class _ImageThumbnailWidgetState extends State<ImageThumbnailWidget> {
   }
 
   Widget _buildErrorWidget() {
-    if (!_hasError) return const SizedBox.shrink();
     return Container(
       color: AppColors.slate900,
       child: const Center(
