@@ -123,7 +123,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
   Future<void> handleTap(String val) async {
     if (isLoading) return;
 
-    if (pin.length < 4) {
+    if (pin.length < SecurityConstants.pinLength) {
       setState(() {
         pin += val;
         isError = false;
@@ -131,7 +131,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
       });
       HapticFeedback.lightImpact();
 
-      if (pin.length >= 4) {
+      if (pin.length >= SecurityConstants.pinLength) {
         // Auto-verify when 4+ digits entered
         await _verifyPin();
       }
@@ -139,7 +139,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
   }
 
   Future<void> _verifyPin() async {
-    if (pin.length < 4) return;
+    if (pin.length < SecurityConstants.pinLength) return;
 
     final result = await _securityService.verifyPin(pin);
 
@@ -323,7 +323,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: List.generate(
-                      4,
+                      SecurityConstants.pinLength,
                       (index) => AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
                         margin: const EdgeInsets.symmetric(horizontal: 8),

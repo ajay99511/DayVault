@@ -140,13 +140,13 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
   }
 
   Future<void> _handlePinEntry(String digit) async {
-    if (_newPin.length < 4) {
+    if (_newPin.length < SecurityConstants.pinLength) {
       setState(() {
         _newPin += digit;
       });
       HapticFeedback.lightImpact();
 
-      if (_newPin.length >= 4) {
+      if (_newPin.length >= SecurityConstants.pinLength) {
         await Future.delayed(const Duration(milliseconds: 300));
         setState(() => _pinStep = 2);
       }
@@ -154,13 +154,13 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
   }
 
   Future<void> _handleConfirmPinEntry(String digit) async {
-    if (_confirmPin.length < 4) {
+    if (_confirmPin.length < SecurityConstants.pinLength) {
       setState(() {
         _confirmPin += digit;
       });
       HapticFeedback.lightImpact();
 
-      if (_confirmPin.length >= 4) {
+      if (_confirmPin.length >= SecurityConstants.pinLength) {
         await Future.delayed(const Duration(milliseconds: 300));
         await _completeReset();
       }
@@ -647,7 +647,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
         // PIN dots
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(4, (index) {
+          children: List.generate(SecurityConstants.pinLength, (index) {
             return AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               margin: const EdgeInsets.symmetric(horizontal: 8),

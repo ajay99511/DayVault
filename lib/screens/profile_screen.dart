@@ -133,38 +133,123 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   void _toggleSecurity() async {
     final securityService = SecurityService();
     final storage = ref.read(storageServiceProvider);
+    final status = await securityService.getVaultStatus(settings.securityEnabled);
     
-    if (!settings.securityEnabled) {
-      // Turning ON
-      final pinSet = await securityService.isPinSet();
-      if (!pinSet) {
-        // Need to set up PIN first
-        if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PinSetupScreen(
-              onSetupComplete: () {
-                Navigator.pop(context);
-                _load(); // Reload settings
-              },
-            ),
+    if (status.needsSetup) {
+      // Need to set up PIN first
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PinSetupScreen(
+            onSetupComplete: () {
+              Navigator.pop(context);
+              _load(); // Reload settings
+            },
           ),
-        );
-        return;
-      }
-      
-      // If PIN is set, just enable it
-      final newSettings = settings.copyWith(securityEnabled: true);
-      await storage.saveSettings(newSettings);
-      setState(() => settings = newSettings);
+        ),
+      );
+    } else if (status.canReactivate) {
+      // PIN is set but security is disabled in settings -> Reactivate
+      _showReactivationVerification();
     } else {
-      // Turning OFF - Require verification
+      // Security is currently enabled -> Disable it
       _showDisableSecurityVerification();
     }
   }
 
-  Future<void> _showDisableSecurityVerification() async {
+  Future<void> _showReactivationVerification() async {
+    final securityService = SecurityService();
+    
+    // Try biometrics first if enabled previously
+    if (settings.biometricsEnabled) {
+      try {
+        final didAuthenticate = await LocalAuthentication().authenticate(
+          localizedReason: 'Authenticate to reactivate security',
+        );
+        if (didAuthenticate) {
+          _enableSecurityAction();
+          return;
+        }
+      } catch (e) {
+        debugPrint('Biometric error: $e');
+      }
+    }
+
+    // Fallback to PIN dialog for reactivation
+    if (!mounted) return;
+    final pinController = TextEditingController();
+    String? error;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: AppColors.slate900,
+          title: const Text('Activate Security', style: TextStyle(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter your PIN to re-enable security features.',
+                style: TextStyle(color: AppColors.slate400, fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              if (error != null)
+                Text(error!, style: const TextStyle(color: AppColors.rose500, fontSize: 12)),
+              TextField(
+                controller: pinController,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                maxLength: SecurityConstants.pinLength,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  labelText: 'PIN',
+                  labelStyle: TextStyle(color: AppColors.slate400),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('CANCEL', style: TextStyle(color: AppColors.slate400)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final result = await securityService.verifyPin(pinController.text);
+                if (result.success) {
+                  Navigator.pop(ctx);
+                  _enableSecurityAction();
+                } else {
+                  setDialogState(() => error = result.error ?? 'Incorrect PIN');
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.indigo500),
+              child: const Text('ACTIVATE', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _enableSecurityAction() async {
+    final storage = ref.read(storageServiceProvider);
+    final newSettings = settings.copyWith(securityEnabled: true);
+    await storage.saveSettings(newSettings);
+    if (mounted) {
+      setState(() => settings = newSettings);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Security reactivated'),
+          backgroundColor: AppColors.indigo500,
+        ),
+      );
+    }
+  }
+
+  void _showDisableSecurityVerification() async {
     final securityService = SecurityService();
     
     // Try biometrics first if enabled
@@ -207,7 +292,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 controller: pinController,
                 obscureText: true,
                 keyboardType: TextInputType.number,
-                maxLength: 6,
+                maxLength: SecurityConstants.pinLength,
                 style: const TextStyle(color: Colors.white),
                 decoration: const InputDecoration(
                   labelText: 'PIN',

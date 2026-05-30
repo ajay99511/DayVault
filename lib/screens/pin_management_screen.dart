@@ -170,19 +170,24 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: AppColors.slate900,
-          title: const Text('Disable All Security', style: TextStyle(color: Colors.white)),
+          title: const Text('Delete Security Data?', style: TextStyle(color: AppColors.rose500)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('This will remove your PIN and disable all protection. Enter PIN to confirm.', style: TextStyle(color: AppColors.slate400, fontSize: 12)),
+              const Text(
+                'This action will permanently delete your PIN, salts, and recovery questions. '
+                'Security will be completely disabled. This is irreversible.',
+                style: TextStyle(color: AppColors.slate400, fontSize: 12),
+              ),
               const SizedBox(height: 16),
               if (error != null) Text(error!, style: const TextStyle(color: AppColors.rose500, fontSize: 12)),
               TextField(
                 controller: pinController, 
                 obscureText: true, 
                 keyboardType: TextInputType.number, 
+                maxLength: SecurityConstants.pinLength,
                 style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(labelText: 'Confirm PIN', labelStyle: TextStyle(color: AppColors.slate400)),
+                decoration: const InputDecoration(labelText: 'Verify Current PIN', labelStyle: TextStyle(color: AppColors.slate400)),
               ),
             ],
           ),
@@ -201,7 +206,7 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
                 }
               },
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.rose500),
-              child: const Text('DISABLE', style: TextStyle(color: Colors.white)),
+              child: const Text('DELETE EVERYTHING', style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -230,38 +235,38 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(error!, style: const TextStyle(color: AppColors.rose500, fontSize: 12)),
                   ),
-                TextField(controller: oldPinController, obscureText: true, keyboardType: TextInputType.number, maxLength: 6, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Current PIN', labelStyle: TextStyle(color: AppColors.slate400))),
+                TextField(controller: oldPinController, obscureText: true, keyboardType: TextInputType.number, maxLength: SecurityConstants.pinLength, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Current PIN', labelStyle: TextStyle(color: AppColors.slate400))),
                 const SizedBox(height: 8),
-                TextField(controller: newPinController, obscureText: true, keyboardType: TextInputType.number, maxLength: 6, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'New PIN', labelStyle: TextStyle(color: AppColors.slate400))),
+                TextField(controller: newPinController, obscureText: true, keyboardType: TextInputType.number, maxLength: SecurityConstants.pinLength, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'New PIN', labelStyle: TextStyle(color: AppColors.slate400))),
                 const SizedBox(height: 8),
-                TextField(controller: confirmPinController, obscureText: true, keyboardType: TextInputType.number, maxLength: 6, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Confirm New PIN', labelStyle: TextStyle(color: AppColors.slate400))),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL', style: TextStyle(color: AppColors.slate400))),
-            ElevatedButton(
-              onPressed: () async {
-                if (newPinController.text.length < 4) {
-                  setDialogState(() => error = 'New PIN too short');
-                  return;
-                }
-                if (newPinController.text != confirmPinController.text) {
-                  setDialogState(() => error = 'New PINs do not match');
-                  return;
-                }
-                final result = await _securityService.changePin(oldPinController.text, newPinController.text);
-                if (result.success) {
-                  Navigator.pop(ctx);
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PIN changed successfully'), backgroundColor: AppColors.emerald500));
-                } else {
-                  setDialogState(() => error = result.error ?? 'Failed to change PIN');
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.indigo500),
-              child: const Text('CHANGE', style: TextStyle(color: Colors.white)),
-            ),
+                TextField(controller: confirmPinController, obscureText: true, keyboardType: TextInputType.number, maxLength: SecurityConstants.pinLength, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(labelText: 'Confirm New PIN', labelStyle: TextStyle(color: AppColors.slate400))),
           ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('CANCEL', style: TextStyle(color: AppColors.slate400))),
+        ElevatedButton(
+          onPressed: () async {
+            if (newPinController.text.length < SecurityConstants.pinLength) {
+              setDialogState(() => error = 'New PIN too short');
+              return;
+            }
+            if (newPinController.text != confirmPinController.text) {
+              setDialogState(() => error = 'New PINs do not match');
+              return;
+            }
+            final result = await _securityService.changePin(oldPinController.text, newPinController.text);
+            if (result.success) {
+              Navigator.pop(ctx);
+              if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PIN changed successfully'), backgroundColor: AppColors.emerald500));
+            } else {
+              setDialogState(() => error = result.error ?? 'Failed to change PIN');
+            }
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.indigo500),
+          child: const Text('CHANGE', style: TextStyle(color: Colors.white)),
+        ),
+      ],
         ),
       ),
     );
@@ -296,7 +301,7 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
                   controller: newPinController, 
                   obscureText: true, 
                   keyboardType: TextInputType.number, 
-                  maxLength: 6, 
+                  maxLength: SecurityConstants.pinLength, 
                   style: const TextStyle(color: Colors.white),
                   decoration: const InputDecoration(labelText: 'New PIN', labelStyle: TextStyle(color: AppColors.slate400)),
                 ),
@@ -311,6 +316,10 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
                   if (result.success) setDialogState(() => step = 1);
                   else setDialogState(() => error = result.error ?? 'Verification failed');
                 } else {
+                  if (newPinController.text.length < SecurityConstants.pinLength) {
+                    setDialogState(() => error = 'PIN too short');
+                    return;
+                  }
                   final result = await _securityService.resetPinViaSecurityQuestions(answerControllers.map((c) => c.text).toList(), newPinController.text);
                   if (result.success) {
                     Navigator.pop(ctx);
@@ -377,13 +386,13 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
                     ),
                   if (_pinIsSet && _biometricAvailable) Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
 
-                  _actionTile(Icons.lock_reset, AppColors.indigo500, 'Change PIN', 'Update your secure passkey', _showChangePinDialog),
+                  _actionTile(Icons.lock_reset, AppColors.indigo500, 'Change PIN', 'Update your ${SecurityConstants.pinLength}-digit passkey', _showChangePinDialog),
                   Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
-                  _actionTile(Icons.help_outline, AppColors.fuchsia500, 'Update Security Questions', 'Modify recovery methods', _showUpdateQuestionsDialog),
+                  _actionTile(Icons.help_outline, AppColors.fuchsia500, 'Update Recovery Questions', 'Modify recovery methods', _showUpdateQuestionsDialog),
                   Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
                   _actionTile(Icons.history, AppColors.amber500, 'Recovery Reset', 'Reset PIN via security questions', _showResetPinViaQuestionsDialog),
                   Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
-                  _actionTile(Icons.no_encryption, AppColors.rose500, 'Disable Security', 'Remove all protection (Caution)', _showDisableSecurityDialog, isDestructive: true),
+                  _actionTile(Icons.delete_forever_outlined, AppColors.rose500, 'Delete All Security Data', 'Permanently wipe PIN and salts (DANGEROUS)', _showDisableSecurityDialog, isDestructive: true),
                 ],
               ),
             ),

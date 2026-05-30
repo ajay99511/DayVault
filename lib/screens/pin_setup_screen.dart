@@ -92,13 +92,13 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
   }
 
   Future<void> _handlePinEntry(String digit) async {
-    if (_pin.length < 4) {
+    if (_pin.length < SecurityConstants.pinLength) {
       setState(() {
         _pin += digit;
       });
       HapticFeedback.lightImpact();
 
-      if (_pin.length >= 4) {
+      if (_pin.length >= SecurityConstants.pinLength) {
         await Future.delayed(const Duration(milliseconds: 300));
         if (_currentStep == 1) {
           setState(() => _currentStep = 2);
@@ -108,13 +108,13 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
   }
 
   Future<void> _handleConfirmPinEntry(String digit) async {
-    if (_confirmPin.length < 4) {
+    if (_confirmPin.length < SecurityConstants.pinLength) {
       setState(() {
         _confirmPin += digit;
       });
       HapticFeedback.lightImpact();
 
-      if (_confirmPin.length >= 4) {
+      if (_confirmPin.length >= SecurityConstants.pinLength) {
         await Future.delayed(const Duration(milliseconds: 300));
         if (_pin == _confirmPin) {
           setState(() => _currentStep = 3);
@@ -129,6 +129,7 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
       }
     }
   }
+
 
   Future<void> _handleBackspace() async {
     if (_currentStep == 1 && _pin.isNotEmpty) {
@@ -377,7 +378,7 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
         // PIN dots
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(4, (index) {
+          children: List.generate(SecurityConstants.pinLength, (index) {
             return AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               margin: const EdgeInsets.symmetric(horizontal: 8),

@@ -49,3 +49,9 @@ const List<String> essentialFeelings = [
   "Lonely",
   "Confused",
 ];
+
+class SecurityConstants {
+  static const int pinLength = 4;
+  static const int maxAttempts = 5;
+  static const int lockoutDurationSeconds = 30;
+}

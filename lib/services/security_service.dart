@@ -11,6 +11,7 @@ import 'package:pointycastle/macs/hmac.dart';
 import 'package:pointycastle/digests/sha256.dart';
 import 'package:pointycastle/key_derivators/api.dart';
 import '../config/security_questions.dart';
+import '../config/constants.dart';
 
 /// Security service handling PIN hashing, rate limiting, and data encryption.
 ///
@@ -36,8 +37,8 @@ class SecurityService {
   Uint8List? _cachedEncryptionKey;
 
   // Security constants
-  static const int _maxAttempts = 5;
-  static const int _lockoutDurationSeconds = 30;
+  static const int _maxAttempts = SecurityConstants.maxAttempts;
+  static const int _lockoutDurationSeconds = SecurityConstants.lockoutDurationSeconds;
   static const String _saltKey = 'security_salt';
   static const String _encryptionSaltKey = 'encryption_salt';
   static const String _pinHashKey = 'pin_hash';
@@ -50,6 +51,21 @@ class SecurityService {
 
   // Biometric authentication
   final LocalAuthentication _localAuth = LocalAuthentication();
+
+  /// Get the overall status of the security vault
+  Future<SecurityVaultStatus> getVaultStatus(bool settingsEnabled) async {
+    final pinSet = await isPinSet();
+    return SecurityVaultStatus(
+      isConfigured: pinSet,
+      isEnabled: settingsEnabled,
+      isUnlocked: _cachedEncryptionKey != null,
+    );
+  }
+
+  /// Clear the encryption key from memory
+  void lockVault() {
+    _cachedEncryptionKey = null;
+  }
 
   /// Generate a random salt for PIN hashing
   String _generateSalt() {
@@ -257,7 +273,7 @@ class SecurityService {
     if (!_isValidPin(newPin)) {
       return PinVerificationResult(
         success: false,
-        error: 'New PIN must be 4-6 digits',
+        error: 'New PIN must be exactly ${SecurityConstants.pinLength} digits',
       );
     }
 
@@ -307,9 +323,9 @@ class SecurityService {
     return PinVerificationResult(success: true);
   }
 
-  /// Validate PIN format (4-6 digits only)
+  /// Validate PIN format (strict length)
   bool _isValidPin(String pin) {
-    return RegExp(r'^\d{4,6}$').hasMatch(pin);
+    return RegExp('^\\d{${SecurityConstants.pinLength}}\$').hasMatch(pin);
   }
 
   /// Get remaining attempts before lockout
@@ -531,6 +547,25 @@ class SecurityService {
       return 'Error checking biometric status';
     }
   }
+}
+
+/// High-level representation of the security vault state (OOD)
+class SecurityVaultStatus {
+  /// Whether a PIN and salts are configured in secure storage
+  final bool isConfigured;
+  /// Whether the user has enabled the security system in settings
+  final bool isEnabled;
+  /// Whether the encryption key is currently available in memory
+  final bool isUnlocked;
+
+  SecurityVaultStatus({
+    required this.isConfigured,
+    required this.isEnabled,
+    required this.isUnlocked,
+  });
+
+  bool get needsSetup => !isConfigured;
+  bool get canReactivate => isConfigured && !isEnabled;
 }
 
 /// Result of PIN verification attempt
