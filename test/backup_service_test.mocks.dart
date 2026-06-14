@@ -3,11 +3,12 @@
 // Do not manually edit this file.
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
-import 'dart:async' as _i4;
+import 'dart:async' as _i5;
 
-import 'package:memory_palace/models/objectbox_models.dart' as _i5;
-import 'package:memory_palace/models/types.dart' as _i2;
-import 'package:memory_palace/services/storage_service.dart' as _i3;
+import 'package:memory_palace/models/objectbox_models.dart' as _i6;
+import 'package:memory_palace/models/paged_result.dart' as _i2;
+import 'package:memory_palace/models/types.dart' as _i3;
+import 'package:memory_palace/services/storage_service.dart' as _i4;
 import 'package:mockito/mockito.dart' as _i1;
 
 // ignore_for_file: type=lint
@@ -25,8 +26,19 @@ import 'package:mockito/mockito.dart' as _i1;
 // ignore_for_file: subtype_of_sealed_class
 // ignore_for_file: invalid_use_of_internal_member
 
-class _FakeUserSettings_0 extends _i1.SmartFake implements _i2.UserSettings {
-  _FakeUserSettings_0(
+class _FakePagedResult_0<T> extends _i1.SmartFake
+    implements _i2.PagedResult<T> {
+  _FakePagedResult_0(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
+}
+
+class _FakeUserSettings_1 extends _i1.SmartFake implements _i3.UserSettings {
+  _FakeUserSettings_1(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -38,114 +50,152 @@ class _FakeUserSettings_0 extends _i1.SmartFake implements _i2.UserSettings {
 /// A class which mocks [StorageService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockStorageService extends _i1.Mock implements _i3.StorageService {
+class MockStorageService extends _i1.Mock implements _i4.StorageService {
   @override
-  _i4.Future<List<_i2.JournalEntry>> getJournal() => (super.noSuchMethod(
+  _i5.Future<List<_i3.JournalEntry>> getJournal() => (super.noSuchMethod(
         Invocation.method(
           #getJournal,
           [],
         ),
         returnValue:
-            _i4.Future<List<_i2.JournalEntry>>.value(<_i2.JournalEntry>[]),
+            _i5.Future<List<_i3.JournalEntry>>.value(<_i3.JournalEntry>[]),
         returnValueForMissingStub:
-            _i4.Future<List<_i2.JournalEntry>>.value(<_i2.JournalEntry>[]),
-      ) as _i4.Future<List<_i2.JournalEntry>>);
+            _i5.Future<List<_i3.JournalEntry>>.value(<_i3.JournalEntry>[]),
+      ) as _i5.Future<List<_i3.JournalEntry>>);
 
   @override
-  _i4.Future<void> saveJournalEntry(_i2.JournalEntry? entry) =>
+  _i5.Future<void> saveJournalEntry(_i3.JournalEntry? entry) =>
       (super.noSuchMethod(
         Invocation.method(
           #saveJournalEntry,
           [entry],
         ),
-        returnValue: _i4.Future<void>.value(),
-        returnValueForMissingStub: _i4.Future<void>.value(),
-      ) as _i4.Future<void>);
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 
   @override
-  _i4.Future<void> deleteJournalEntry(String? entryId) => (super.noSuchMethod(
+  _i5.Future<_i2.PagedResult<_i3.JournalEntry>> getJournalPage(
+    int? pageSize, [
+    _i2.PaginationCursor? cursor,
+  ]) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getJournalPage,
+          [
+            pageSize,
+            cursor,
+          ],
+        ),
+        returnValue: _i5.Future<_i2.PagedResult<_i3.JournalEntry>>.value(
+            _FakePagedResult_0<_i3.JournalEntry>(
+          this,
+          Invocation.method(
+            #getJournalPage,
+            [
+              pageSize,
+              cursor,
+            ],
+          ),
+        )),
+        returnValueForMissingStub:
+            _i5.Future<_i2.PagedResult<_i3.JournalEntry>>.value(
+                _FakePagedResult_0<_i3.JournalEntry>(
+          this,
+          Invocation.method(
+            #getJournalPage,
+            [
+              pageSize,
+              cursor,
+            ],
+          ),
+        )),
+      ) as _i5.Future<_i2.PagedResult<_i3.JournalEntry>>);
+
+  @override
+  _i5.Future<void> deleteJournalEntry(String? entryId) => (super.noSuchMethod(
         Invocation.method(
           #deleteJournalEntry,
           [entryId],
         ),
-        returnValue: _i4.Future<void>.value(),
-        returnValueForMissingStub: _i4.Future<void>.value(),
-      ) as _i4.Future<void>);
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 
   @override
-  _i4.Future<_i5.ObjectBoxJournalEntry?> getJournalEntryById(String? entryId) =>
+  _i5.Future<_i6.ObjectBoxJournalEntry?> getJournalEntryById(String? entryId) =>
       (super.noSuchMethod(
         Invocation.method(
           #getJournalEntryById,
           [entryId],
         ),
-        returnValue: _i4.Future<_i5.ObjectBoxJournalEntry?>.value(),
+        returnValue: _i5.Future<_i6.ObjectBoxJournalEntry?>.value(),
         returnValueForMissingStub:
-            _i4.Future<_i5.ObjectBoxJournalEntry?>.value(),
-      ) as _i4.Future<_i5.ObjectBoxJournalEntry?>);
+            _i5.Future<_i6.ObjectBoxJournalEntry?>.value(),
+      ) as _i5.Future<_i6.ObjectBoxJournalEntry?>);
 
   @override
-  _i4.Future<List<_i2.RankingCategory>> getFavoriteRankings() =>
+  _i5.Future<List<_i3.RankingCategory>> getFavoriteRankings() =>
       (super.noSuchMethod(
         Invocation.method(
           #getFavoriteRankings,
           [],
         ),
-        returnValue: _i4.Future<List<_i2.RankingCategory>>.value(
-            <_i2.RankingCategory>[]),
-        returnValueForMissingStub: _i4.Future<List<_i2.RankingCategory>>.value(
-            <_i2.RankingCategory>[]),
-      ) as _i4.Future<List<_i2.RankingCategory>>);
+        returnValue: _i5.Future<List<_i3.RankingCategory>>.value(
+            <_i3.RankingCategory>[]),
+        returnValueForMissingStub: _i5.Future<List<_i3.RankingCategory>>.value(
+            <_i3.RankingCategory>[]),
+      ) as _i5.Future<List<_i3.RankingCategory>>);
 
   @override
-  _i4.Future<List<_i2.RankingCategory>> getRankings() => (super.noSuchMethod(
+  _i5.Future<List<_i3.RankingCategory>> getRankings() => (super.noSuchMethod(
         Invocation.method(
           #getRankings,
           [],
         ),
-        returnValue: _i4.Future<List<_i2.RankingCategory>>.value(
-            <_i2.RankingCategory>[]),
-        returnValueForMissingStub: _i4.Future<List<_i2.RankingCategory>>.value(
-            <_i2.RankingCategory>[]),
-      ) as _i4.Future<List<_i2.RankingCategory>>);
+        returnValue: _i5.Future<List<_i3.RankingCategory>>.value(
+            <_i3.RankingCategory>[]),
+        returnValueForMissingStub: _i5.Future<List<_i3.RankingCategory>>.value(
+            <_i3.RankingCategory>[]),
+      ) as _i5.Future<List<_i3.RankingCategory>>);
 
   @override
-  _i4.Future<void> addRankingCategory(_i2.RankingCategory? category) =>
+  _i5.Future<void> addRankingCategory(_i3.RankingCategory? category) =>
       (super.noSuchMethod(
         Invocation.method(
           #addRankingCategory,
           [category],
         ),
-        returnValue: _i4.Future<void>.value(),
-        returnValueForMissingStub: _i4.Future<void>.value(),
-      ) as _i4.Future<void>);
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 
   @override
-  _i4.Future<void> deleteRankingCategory(String? categoryId) =>
+  _i5.Future<void> deleteRankingCategory(String? categoryId) =>
       (super.noSuchMethod(
         Invocation.method(
           #deleteRankingCategory,
           [categoryId],
         ),
-        returnValue: _i4.Future<void>.value(),
-        returnValueForMissingStub: _i4.Future<void>.value(),
-      ) as _i4.Future<void>);
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 
   @override
-  _i4.Future<void> updateRankingCategory(_i2.RankingCategory? category) =>
+  _i5.Future<void> updateRankingCategory(_i3.RankingCategory? category) =>
       (super.noSuchMethod(
         Invocation.method(
           #updateRankingCategory,
           [category],
         ),
-        returnValue: _i4.Future<void>.value(),
-        returnValueForMissingStub: _i4.Future<void>.value(),
-      ) as _i4.Future<void>);
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 
   @override
-  _i4.Future<void> addRankedItem(
+  _i5.Future<void> addRankedItem(
     String? categoryId,
-    _i2.RankedItem? item,
+    _i3.RankedItem? item,
   ) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -155,12 +205,12 @@ class MockStorageService extends _i1.Mock implements _i3.StorageService {
             item,
           ],
         ),
-        returnValue: _i4.Future<void>.value(),
-        returnValueForMissingStub: _i4.Future<void>.value(),
-      ) as _i4.Future<void>);
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 
   @override
-  _i4.Future<void> deleteRankedItem(
+  _i5.Future<void> deleteRankedItem(
     String? categoryId,
     String? itemId,
   ) =>
@@ -172,14 +222,14 @@ class MockStorageService extends _i1.Mock implements _i3.StorageService {
             itemId,
           ],
         ),
-        returnValue: _i4.Future<void>.value(),
-        returnValueForMissingStub: _i4.Future<void>.value(),
-      ) as _i4.Future<void>);
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 
   @override
-  _i4.Future<void> reorderRankedItems(
+  _i5.Future<void> reorderRankedItems(
     String? categoryId,
-    List<_i2.RankedItem>? reordered,
+    List<_i3.RankedItem>? reordered,
   ) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -189,40 +239,40 @@ class MockStorageService extends _i1.Mock implements _i3.StorageService {
             reordered,
           ],
         ),
-        returnValue: _i4.Future<void>.value(),
-        returnValueForMissingStub: _i4.Future<void>.value(),
-      ) as _i4.Future<void>);
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 
   @override
-  _i2.UserSettings getSettings() => (super.noSuchMethod(
+  _i3.UserSettings getSettings() => (super.noSuchMethod(
         Invocation.method(
           #getSettings,
           [],
         ),
-        returnValue: _FakeUserSettings_0(
+        returnValue: _FakeUserSettings_1(
           this,
           Invocation.method(
             #getSettings,
             [],
           ),
         ),
-        returnValueForMissingStub: _FakeUserSettings_0(
+        returnValueForMissingStub: _FakeUserSettings_1(
           this,
           Invocation.method(
             #getSettings,
             [],
           ),
         ),
-      ) as _i2.UserSettings);
+      ) as _i3.UserSettings);
 
   @override
-  _i4.Future<_i2.UserSettings> saveSettings(_i2.UserSettings? settings) =>
+  _i5.Future<_i3.UserSettings> saveSettings(_i3.UserSettings? settings) =>
       (super.noSuchMethod(
         Invocation.method(
           #saveSettings,
           [settings],
         ),
-        returnValue: _i4.Future<_i2.UserSettings>.value(_FakeUserSettings_0(
+        returnValue: _i5.Future<_i3.UserSettings>.value(_FakeUserSettings_1(
           this,
           Invocation.method(
             #saveSettings,
@@ -230,17 +280,17 @@ class MockStorageService extends _i1.Mock implements _i3.StorageService {
           ),
         )),
         returnValueForMissingStub:
-            _i4.Future<_i2.UserSettings>.value(_FakeUserSettings_0(
+            _i5.Future<_i3.UserSettings>.value(_FakeUserSettings_1(
           this,
           Invocation.method(
             #saveSettings,
             [settings],
           ),
         )),
-      ) as _i4.Future<_i2.UserSettings>);
+      ) as _i5.Future<_i3.UserSettings>);
 
   @override
-  _i4.Future<void> saveDraft(
+  _i5.Future<void> saveDraft(
     String? draftId,
     String? draftData,
   ) =>
@@ -252,47 +302,47 @@ class MockStorageService extends _i1.Mock implements _i3.StorageService {
             draftData,
           ],
         ),
-        returnValue: _i4.Future<void>.value(),
-        returnValueForMissingStub: _i4.Future<void>.value(),
-      ) as _i4.Future<void>);
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 
   @override
-  _i4.Future<String?> getDraft(String? draftId) => (super.noSuchMethod(
+  _i5.Future<String?> getDraft(String? draftId) => (super.noSuchMethod(
         Invocation.method(
           #getDraft,
           [draftId],
         ),
-        returnValue: _i4.Future<String?>.value(),
-        returnValueForMissingStub: _i4.Future<String?>.value(),
-      ) as _i4.Future<String?>);
+        returnValue: _i5.Future<String?>.value(),
+        returnValueForMissingStub: _i5.Future<String?>.value(),
+      ) as _i5.Future<String?>);
 
   @override
-  _i4.Future<void> deleteDraft(String? draftId) => (super.noSuchMethod(
+  _i5.Future<void> deleteDraft(String? draftId) => (super.noSuchMethod(
         Invocation.method(
           #deleteDraft,
           [draftId],
         ),
-        returnValue: _i4.Future<void>.value(),
-        returnValueForMissingStub: _i4.Future<void>.value(),
-      ) as _i4.Future<void>);
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 
   @override
-  _i4.Future<List<String>> getAllDraftIds() => (super.noSuchMethod(
+  _i5.Future<List<String>> getAllDraftIds() => (super.noSuchMethod(
         Invocation.method(
           #getAllDraftIds,
           [],
         ),
-        returnValue: _i4.Future<List<String>>.value(<String>[]),
-        returnValueForMissingStub: _i4.Future<List<String>>.value(<String>[]),
-      ) as _i4.Future<List<String>>);
+        returnValue: _i5.Future<List<String>>.value(<String>[]),
+        returnValueForMissingStub: _i5.Future<List<String>>.value(<String>[]),
+      ) as _i5.Future<List<String>>);
 
   @override
-  _i4.Future<void> clearAllDrafts() => (super.noSuchMethod(
+  _i5.Future<void> clearAllDrafts() => (super.noSuchMethod(
         Invocation.method(
           #clearAllDrafts,
           [],
         ),
-        returnValue: _i4.Future<void>.value(),
-        returnValueForMissingStub: _i4.Future<void>.value(),
-      ) as _i4.Future<void>);
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
 }

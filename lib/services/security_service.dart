@@ -49,6 +49,9 @@ class SecurityService {
   static const String _securityQuestionsKey = 'security_questions';
   static const String _securityAnswersKey = 'security_answers';
 
+  // Crash-recovery guard for PIN change re-key operation
+  static const String _rekeyPendingKey = 'rekey_pending';
+
   // Biometric authentication
   final LocalAuthentication _localAuth = LocalAuthentication();
 
@@ -599,6 +602,16 @@ class SecurityQuestionsResult {
 }
 
 /// Top-level function for PBKDF2 key derivation.
+class ChangePinResult {
+  final bool success;
+  final String? error;
+
+  const ChangePinResult({required this.success, this.error});
+
+  factory ChangePinResult.fromVerification(PinVerificationResult r) =>
+      ChangePinResult(success: false, error: r.error);
+}
+
 /// Must be outside the class for compute().
 Uint8List _pbkdf2Derive(Map<String, dynamic> params) {
   final pin = params['pin'] as String;

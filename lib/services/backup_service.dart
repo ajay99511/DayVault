@@ -9,6 +9,8 @@ import 'storage_service.dart';
 import 'encryption_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+enum BackupStage { idle, serializing, encrypting, writing, reading, decrypting, restoring }
+
 /// Service for exporting and importing user data.
 /// 
 /// Features:
@@ -58,7 +60,7 @@ class BackupService {
       'tags': entry.tags,
       'location': entry.location?.toJson(),
       'timeBucket': entry.timeBucket?.index,
-      'images': entry.images,
+      'images': entry.images.map((i) => i.toJson()).toList(),
       'isSpotlight': entry.isSpotlight,
     };
   }

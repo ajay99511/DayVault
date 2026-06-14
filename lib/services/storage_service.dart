@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../models/objectbox_models.dart';
+import '../models/paged_result.dart';
 import '../objectbox.g.dart';
 import 'objectbox_service.dart';
 import 'encryption_service.dart';
@@ -102,6 +103,55 @@ class StorageService {
     } finally {
       query.close();
     }
+  }
+
+  /// Cursor-based pagination — returns at most [pageSize] entries ordered by
+  /// date descending. Pass [cursor] from the previous [PagedResult.nextCursor]
+  /// to fetch the next page; omit or pass null to start from the first page.
+  Future<PagedResult<JournalEntry>> getJournalPage(
+    int pageSize, [
+    PaginationCursor? cursor,
+  ]) async {
+    if (pageSize < 1 || pageSize > 100) {
+      throw ArgumentError('pageSize must be in [1, 100], got $pageSize');
+    }
+
+    final queryBuilder = cursor == null
+        ? _journalBox.query()
+        : _journalBox.query(ObjectBoxJournalEntry_.id.lessThan(cursor.lastId));
+
+    final query = queryBuilder
+        .order(ObjectBoxJournalEntry_.date, flags: Order.descending)
+        .build()
+      ..limit = pageSize + 1;
+
+    final List<ObjectBoxJournalEntry> raw;
+    try {
+      raw = query.find();
+    } finally {
+      query.close();
+    }
+
+    final hasMore = raw.length > pageSize;
+    final page = hasMore ? raw.sublist(0, pageSize) : raw;
+
+    final key = SecurityService().getCachedEncryptionKey();
+    final List<JournalEntry> items;
+    if (key == null) {
+      items = await Future.wait(page.map((e) => e.toFreezed()));
+    } else {
+      final rawEntries = page.map((e) => e.toRawMap()).toList();
+      final decrypted = await compute(
+        _batchDecryptEntries,
+        {'entries': rawEntries, 'key': key},
+      );
+      items = List.generate(
+          page.length, (i) => page[i].toFreezedFromDecrypted(decrypted[i]));
+    }
+
+    final nextCursor =
+        hasMore ? PaginationCursor.fromLastId(page.last.id) : null;
+    return PagedResult(items: items, nextCursor: nextCursor);
   }
 
   Future<void> deleteJournalEntry(String entryId) async {

@@ -814,69 +814,16 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Tabs
+            // Tabs — _SyncedTabBar is a descendant of DefaultTabController
+            // so it can safely call DefaultTabController.of(context) in
+            // didChangeDependencies without throwing.
             if (categories.isNotEmpty)
-              Builder(builder: (ctx) {
-                final tabController = DefaultTabController.of(ctx);
-                tabController.addListener(() {
-                  if (!tabController.indexIsChanging && ctx.mounted) {
-                    if (tabController.index < categories.length) {
-                      final newId = categories[tabController.index].id;
-                      if (activeId != newId) {
-                        setState(() => activeId = newId);
-                      }
-                    }
-                  }
-                });
-
-                return Row(
-                  children: [
-                    Expanded(
-                      child: TabBar(
-                        isScrollable: true,
-                        tabAlignment: TabAlignment.start,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        dividerColor: Colors.transparent,
-                        indicator: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        labelColor: Colors.black,
-                        unselectedLabelColor: AppColors.slate400,
-                        labelStyle: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 10,
-                        ),
-                        tabs: categories.map((cat) {
-                          return Tab(
-                            height: 40,
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (cat.isFavorite) ...[
-                                    const Icon(Icons.star,
-                                        size: 12, color: AppColors.amber500),
-                                    const SizedBox(width: 4),
-                                  ],
-                                  Text(cat.title.toUpperCase()),
-                                ],
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.more_vert,
-                          color: AppColors.slate400),
-                      onPressed: () => _showCategoryOptions(_activeCategory),
-                    ),
-                  ],
-                );
-              }),
+              _SyncedTabBar(
+                categories: categories,
+                activeId: activeId,
+                onTabChanged: (newId) => setState(() => activeId = newId),
+                onCategoryOptions: () => _showCategoryOptions(_activeCategory),
+              ),
             const SizedBox(height: 24),
 
             // TabBarView Content (Swipeable lists)
@@ -1314,6 +1261,106 @@ class _RankedItemTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ━━━ Synced Tab Bar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Lives INSIDE DefaultTabController's scope so didChangeDependencies can
+// safely call DefaultTabController.of(context) without throwing.
+
+class _SyncedTabBar extends StatefulWidget {
+  final List<RankingCategory> categories;
+  final String activeId;
+  final ValueChanged<String> onTabChanged;
+  final VoidCallback onCategoryOptions;
+
+  const _SyncedTabBar({
+    required this.categories,
+    required this.activeId,
+    required this.onTabChanged,
+    required this.onCategoryOptions,
+  });
+
+  @override
+  State<_SyncedTabBar> createState() => _SyncedTabBarState();
+}
+
+class _SyncedTabBarState extends State<_SyncedTabBar> {
+  TabController? _tabCtrl;
+  VoidCallback? _tabListener;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final newCtrl = DefaultTabController.of(context);
+    if (newCtrl != _tabCtrl) {
+      if (_tabListener != null) _tabCtrl?.removeListener(_tabListener!);
+      _tabCtrl = newCtrl;
+      _tabListener = () {
+        if (!newCtrl.indexIsChanging && mounted) {
+          if (newCtrl.index < widget.categories.length) {
+            final newId = widget.categories[newCtrl.index].id;
+            if (widget.activeId != newId) widget.onTabChanged(newId);
+          }
+        }
+      };
+      _tabCtrl!.addListener(_tabListener!);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_tabListener != null) _tabCtrl?.removeListener(_tabListener!);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            dividerColor: Colors.transparent,
+            indicator: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            labelColor: Colors.black,
+            unselectedLabelColor: AppColors.slate400,
+            labelStyle: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 10,
+            ),
+            tabs: widget.categories.map((cat) {
+              return Tab(
+                height: 40,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (cat.isFavorite) ...[
+                        const Icon(Icons.star,
+                            size: 12, color: AppColors.amber500),
+                        const SizedBox(width: 4),
+                      ],
+                      Text(cat.title.toUpperCase()),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.more_vert, color: AppColors.slate400),
+          onPressed: widget.onCategoryOptions,
+        ),
+      ],
     );
   }
 }

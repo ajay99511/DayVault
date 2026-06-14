@@ -1,9 +1,4 @@
-import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:battery_plus/battery_plus.dart';
-import 'package:device_info_plus/device_info_plus.dart';
-import 'package:system_info2/system_info2.dart';
 import 'package:local_auth/local_auth.dart';
 import '../services/storage_service.dart';
 import '../services/security_service.dart';
@@ -27,116 +22,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   int totalMemories = 0;
   int _streak = 0;
 
-  // System Tracking
-  final Battery _battery = Battery();
-  Timer? _timer;
-  int _batteryLevel = 100;
-  String _batteryState = 'Unknown';
-  String _osName = 'Loading...';
-  String _deviceName = 'Loading...';
-  double _freeRamGB = 0;
-  double _totalRamGB = 0;
-
   @override
   void initState() {
     super.initState();
     _load();
-    _initSystemInfo();
-    _startMetricsTimer();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _initSystemInfo() async {
-    final DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-    try {
-      if (Platform.isAndroid) {
-        final androidInfo = await deviceInfo.androidInfo;
-        _deviceName = androidInfo.model;
-        _osName = 'Android ${androidInfo.version.release}';
-      } else if (Platform.isIOS) {
-        final iosInfo = await deviceInfo.iosInfo;
-        _deviceName = iosInfo.utsname.machine;
-        _osName = 'iOS ${iosInfo.systemVersion}';
-      } else if (Platform.isWindows) {
-        final windowsInfo = await deviceInfo.windowsInfo;
-        _deviceName = windowsInfo.productName;
-        _osName = 'Windows';
-      } else if (Platform.isMacOS) {
-        final macInfo = await deviceInfo.macOsInfo;
-        _deviceName = macInfo.model;
-        _osName = 'macOS ${macInfo.osRelease}';
-      } else if (Platform.isLinux) {
-        final linuxInfo = await deviceInfo.linuxInfo;
-        _deviceName = linuxInfo.prettyName;
-        _osName = 'Linux';
-      } else {
-        _deviceName = 'Unknown Device';
-        _osName = Platform.operatingSystem;
-      }
-    } catch (e) {
-      _deviceName = 'Access Denied';
-      _osName = 'Unknown OS';
-    }
-
-    if (mounted) setState(() {});
-  }
-
-  void _startMetricsTimer() {
-    _updateMetrics();
-    _timer =
-        Timer.periodic(const Duration(seconds: 5), (_) => _updateMetrics());
-  }
-
-  Future<void> _updateMetrics() async {
-    if (!mounted) return;
-    try {
-      final level = await _battery.batteryLevel;
-      final state = await _battery.batteryState;
-      if (mounted) {
-        setState(() {
-          _batteryLevel = level;
-          _batteryState = state.name.toUpperCase();
-
-          try {
-            // Using system_info2 for memory stats (in bytes)
-            _totalRamGB =
-                SysInfo.getTotalPhysicalMemory() / (1024 * 1024 * 1024);
-            _freeRamGB = SysInfo.getFreePhysicalMemory() / (1024 * 1024 * 1024);
-          } catch (e) {
-            // Fallbacks in case system_info2 fails on the target platform
-            _totalRamGB = 0;
-            _freeRamGB = 0;
-          }
-        });
-      }
-    } catch (e) {
-      // Ignore battery errors on unsupported devices (e.g. some emulators/desktops)
-    }
   }
 
   Future<void> _load() async {
     final s = ref.read(storageServiceProvider).getSettings();
     final j = await ref.read(storageServiceProvider).getJournal();
     final computedStreak = StorageService.computeStreak(j);
-    setState(() {
-      settings = s;
-      totalMemories = j.length;
-      _streak = computedStreak;
-    });
+    if (mounted) {
+      setState(() {
+        settings = s;
+        totalMemories = j.length;
+        _streak = computedStreak;
+      });
+    }
   }
 
   void _toggleSecurity() async {
     final securityService = SecurityService();
-    final storage = ref.read(storageServiceProvider);
     final status = await securityService.getVaultStatus(settings.securityEnabled);
-    
+
     if (status.needsSetup) {
-      // Need to set up PIN first
       if (!mounted) return;
       Navigator.push(
         context,
@@ -144,24 +53,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           builder: (_) => PinSetupScreen(
             onSetupComplete: () {
               Navigator.pop(context);
-              _load(); // Reload settings
+              _load();
             },
           ),
         ),
       );
     } else if (status.canReactivate) {
-      // PIN is set but security is disabled in settings -> Reactivate
       _showReactivationVerification();
     } else {
-      // Security is currently enabled -> Disable it
       _showDisableSecurityVerification();
     }
   }
 
   Future<void> _showReactivationVerification() async {
     final securityService = SecurityService();
-    
-    // Try biometrics first if enabled previously
+
     if (settings.biometricsEnabled) {
       try {
         final didAuthenticate = await LocalAuthentication().authenticate(
@@ -176,7 +82,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     }
 
-    // Fallback to PIN dialog for reactivation
     if (!mounted) return;
     final pinController = TextEditingController();
     String? error;
@@ -186,7 +91,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: AppColors.slate900,
-          title: const Text('Activate Security', style: TextStyle(color: Colors.white)),
+          title: const Text('Activate Security',
+              style: TextStyle(color: Colors.white)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -196,7 +102,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               const SizedBox(height: 16),
               if (error != null)
-                Text(error!, style: const TextStyle(color: AppColors.rose500, fontSize: 12)),
+                Text(error!,
+                    style: const TextStyle(
+                        color: AppColors.rose500, fontSize: 12)),
               TextField(
                 controller: pinController,
                 obscureText: true,
@@ -213,20 +121,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('CANCEL', style: TextStyle(color: AppColors.slate400)),
+              child: const Text('CANCEL',
+                  style: TextStyle(color: AppColors.slate400)),
             ),
             ElevatedButton(
               onPressed: () async {
-                final result = await securityService.verifyPin(pinController.text);
+                final result =
+                    await securityService.verifyPin(pinController.text);
                 if (result.success) {
-                  Navigator.pop(ctx);
+                  if (ctx.mounted) Navigator.pop(ctx);
                   _enableSecurityAction();
                 } else {
-                  setDialogState(() => error = result.error ?? 'Incorrect PIN');
+                  setDialogState(
+                      () => error = result.error ?? 'Incorrect PIN');
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.indigo500),
-              child: const Text('ACTIVATE', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.indigo500),
+              child: const Text('ACTIVATE',
+                  style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -251,8 +164,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   void _showDisableSecurityVerification() async {
     final securityService = SecurityService();
-    
-    // Try biometrics first if enabled
+
     if (settings.biometricsEnabled) {
       try {
         final didAuthenticate = await LocalAuthentication().authenticate(
@@ -267,7 +179,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     }
 
-    // Fallback to PIN dialog
     if (!mounted) return;
     final pinController = TextEditingController();
     String? error;
@@ -277,7 +188,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           backgroundColor: AppColors.slate900,
-          title: const Text('Verify PIN', style: TextStyle(color: Colors.white)),
+          title: const Text('Verify PIN',
+              style: TextStyle(color: Colors.white)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -287,7 +199,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
               const SizedBox(height: 16),
               if (error != null)
-                Text(error!, style: const TextStyle(color: AppColors.rose500, fontSize: 12)),
+                Text(error!,
+                    style: const TextStyle(
+                        color: AppColors.rose500, fontSize: 12)),
               TextField(
                 controller: pinController,
                 obscureText: true,
@@ -304,20 +218,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('CANCEL', style: TextStyle(color: AppColors.slate400)),
+              child: const Text('CANCEL',
+                  style: TextStyle(color: AppColors.slate400)),
             ),
             ElevatedButton(
               onPressed: () async {
-                final result = await securityService.verifyPin(pinController.text);
+                final result =
+                    await securityService.verifyPin(pinController.text);
                 if (result.success) {
-                  Navigator.pop(ctx);
+                  if (ctx.mounted) Navigator.pop(ctx);
                   _disableSecurityAction();
                 } else {
-                  setDialogState(() => error = result.error ?? 'Incorrect PIN');
+                  setDialogState(
+                      () => error = result.error ?? 'Incorrect PIN');
                 }
               },
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.indigo500),
-              child: const Text('VERIFY', style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.indigo500),
+              child: const Text('VERIFY',
+                  style: TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -357,21 +276,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: Row(
                 children: [
                   Container(
-                    width: 80,
-                    height: 80,
-                    padding: const EdgeInsets.all(2),
+                    width: 56,
+                    height: 56,
                     decoration: const BoxDecoration(
                       shape: BoxShape.circle,
-                      color: AppColors.slate800,
+                      color: AppColors.indigo500,
                     ),
-                    child: CircleAvatar(
-                      backgroundColor: AppColors.slate900,
-                      child: Icon(
-                        Platform.isAndroid || Platform.isIOS
-                            ? Icons.phone_android
-                            : Icons.computer,
-                        color: AppColors.indigo500,
-                        size: 32,
+                    alignment: Alignment.center,
+                    child: Text(
+                      (settings.username.isNotEmpty)
+                          ? settings.username[0].toUpperCase()
+                          : 'J',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),
@@ -381,7 +300,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _deviceName,
+                          settings.username.isNotEmpty
+                              ? settings.username
+                              : 'Journaler',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 22,
@@ -390,12 +311,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                         ),
                         Text(
-                          "OS: $_osName",
+                          '$totalMemories entries · $_streak day streak',
                           style: const TextStyle(
-                            color: AppColors.fuchsia500,
+                            color: AppColors.slate400,
                             fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1,
                           ),
                         ),
                       ],
@@ -431,42 +350,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   "$_streak",
                   Icons.local_fire_department,
                   AppColors.emerald500,
-                ),
-              ],
-            ),
-            const SizedBox(height: 40),
-
-            // Diagnostics Grid
-            const Text(
-              "REAL-TIME DIAGNOSTICS",
-              style: TextStyle(
-                color: AppColors.slate400,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                _statCard(
-                  "Battery",
-                  "$_batteryLevel%",
-                  _batteryState == 'CHARGING'
-                      ? Icons.battery_charging_full
-                      : Icons.battery_full,
-                  _batteryLevel <= 20
-                      ? AppColors.rose500
-                      : AppColors.emerald500,
-                ),
-                const SizedBox(width: 12),
-                _statCard(
-                  "RAM Status",
-                  _totalRamGB > 0
-                      ? "${(_totalRamGB - _freeRamGB).toStringAsFixed(1)} / ${_totalRamGB.toStringAsFixed(1)} GB"
-                      : "N/A",
-                  Icons.memory,
-                  AppColors.amber500,
                 ),
               ],
             ),
@@ -523,9 +406,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 ),
                               ),
                               Text(
-                                settings.biometricsEnabled 
-                                  ? "Biometric Access Enrolled" 
-                                  : "Require security on launch",
+                                settings.biometricsEnabled
+                                    ? "Biometric Access Enrolled"
+                                    : "Require security on launch",
                                 style: const TextStyle(
                                   color: AppColors.slate400,
                                   fontSize: 12,
@@ -549,14 +432,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       color: AppColors.indigo500.withValues(alpha: 0.1),
                       child: Row(
                         children: [
-                          const Icon(
-                            Icons.lock,
-                            size: 12,
-                            color: AppColors.indigo500,
-                          ),
+                          const Icon(Icons.lock,
+                              size: 12, color: AppColors.indigo500),
                           const SizedBox(width: 8),
                           Text(
-                            settings.biometricsEnabled ? "BIOMETRICS + PASSKEY ACTIVE" : "PASSKEY ACTIVE",
+                            settings.biometricsEnabled
+                                ? "BIOMETRICS + PASSKEY ACTIVE"
+                                : "PASSKEY ACTIVE",
                             style: const TextStyle(
                               color: AppColors.indigo500,
                               fontSize: 10,
@@ -588,7 +470,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  // PIN & Security Management
                   ListTile(
                     leading: Container(
                       padding: const EdgeInsets.all(10),
@@ -596,22 +477,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         color: AppColors.fuchsia500.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(
-                        Icons.security,
-                        color: AppColors.fuchsia500,
-                        size: 24,
-                      ),
+                      child: const Icon(Icons.security,
+                          color: AppColors.fuchsia500, size: 24),
                     ),
                     title: const Text(
                       'PIN & Security',
                       style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
+                          color: Colors.white, fontWeight: FontWeight.w600),
                     ),
                     subtitle: const Text(
                       'Manage PIN, security questions & biometrics',
-                      style: TextStyle(color: AppColors.slate400, fontSize: 11),
+                      style:
+                          TextStyle(color: AppColors.slate400, fontSize: 11),
                     ),
                     trailing: const Icon(Icons.chevron_right,
                         color: AppColors.slate400),
@@ -673,20 +550,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
         child: Icon(icon, color: iconColor, size: 20),
       ),
-      title: Text(
-        title,
-        style:
-            const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: const TextStyle(color: AppColors.slate400, fontSize: 11),
-      ),
+      title: Text(title,
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w600)),
+      subtitle: Text(subtitle,
+          style: const TextStyle(color: AppColors.slate400, fontSize: 11)),
       trailing: const Icon(Icons.chevron_right, color: AppColors.slate400),
       onTap: () async {
         final backupService = ref.read(backupServiceProvider);
-
-        // Show loading
+        if (!context.mounted) return;
         showDialog(
           context: context,
           barrierDismissible: false,
@@ -696,19 +568,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ),
         );
-
         final result = await backupService.exportToFile(encrypted: encrypted);
-
         if (context.mounted) {
-          Navigator.pop(context); // Close loading
-
+          Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                result.success
-                    ? (result.message ?? 'Backup exported successfully')
-                    : (result.error ?? 'Export failed'),
-              ),
+              content: Text(result.success
+                  ? (result.message ?? 'Backup exported successfully')
+                  : (result.error ?? 'Export failed')),
               backgroundColor:
                   result.success ? AppColors.emerald500 : AppColors.rose500,
               behavior: SnackBarBehavior.floating,
@@ -727,16 +594,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           color: AppColors.fuchsia500.withValues(alpha: 0.2),
           shape: BoxShape.circle,
         ),
-        child: const Icon(Icons.folder, color: AppColors.fuchsia500, size: 20),
+        child: const Icon(Icons.folder,
+            color: AppColors.fuchsia500, size: 20),
       ),
-      title: const Text(
-        'Manage Backups',
-        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-      ),
-      subtitle: const Text(
-        'View and restore previous backups',
-        style: TextStyle(color: AppColors.slate400, fontSize: 11),
-      ),
+      title: const Text('Manage Backups',
+          style:
+              TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+      subtitle: const Text('View and restore previous backups',
+          style: TextStyle(color: AppColors.slate400, fontSize: 11)),
       trailing: const Icon(Icons.chevron_right, color: AppColors.slate400),
       onTap: () => _showBackupsDialog(context, ref),
     );
@@ -745,7 +610,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   void _showBackupsDialog(BuildContext context, WidgetRef ref) async {
     final backupService = ref.read(backupServiceProvider);
     final backups = await backupService.listBackups();
-
     if (!context.mounted) return;
 
     showModalBottomSheet(
@@ -769,10 +633,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   const Text(
                     'Manage Backups',
                     style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold),
                   ),
                   IconButton(
                     icon: const Icon(Icons.close, color: Colors.white54),
@@ -790,10 +653,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           Icon(Icons.folder_open,
                               size: 48, color: AppColors.slate400),
                           SizedBox(height: 16),
-                          Text(
-                            'No backups found',
-                            style: TextStyle(color: AppColors.slate400),
-                          ),
+                          Text('No backups found',
+                              style: TextStyle(color: AppColors.slate400)),
                         ],
                       ),
                     )
@@ -822,18 +683,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     Text(
                                       backup.name,
                                       style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
-                                      ),
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
                                       '${backup.formattedDate} • ${backup.formattedSize}',
                                       style: const TextStyle(
-                                        color: AppColors.slate400,
-                                        fontSize: 10,
-                                      ),
+                                          color: AppColors.slate400,
+                                          fontSize: 10),
                                     ),
                                   ],
                                 ),
@@ -847,8 +706,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                     builder: (dialog) => AlertDialog(
                                       backgroundColor: AppColors.slate900,
                                       title: const Text('Delete Backup?',
-                                          style:
-                                              TextStyle(color: Colors.white)),
+                                          style: TextStyle(color: Colors.white)),
                                       content: const Text(
                                           'This action cannot be undone.',
                                           style:
@@ -871,7 +729,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                       ],
                                     ),
                                   );
-
                                   if (confirmed == true) {
                                     await backupService
                                         .deleteBackup(backup.path);
@@ -894,7 +751,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
-  Widget _statCard(String label, String value, IconData icon, Color color) {
+  Widget _statCard(
+      String label, String value, IconData icon, Color color) {
     return Expanded(
       child: GlassContainer(
         padding: const EdgeInsets.symmetric(vertical: 20),
@@ -905,18 +763,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             Text(
               value,
               style: const TextStyle(
-                color: Colors.white,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold),
             ),
             Text(
               label.toUpperCase(),
               style: const TextStyle(
-                color: AppColors.slate400,
-                fontSize: 8,
-                letterSpacing: 1.5,
-              ),
+                  color: AppColors.slate400,
+                  fontSize: 8,
+                  letterSpacing: 1.5),
             ),
           ],
         ),
