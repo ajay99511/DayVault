@@ -10,12 +10,16 @@ class StatsNotifier extends _$StatsNotifier {
   @override
   Future<JournalStats> build() async {
     final entries = await ref.read(storageServiceProvider).getJournal();
-    return _computeStats(entries);
+    return computeStats(entries);
   }
 
   void invalidate() => ref.invalidateSelf();
 
-  JournalStats _computeStats(List<JournalEntry> entries) {
+  /// Pure, side-effect-free statistics computation over [entries].
+  ///
+  /// Exposed as `static` so it can be unit/property tested directly without
+  /// constructing the Riverpod provider graph (see test/stats_provider_test).
+  static JournalStats computeStats(List<JournalEntry> entries) {
     if (entries.isEmpty) return JournalStats.empty;
 
     final today = DateTime.now();
@@ -64,7 +68,7 @@ class StatsNotifier extends _$StatsNotifier {
     );
   }
 
-  int _computeStreak(List<JournalEntry> entries, DateTime todayDate) {
+  static int _computeStreak(List<JournalEntry> entries, DateTime todayDate) {
     final dates = entries
         .map((e) => DateTime(e.date.year, e.date.month, e.date.day))
         .toSet()

@@ -6,6 +6,8 @@ import '../services/backup_service.dart';
 import 'pin_setup_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
+import '../models/stats.dart';
+import '../providers/stats_provider.dart';
 import '../config/constants.dart';
 import '../widgets/glass_widgets.dart';
 import 'pin_management_screen.dart';
@@ -19,8 +21,6 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   UserSettings settings = const UserSettings();
-  int totalMemories = 0;
-  int _streak = 0;
 
   @override
   void initState() {
@@ -28,16 +28,61 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     _load();
   }
 
+  /// Loads user settings only. Journaling statistics are sourced from
+  /// [statsProvider]; this method intentionally no longer fetches the journal
+  /// or computes the streak (that work now lives in [StatsNotifier]).
   Future<void> _load() async {
     final s = ref.read(storageServiceProvider).getSettings();
-    final j = await ref.read(storageServiceProvider).getJournal();
-    final computedStreak = StorageService.computeStreak(j);
     if (mounted) {
-      setState(() {
-        settings = s;
-        totalMemories = j.length;
-        _streak = computedStreak;
-      });
+      setState(() => settings = s);
+    }
+  }
+
+  Future<void> _showUsernameEditDialog() async {
+    final controller = TextEditingController(text: settings.username);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.slate900,
+        title: const Text('Edit Display Name',
+            style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 50,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            labelText: 'Display name',
+            labelStyle: TextStyle(color: AppColors.slate400),
+            hintText: 'Journaler',
+            hintStyle: TextStyle(color: AppColors.slate600),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL',
+                style: TextStyle(color: AppColors.slate400)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppColors.indigo500),
+            child:
+                const Text('SAVE', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+
+    // Null means the dialog was dismissed/cancelled — leave settings untouched.
+    if (newName == null || newName == settings.username) return;
+
+    final updated = settings.copyWith(username: newName);
+    await ref.read(storageServiceProvider).saveSettings(updated);
+    if (mounted) {
+      setState(() => settings = updated);
     }
   }
 
@@ -264,6 +309,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final statsAsync = ref.watch(statsProvider);
+
+    // Non-blocking notification on stats failure (Req 1.7). Using ref.listen
+    // (not a build-time side effect) ensures the SnackBar fires only on the
+    // transition into an error state, not on every rebuild.
+    ref.listen<AsyncValue<JournalStats>>(statsProvider, (prev, next) {
+      next.whenOrNull(
+        error: (err, _) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not load your insights'),
+              backgroundColor: AppColors.rose500,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        },
+      );
+    });
+
+    final headerSubtitle = statsAsync.maybeWhen(
+      data: (s) => '${s.totalEntries} entries · ${s.streak} day streak',
+      orElse: () => 'Your journaling insights',
+    );
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
@@ -303,15 +373,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           settings.username.isNotEmpty
                               ? settings.username
                               : 'Journaler',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         Text(
-                          '$totalMemories entries · $_streak day streak',
+                          headerSubtitle,
                           style: const TextStyle(
                             color: AppColors.slate400,
                             fontSize: 12,
@@ -319,6 +390,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined,
+                        color: AppColors.slate400, size: 20),
+                    tooltip: 'Edit display name',
+                    onPressed: _showUsernameEditDialog,
                   ),
                 ],
               ),
@@ -336,22 +413,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                _statCard(
-                  "Engrams",
-                  "$totalMemories",
-                  Icons.storage,
-                  AppColors.indigo500,
-                ),
-                const SizedBox(width: 12),
-                _statCard(
-                  "Streak",
-                  "$_streak",
-                  Icons.local_fire_department,
-                  AppColors.emerald500,
-                ),
-              ],
+            statsAsync.when(
+              data: (stats) => _statsGrid(stats),
+              loading: () => _shimmerGrid(),
+              // On error, fall back to zero/empty-state cards (Req 1.7); the
+              // SnackBar above surfaces the failure non-blockingly.
+              error: (_, __) => _statsGrid(JournalStats.empty),
             ),
             const SizedBox(height: 40),
 
@@ -751,30 +818,146 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  /// Renders the six journaling stat cards (Req 1.1) in three rows of two,
+  /// applying the empty/zero-state formatting rules from Req 1.3.
+  Widget _statsGrid(JournalStats stats) {
+    final moodValue =
+        stats.averageMood < 0 ? '—' : stats.averageMood.toStringAsFixed(1);
+    final topTags = stats.topTags.isEmpty
+        ? 'No tags yet'
+        : stats.topTags.join(', ');
+
+    return Column(
+      children: [
+        Row(
+          children: [
+            _statCard('Streak', '${stats.streak}',
+                Icons.local_fire_department, AppColors.amber500),
+            const SizedBox(width: 12),
+            _statCard('Entries', '${stats.totalEntries}', Icons.storage,
+                AppColors.indigo500),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _statCard('Avg Mood', moodValue,
+                Icons.sentiment_satisfied_alt, AppColors.fuchsia500),
+            const SizedBox(width: 12),
+            _statCard('Words', '${stats.totalWordCount}',
+                Icons.text_fields, AppColors.emerald500),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _statCard('Days Old', '${stats.journalAgeInDays}',
+                Icons.calendar_today, AppColors.rose500),
+            const SizedBox(width: 12),
+            _statCard('Top Tags', topTags, Icons.label_outline,
+                AppColors.slate300,
+                valueFontSize: 14, valueMaxLines: 2),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Pulsing placeholder grid shown while [statsProvider] resolves.
+  Widget _shimmerGrid() {
+    return Column(
+      children: List.generate(
+        3,
+        (_) => const Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: Row(
+            children: [
+              _ShimmerCard(),
+              SizedBox(width: 12),
+              _ShimmerCard(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _statCard(
-      String label, String value, IconData icon, Color color) {
+    String label,
+    String value,
+    IconData icon,
+    Color color, {
+    double valueFontSize = 24,
+    int valueMaxLines = 1,
+  }) {
     return Expanded(
       child: GlassContainer(
-        padding: const EdgeInsets.symmetric(vertical: 20),
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.slate400, size: 20),
+            Icon(icon, color: color, size: 20),
             const SizedBox(height: 8),
             Text(
               value,
-              style: const TextStyle(
+              textAlign: TextAlign.center,
+              maxLines: valueMaxLines,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
                   color: Colors.white,
-                  fontSize: 24,
+                  fontSize: valueFontSize,
                   fontWeight: FontWeight.bold),
             ),
+            const SizedBox(height: 2),
             Text(
               label.toUpperCase(),
+              textAlign: TextAlign.center,
               style: const TextStyle(
                   color: AppColors.slate400,
                   fontSize: 8,
                   letterSpacing: 1.5),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A single shimmer placeholder card used during stats loading.
+class _ShimmerCard extends StatefulWidget {
+  const _ShimmerCard();
+
+  @override
+  State<_ShimmerCard> createState() => _ShimmerCardState();
+}
+
+class _ShimmerCardState extends State<_ShimmerCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: FadeTransition(
+        opacity: Tween<double>(begin: 0.35, end: 0.75).animate(_controller),
+        child: const GlassContainer(
+          padding: EdgeInsets.symmetric(vertical: 20),
+          child: SizedBox(
+            height: 56,
+            child: Center(
+              child: Icon(Icons.hourglass_empty,
+                  color: AppColors.slate600, size: 20),
+            ),
+          ),
         ),
       ),
     );

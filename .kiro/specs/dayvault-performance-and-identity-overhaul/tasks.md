@@ -48,14 +48,14 @@ This plan converts the six-category overhaul (profile/identity, rendering perfor
     - After creating this file run `flutter pub run build_runner build --delete-conflicting-outputs` to generate `stats_provider.g.dart`
     - _Requirements: 1.1, 1.2, 1.6_
 
-  - [ ]* 2.2 Write property test for stats computation (Property 1)
+  - [x]* 2.2 Write property test for stats computation (Property 1)
     - **Property 1: Stats computation is correct for any entry collection**
     - Generate lists of 0–500 `JournalEntry` objects with random moods, dates, tags, and content
     - Assert `totalEntries == entries.length`, `totalWordCount` equals manual whitespace-split count, `averageMood` equals arithmetic mean of `mood.index` values (or -1.0 if empty), `journalAgeInDays` uses oldest entry date, `topTags` has at most 3 items alpha-sorted on tie
     - Include streak-specific edge cases as unit tests alongside the property test: single entry today, single entry yesterday, single entry two days ago, gap in consecutive days, all entries on the same day
     - **Validates: Requirements 1.1, 1.3**
 
-  - [ ] 2.3 Refactor `ProfileScreen` to remove device diagnostics and display `StatsProvider` output
+  - [x] 2.3 Refactor `ProfileScreen` to remove device diagnostics and display `StatsProvider` output
     - Delete all imports of `device_info_plus`, `battery_plus`, `system_info2`
     - Delete `_initSystemInfo()`, `_startMetricsTimer()`, `_updateMetrics()`, `Timer`, `Battery`, `DeviceInfoPlugin`, `SysInfo` fields and methods
     - Delete the "REAL-TIME DIAGNOSTICS" section and its stat cards
@@ -63,12 +63,12 @@ This plan converts the six-category overhaul (profile/identity, rendering perfor
     - Watch `statsNotifierProvider`; display shimmer on loading, 6 stat cards on data, empty-state on error, non-blocking `SnackBar` on error
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.7, 2.3_
 
-  - [ ]* 2.4 Write unit tests for `StatsNotifier` caching and error handling
+  - [x]* 2.4 Write unit tests for `StatsNotifier` caching and error handling
     - Verify provider calls `getJournal()` exactly once for multiple `ref.read` calls (Req 1.2)
     - Verify `ProfileScreen` renders empty-state cards when `StatsNotifier` returns `AsyncValue.error` (Req 1.7)
     - _Requirements: 1.2, 1.7_
 
-  - [ ] 2.5 Add username inline edit to `ProfileScreen` header
+  - [x] 2.5 Add username inline edit to `ProfileScreen` header
     - Replace the static `settings.username ?? 'Journaler'` text in the header with a `Row` containing a `CircleAvatar` (first letter initial), a `Column` (display name + entry count subtitle), and an edit `IconButton`
     - `IconButton.onPressed` calls `_showUsernameEditDialog()` which presents an `AlertDialog` with a `TextField(maxLength: 50)` pre-populated with the current username
     - On SAVE: call `storageService.saveSettings(settings.copyWith(username: trimmedValue.isEmpty ? null : trimmedValue))`; update local state with `setState`
