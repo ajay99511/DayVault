@@ -162,10 +162,11 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
       body: Stack(
         children: [
           // Content
-          Column(
+          ResponsiveCenter(
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 60),
+              SizedBox(height: MediaQuery.of(context).padding.top + 16),
               // Header
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -294,11 +295,17 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
               ),
             ],
           ),
+          ),
 
-          // FAB
+          // FAB — aligned to the right edge of the centered content column so
+          // it stays visually attached on wide (tablet/desktop) layouts.
           Positioned(
             bottom: 120,
-            right: 24,
+            right: 24 +
+                (MediaQuery.of(context).size.width -
+                            Breakpoints.contentMaxWidth)
+                        .clamp(0, double.infinity) /
+                    2,
             child: GestureDetector(
               onTap: _openEditor,
               child: Container(

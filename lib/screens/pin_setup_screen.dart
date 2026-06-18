@@ -5,6 +5,7 @@ import '../config/constants.dart';
 import '../config/security_questions.dart';
 import '../services/security_service.dart';
 import '../services/storage_service.dart';
+import '../widgets/glass_widgets.dart';
 
 class PinSetupScreen extends ConsumerStatefulWidget {
   final VoidCallback onSetupComplete;
@@ -216,7 +217,9 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
               )
             : SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
-                child: Column(
+                child: ResponsiveCenter(
+                  maxWidth: 520,
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 40),
@@ -304,6 +307,7 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
                     // Navigation buttons
                     _buildNavigationButtons(),
                   ],
+                ),
                 ),
               ),
       ),

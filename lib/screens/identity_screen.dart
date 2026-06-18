@@ -676,10 +676,11 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
       initialIndex: initialIndex,
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: Column(
+        body: ResponsiveCenter(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 60),
+            SizedBox(height: MediaQuery.of(context).padding.top + 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Row(
@@ -974,6 +975,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                     ),
             ),
           ],
+        ),
         ),
         floatingActionButton: categories.isEmpty
             ? null

@@ -302,7 +302,8 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
+                    child: ResponsiveCenter(
+                      child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 20),
@@ -400,6 +401,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
                         ),
                         const SizedBox(height: 100),
                       ],
+                    ),
                     ),
                   ),
                 ),

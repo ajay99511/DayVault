@@ -351,7 +351,8 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: Column(
+        child: ResponsiveCenter(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Status Header
@@ -397,6 +398,7 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

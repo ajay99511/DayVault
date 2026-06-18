@@ -87,6 +87,69 @@ class GlassContainer extends StatelessWidget {
   }
 }
 
+/// Layout breakpoints (logical pixels) used across the app to adapt spacing,
+/// content width, and navigation affordances to the available screen size.
+class Breakpoints {
+  /// Phones in portrait. Below this, content runs effectively full-width.
+  static const double mobile = 600;
+
+  /// Tablets / small laptops. At and above this we widen gutters.
+  static const double tablet = 900;
+
+  /// Comfortable maximum reading width for a single content column. Beyond
+  /// this, lines get too long and the layout looks stretched, so content is
+  /// centered inside this cap on large screens.
+  static const double contentMaxWidth = 720;
+
+  static bool isMobile(BuildContext context) =>
+      MediaQuery.sizeOf(context).width < mobile;
+
+  static bool isTablet(BuildContext context) {
+    final w = MediaQuery.sizeOf(context).width;
+    return w >= mobile && w < tablet;
+  }
+
+  static bool isDesktop(BuildContext context) =>
+      MediaQuery.sizeOf(context).width >= tablet;
+}
+
+/// Constrains its [child] to a comfortable maximum width and centers it
+/// horizontally, so screens that look right on a phone don't stretch awkwardly
+/// edge-to-edge on tablets and desktops.
+///
+/// Pins the child to the top so it composes correctly inside a full-height
+/// [Column] (children using [Expanded] still receive a bounded height).
+class ResponsiveCenter extends StatelessWidget {
+  final Widget child;
+  final double maxWidth;
+
+  /// Optional symmetric horizontal padding applied *inside* the width cap.
+  final double horizontalPadding;
+
+  const ResponsiveCenter({
+    super.key,
+    required this.child,
+    this.maxWidth = Breakpoints.contentMaxWidth,
+    this.horizontalPadding = 0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: horizontalPadding > 0
+            ? Padding(
+                padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                child: child,
+              )
+            : child,
+      ),
+    );
+  }
+}
+
 class AnimatedOrb extends StatelessWidget {
   final double width;
   final double height;

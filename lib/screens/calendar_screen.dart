@@ -156,9 +156,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Column(
+      body: ResponsiveCenter(
+        child: Column(
         children: [
-          const SizedBox(height: 60),
+          SizedBox(height: MediaQuery.of(context).padding.top + 16),
           // Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -347,6 +348,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

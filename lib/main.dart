@@ -348,18 +348,25 @@ class _MainShellState extends State<MainShell>
       ),
       bottomNavigationBar: Container(
         padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
-        child: GlassContainer(
-          useBackdropFilter: true, // Only for nav bar
-          borderRadius: 32,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _navItem(0, Icons.menu_book, "Journal"),
-              _navItem(1, Icons.calendar_month, "Recall"),
-              _navItem(2, Icons.person_outline, "Identity"),
-              _navItem(3, Icons.account_circle_outlined, "System"),
-            ],
+        // Cap the nav width so it reads as a centered pill on tablets/desktops
+        // instead of stretching the full window width.
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: GlassContainer(
+              useBackdropFilter: true, // Only for nav bar
+              borderRadius: 32,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _navItem(0, Icons.menu_book, "Journal"),
+                  _navItem(1, Icons.calendar_month, "Recall"),
+                  _navItem(2, Icons.person_outline, "Identity"),
+                  _navItem(3, Icons.account_circle_outlined, "System"),
+                ],
+              ),
+            ),
           ),
         ),
       ),

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import '../config/constants.dart';
 import '../services/security_service.dart';
+import '../widgets/glass_widgets.dart';
 
 class ForgotPinScreen extends StatefulWidget {
   final VoidCallback onPinReset;
@@ -244,7 +245,9 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
               )
             : SingleChildScrollView(
                 padding: const EdgeInsets.all(24),
-                child: Column(
+                child: ResponsiveCenter(
+                  maxWidth: 520,
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 40),
@@ -346,6 +349,7 @@ class _ForgotPinScreenState extends State<ForgotPinScreen> {
                     // Navigation buttons
                     _buildNavigationButtons(),
                   ],
+                ),
                 ),
               ),
       ),

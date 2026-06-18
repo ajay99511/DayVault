@@ -135,7 +135,8 @@ class JournalViewerScreen extends ConsumerWidget {
 
                 Expanded(
                   child: SingleChildScrollView(
-                    child: Column(
+                    child: ResponsiveCenter(
+                      child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Hero Image Carousel
@@ -348,6 +349,7 @@ class JournalViewerScreen extends ConsumerWidget {
                           ),
                         ),
                       ],
+                    ),
                     ),
                   ),
                 ),

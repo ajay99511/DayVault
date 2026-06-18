@@ -337,8 +337,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
-        child: Column(
+        padding: EdgeInsets.only(
+          top: MediaQuery.of(context).padding.top + 40,
+          bottom: 120,
+        ),
+        child: ResponsiveCenter(
+          horizontalPadding: 24,
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header Card
@@ -594,6 +599,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             ),
           ],
+        ),
         ),
       ),
     );
