@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../services/storage_service.dart';
+import '../utils/debouncer.dart';
 import '../widgets/glass_widgets.dart';
 import '../widgets/image_widgets.dart';
 import '../config/constants.dart';
@@ -11,6 +12,54 @@ import 'journal_viewer_screen.dart';
 
 class JournalScreen extends ConsumerStatefulWidget {
   const JournalScreen({super.key});
+
+  /// Apply the active filters to [entries]. Pure + static for unit testing.
+  ///
+  /// - [query]: case-insensitive substring match over headline, content, tags.
+  /// - [spotlightOnly]: keep only spotlighted entries.
+  /// - [selectedTags]: keep entries carrying at least one selected tag (OR);
+  ///   matching is case-insensitive. Empty set means "no tag filter".
+  static List<JournalEntry> filterEntries(
+    List<JournalEntry> entries, {
+    String query = '',
+    bool spotlightOnly = false,
+    Set<String> selectedTags = const {},
+  }) {
+    final q = query.trim().toLowerCase();
+    final wanted = selectedTags.map((t) => t.toLowerCase()).toSet();
+
+    return entries.where((e) {
+      if (spotlightOnly && !e.isSpotlight) return false;
+
+      if (wanted.isNotEmpty) {
+        final entryTags = e.tags.map((t) => t.toLowerCase()).toSet();
+        if (entryTags.intersection(wanted).isEmpty) return false;
+      }
+
+      if (q.isNotEmpty) {
+        final inText = e.headline.toLowerCase().contains(q) ||
+            e.content.toLowerCase().contains(q);
+        final inTags = e.tags.any((t) => t.toLowerCase().contains(q));
+        if (!inText && !inTags) return false;
+      }
+
+      return true;
+    }).toList();
+  }
+
+  /// Distinct tags present across [entries], sorted case-insensitively.
+  /// First-seen original casing is preserved for display.
+  static List<String> availableTags(List<JournalEntry> entries) {
+    final seen = <String, String>{}; // lowercase -> display
+    for (final e in entries) {
+      for (final t in e.tags) {
+        seen.putIfAbsent(t.toLowerCase(), () => t);
+      }
+    }
+    final result = seen.values.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return result;
+  }
 
   @override
   ConsumerState<JournalScreen> createState() => _JournalScreenState();
@@ -26,8 +75,29 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
 
+  // Filter state
+  bool _spotlightOnly = false;
+  final Set<String> _selectedTags = {};
+  final Debouncer _searchDebouncer =
+      Debouncer(delay: const Duration(milliseconds: 300));
+
+  /// Debounced search update — coalesces rapid keystrokes into one rebuild.
+  void _onSearchChanged(String value) {
+    _searchDebouncer.run(() {
+      if (mounted) setState(() => _searchQuery = value);
+    });
+  }
+
+  /// Clear the query immediately (cancels any pending debounced update).
+  void _clearSearch() {
+    _searchDebouncer.cancel();
+    _searchCtrl.clear();
+    setState(() => _searchQuery = '');
+  }
+
   @override
   void dispose() {
+    _searchDebouncer.dispose();
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -79,13 +149,13 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
   @override
   Widget build(BuildContext context) {
     // Filtered entries
-    final filteredEntries = _searchQuery.isEmpty
-        ? entries
-        : entries.where((e) {
-            final q = _searchQuery.toLowerCase();
-            return e.headline.toLowerCase().contains(q) ||
-                e.content.toLowerCase().contains(q);
-          }).toList();
+    final filteredEntries = JournalScreen.filterEntries(
+      entries,
+      query: _searchQuery,
+      spotlightOnly: _spotlightOnly,
+      selectedTags: _selectedTags,
+    );
+    final availableTags = JournalScreen.availableTags(entries);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -132,8 +202,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                                       child: TextField(
                                         controller: _searchCtrl,
                                         autofocus: true,
-                                        onChanged: (val) =>
-                                            setState(() => _searchQuery = val),
+                                        onChanged: _onSearchChanged,
                                         style: GoogleFonts.outfit(
                                             color: Colors.white, fontSize: 14),
                                         decoration: InputDecoration(
@@ -148,10 +217,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                                     ),
                                     if (_searchQuery.isNotEmpty)
                                       GestureDetector(
-                                        onTap: () {
-                                          _searchCtrl.clear();
-                                          setState(() => _searchQuery = '');
-                                        },
+                                        onTap: _clearSearch,
                                         child: const Icon(Icons.close,
                                             color: AppColors.slate400,
                                             size: 16),
@@ -182,6 +248,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                               setState(() {
                                 _isSearching = !_isSearching;
                                 if (!_isSearching) {
+                                  _searchDebouncer.cancel();
                                   _searchCtrl.clear();
                                   _searchQuery = '';
                                 }
@@ -206,7 +273,10 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
+              if (!isLoading && loadError == null && entries.isNotEmpty)
+                _buildFilterBar(availableTags),
+              const SizedBox(height: 8),
               Expanded(
                 child: isLoading
                     ? const Center(child: CircularProgressIndicator())
@@ -254,6 +324,68 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterBar(List<String> availableTags) {
+    return SizedBox(
+      height: 36,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        children: [
+          // Spotlight filter.
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              label: const Text('Spotlight'),
+              avatar: Icon(
+                _spotlightOnly ? Icons.star : Icons.star_border,
+                size: 16,
+                color: _spotlightOnly ? AppColors.amber500 : Colors.white54,
+              ),
+              selected: _spotlightOnly,
+              showCheckmark: false,
+              labelStyle: const TextStyle(fontSize: 12, color: Colors.white),
+              backgroundColor: Colors.white.withValues(alpha: 0.05),
+              selectedColor: AppColors.amber500.withValues(alpha: 0.25),
+              side: BorderSide(
+                color: _spotlightOnly
+                    ? AppColors.amber500.withValues(alpha: 0.5)
+                    : Colors.white12,
+              ),
+              onSelected: (v) => setState(() => _spotlightOnly = v),
+            ),
+          ),
+          // Tag filters.
+          ...availableTags.map((tag) {
+            final selected = _selectedTags.contains(tag);
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                label: Text(tag),
+                selected: selected,
+                showCheckmark: false,
+                labelStyle: const TextStyle(fontSize: 12, color: Colors.white),
+                backgroundColor: Colors.white.withValues(alpha: 0.05),
+                selectedColor: AppColors.indigo500.withValues(alpha: 0.3),
+                side: BorderSide(
+                  color: selected
+                      ? AppColors.indigo500.withValues(alpha: 0.6)
+                      : Colors.white12,
+                ),
+                onSelected: (v) => setState(() {
+                  if (v) {
+                    _selectedTags.add(tag);
+                  } else {
+                    _selectedTags.remove(tag);
+                  }
+                }),
+              ),
+            );
+          }),
         ],
       ),
     );

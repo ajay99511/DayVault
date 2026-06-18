@@ -8,18 +8,33 @@ part of 'auth_provider.dart';
 
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // ignore_for_file: type=lint, type=warning
+/// App-global authentication state (true once the vault is unlocked).
+///
+/// keepAlive: this is session-wide state that must survive transient periods
+/// with no listeners (e.g. the brief loading frame in RootOrchestrator before
+/// it starts watching), so it must not auto-dispose.
 
 @ProviderFor(AuthState)
 final authStateProvider = AuthStateProvider._();
 
+/// App-global authentication state (true once the vault is unlocked).
+///
+/// keepAlive: this is session-wide state that must survive transient periods
+/// with no listeners (e.g. the brief loading frame in RootOrchestrator before
+/// it starts watching), so it must not auto-dispose.
 final class AuthStateProvider extends $NotifierProvider<AuthState, bool> {
+  /// App-global authentication state (true once the vault is unlocked).
+  ///
+  /// keepAlive: this is session-wide state that must survive transient periods
+  /// with no listeners (e.g. the brief loading frame in RootOrchestrator before
+  /// it starts watching), so it must not auto-dispose.
   AuthStateProvider._()
       : super(
           from: null,
           argument: null,
           retry: null,
           name: r'authStateProvider',
-          isAutoDispose: true,
+          isAutoDispose: false,
           dependencies: null,
           $allTransitiveDependencies: null,
         );
@@ -40,7 +55,13 @@ final class AuthStateProvider extends $NotifierProvider<AuthState, bool> {
   }
 }
 
-String _$authStateHash() => r'11c8f541533813b74ac9c7d819e2565d060a4004';
+String _$authStateHash() => r'502aed6e90a884cfe58071dcf63efe0caee69288';
+
+/// App-global authentication state (true once the vault is unlocked).
+///
+/// keepAlive: this is session-wide state that must survive transient periods
+/// with no listeners (e.g. the brief loading frame in RootOrchestrator before
+/// it starts watching), so it must not auto-dispose.
 
 abstract class _$AuthState extends $Notifier<bool> {
   bool build();

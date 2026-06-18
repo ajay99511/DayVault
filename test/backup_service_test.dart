@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memory_palace/services/backup_service.dart';
 import 'package:memory_palace/services/storage_service.dart';
@@ -66,6 +67,84 @@ void main() {
       
       final captured = verify(mockStorage.saveJournalEntry(captureAny)).captured.first;
       expect(captured.headline.length, 10000);
+    });
+  });
+
+  // ─── 9.7* Off-thread staged progress ─────────────────────────────────────
+  group('BackupService staged progress', () {
+    Map<String, dynamic> validBackup() => {
+          'version': '1.0',
+          'journal': [
+            {
+              'id': '1',
+              'type': 0,
+              'date': DateTime.now().toIso8601String(),
+              'headline': 'H',
+              'content': 'C',
+              'mood': 0,
+            }
+          ],
+        };
+
+    test('importFromJson emits reading -> restoring -> idle', () async {
+      final stages = <BackupStage>[];
+      await backupService.importFromJson(jsonEncode(validBackup()),
+          onProgress: stages.add);
+      expect(stages, [
+        BackupStage.reading,
+        BackupStage.restoring,
+        BackupStage.idle,
+      ]);
+    });
+
+    test('oversized backup ends at idle without restoring', () async {
+      final stages = <BackupStage>[];
+      final big = {
+        'version': '1.0',
+        'journal': List.generate(10001, (i) => {'id': '$i'}),
+      };
+      final result = await backupService.importFromJson(jsonEncode(big),
+          onProgress: stages.add);
+      expect(result.success, isFalse);
+      expect(stages, [BackupStage.reading, BackupStage.idle]);
+    });
+
+    test('invalid format ends at idle', () async {
+      final stages = <BackupStage>[];
+      final result = await backupService.importFromJson(
+          jsonEncode({'nope': true}),
+          onProgress: stages.add);
+      expect(result.success, isFalse);
+      expect(stages, [BackupStage.reading, BackupStage.idle]);
+    });
+  });
+
+  // ─── 9.8* Backup round-trip property ─────────────────────────────────────
+  group('Backup JSON round-trip (encode/decode)', () {
+    test('decode(encode(data)) == data for randomized documents', () {
+      final rng = Random(2026);
+      for (var i = 0; i < 100; i++) {
+        final data = <String, dynamic>{
+          'version': '1.0',
+          'exportDate': DateTime(2025, 1, 1).toIso8601String(),
+          'journal': List.generate(rng.nextInt(25), (j) {
+            return {
+              'id': 'e$j',
+              'type': rng.nextInt(2),
+              'headline': 'head $j',
+              'content': 'body ${rng.nextInt(1000)}',
+              'mood': rng.nextInt(5),
+              'tags': ['t${rng.nextInt(3)}', 't${rng.nextInt(3)}'],
+              'isSpotlight': j.isEven,
+            };
+          }),
+          'metadata': {'totalEntries': rng.nextInt(100)},
+        };
+
+        final encoded = encodeBackupJson(data);
+        final decoded = decodeBackupJson(encoded);
+        expect(decoded, equals(data));
+      }
     });
   });
 }

@@ -765,6 +765,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 ),
                               ),
                               IconButton(
+                                icon: const Icon(Icons.restore,
+                                    color: AppColors.indigo500),
+                                tooltip: 'Restore',
+                                onPressed: () =>
+                                    _restoreBackup(context, ctx, ref, backup),
+                              ),
+                              IconButton(
                                 icon: const Icon(Icons.delete_outline,
                                     color: AppColors.rose500),
                                 onPressed: () async {
@@ -814,6 +821,60 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Restore (merge) a backup file into the journal after confirmation.
+  Future<void> _restoreBackup(
+    BuildContext screenContext,
+    BuildContext sheetContext,
+    WidgetRef ref,
+    BackupFileInfo backup,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: screenContext,
+      builder: (dialog) => AlertDialog(
+        backgroundColor: AppColors.slate900,
+        title: const Text('Restore Backup?',
+            style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Entries and rankings from this backup will be merged into your '
+          'journal. Existing items with the same id are overwritten.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('CANCEL',
+                style: TextStyle(color: AppColors.slate400)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('RESTORE',
+                style: TextStyle(color: AppColors.indigo500)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final backupService = ref.read(backupServiceProvider);
+    final result = await backupService.importBackupFile(
+      backup.path,
+      isEncrypted: backup.isEncrypted,
+    );
+
+    if (sheetContext.mounted) Navigator.pop(sheetContext);
+    if (!screenContext.mounted) return;
+    ScaffoldMessenger.of(screenContext).showSnackBar(
+      SnackBar(
+        content: Text(result.success
+            ? (result.message ?? 'Restore complete')
+            : (result.error ?? 'Restore failed')),
+        backgroundColor:
+            result.success ? AppColors.emerald500 : AppColors.rose500,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }

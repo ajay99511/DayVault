@@ -28,6 +28,27 @@ class ImageThumbnailWidget extends StatefulWidget {
     this.borderRadius,
   });
 
+  /// Resolve the physical-pixel dimension to decode an image to, so we never
+  /// decode a multi-megapixel source just to paint a small thumbnail. Scales
+  /// the on-screen logical size by [devicePixelRatio], falling back to
+  /// [fallbackLogical] when the widget has no intrinsic size, and clamps to a
+  /// sane range. Pure + exposed for unit testing.
+  static int resolveCacheDimension(
+    double? logicalSize,
+    double devicePixelRatio, {
+    double fallbackLogical = 400,
+  }) {
+    final logical = (logicalSize != null &&
+            logicalSize.isFinite &&
+            logicalSize > 0)
+        ? logicalSize
+        : fallbackLogical;
+    final dpr = (devicePixelRatio.isFinite && devicePixelRatio > 0)
+        ? devicePixelRatio
+        : 1.0;
+    return (logical * dpr).ceil().clamp(1, 4096);
+  }
+
   @override
   State<ImageThumbnailWidget> createState() => _ImageThumbnailWidgetState();
 }
@@ -56,6 +77,16 @@ class _ImageThumbnailWidgetState extends State<ImageThumbnailWidget> {
     );
   }
 
+  /// Physical-pixel decode bound for the current on-screen size.
+  int _cacheDimension(BuildContext context) {
+    final dpr = MediaQuery.maybeOf(context)?.devicePixelRatio ?? 1.0;
+    // Prefer the larger declared dimension (cover fit fills the larger side).
+    final logical = [widget.width, widget.height]
+        .whereType<double>()
+        .fold<double?>(null, (m, v) => m == null ? v : (v > m ? v : m));
+    return ImageThumbnailWidget.resolveCacheDimension(logical, dpr);
+  }
+
   Widget _buildImage() {
     switch (widget.imageRef.type) {
       case ImageSourceType.galleryAsset:
@@ -68,8 +99,9 @@ class _ImageThumbnailWidgetState extends State<ImageThumbnailWidget> {
   }
 
   Widget _buildGalleryImage() {
+    final cacheDim = _cacheDimension(context);
     return FutureBuilder<Uint8List?>(
-      future: _loadGalleryThumbnail(),
+      future: _loadGalleryThumbnail(cacheDim),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildLoadingIndicator();
@@ -79,6 +111,8 @@ class _ImageThumbnailWidgetState extends State<ImageThumbnailWidget> {
             snapshot.data!,
             fit: widget.fit,
             gaplessPlayback: true,
+            // Downsize decode to the on-screen size.
+            cacheWidth: cacheDim,
           );
         }
         return _buildErrorWidget();
@@ -86,10 +120,15 @@ class _ImageThumbnailWidgetState extends State<ImageThumbnailWidget> {
     );
   }
 
-  Future<Uint8List?> _loadGalleryThumbnail() async {
+  Future<Uint8List?> _loadGalleryThumbnail(int cacheDim) async {
     try {
       final asset = await AssetEntity.fromId(widget.imageRef.source);
-      return await asset?.thumbnailData;
+      if (asset == null) return null;
+      // Thumbnail-first: request a thumbnail sized to the display, not the
+      // full-resolution original.
+      return await asset.thumbnailDataWithSize(
+        ThumbnailSize.square(cacheDim),
+      );
     } catch (e) {
       return null;
     }
@@ -99,6 +138,8 @@ class _ImageThumbnailWidgetState extends State<ImageThumbnailWidget> {
     return CachedNetworkImage(
       imageUrl: widget.imageRef.source,
       fit: widget.fit,
+      // Bound the in-memory decode to display size.
+      memCacheWidth: _cacheDimension(context),
       placeholder: (context, url) => _buildLoadingIndicator(),
       errorWidget: (context, url, error) => _buildErrorWidget(),
       fadeInDuration: const Duration(milliseconds: 200),
@@ -109,6 +150,8 @@ class _ImageThumbnailWidgetState extends State<ImageThumbnailWidget> {
     return Image.file(
       _toFile(widget.imageRef.source),
       fit: widget.fit,
+      // Decode the (possibly large) original file down to display size.
+      cacheWidth: _cacheDimension(context),
       errorBuilder: (context, error, stackTrace) => _buildErrorWidget(),
     );
   }

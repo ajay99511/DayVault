@@ -12,13 +12,28 @@ import 'entry_editor.dart';
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
 
+  /// Build a date-only -> entries map from a flat entry list. Pure + static so
+  /// it can be property-tested independently of the widget.
+  static Map<DateTime, List<JournalEntry>> buildDateMap(
+      List<JournalEntry> entries) {
+    final map = <DateTime, List<JournalEntry>>{};
+    for (final e in entries) {
+      final key = DateTime(e.date.year, e.date.month, e.date.day);
+      (map[key] ??= <JournalEntry>[]).add(e);
+    }
+    return map;
+  }
+
   @override
   ConsumerState<CalendarScreen> createState() => _CalendarScreenState();
 }
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime _currentDate = DateTime.now();
-  List<JournalEntry> _entries = [];
+
+  /// Entries bucketed by calendar day (date-only key), pre-computed on load so
+  /// per-cell lookups during grid build are O(1) instead of O(n) scans.
+  Map<DateTime, List<JournalEntry>> _entriesByDay = const {};
 
   // To simulate infinite calendar scrolling (page 1200 = current month when initialized)
   static const int _initialPage = 1200;
@@ -42,7 +57,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       final data = await ref.read(storageServiceProvider).getJournal();
       if (mounted) {
         setState(() {
-          _entries = data;
+          _entriesByDay = CalendarScreen.buildDateMap(data);
         });
       }
     } catch (e, st) {
@@ -99,11 +114,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   List<JournalEntry> _getEntriesForDay(DateTime date) {
-    return _entries.where((e) {
-      return e.date.year == date.year &&
-          e.date.month == date.month &&
-          e.date.day == date.day;
-    }).toList();
+    final key = DateTime(date.year, date.month, date.day);
+    return _entriesByDay[key] ?? const [];
   }
 
   void _showDayDetails(BuildContext context, DateTime date) {

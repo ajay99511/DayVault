@@ -154,6 +154,14 @@ class StorageService {
     return PagedResult(items: items, nextCursor: nextCursor);
   }
 
+  /// Delete a journal entry.
+  ///
+  /// Image cleanup is reference-only by design: images are stored as references
+  /// (file path / URL / gallery asset) that point at the user's existing files,
+  /// never copies owned by the app. Removing the entry drops those references;
+  /// we deliberately do NOT touch any file in device storage. (See 9.4 — the
+  /// app keeps no orphaned image files to clean up under the reference-only
+  /// model.)
   Future<void> deleteJournalEntry(String entryId) async {
     final query = _journalBox
         .query(ObjectBoxJournalEntry_.entryId.equals(entryId))
@@ -161,7 +169,7 @@ class StorageService {
     try {
       final existing = query.findFirst();
       if (existing != null) {
-        _journalBox.remove(existing.id);
+        _journalBox.remove(existing.id); // drops the entry + its image refs
       }
     } finally {
       query.close();
@@ -177,6 +185,68 @@ class StorageService {
     } finally {
       query.close();
     }
+  }
+
+  /// Returns the internal ObjectBox numeric id for the entry identified by
+  /// [entryId], or null if no such entry exists.
+  Future<int?> getObjectBoxIdForEntry(String entryId) async {
+    final query = _journalBox
+        .query(ObjectBoxJournalEntry_.entryId.equals(entryId))
+        .build();
+    try {
+      return query.findFirst()?.id;
+    } finally {
+      query.close();
+    }
+  }
+
+  /// Batch upsert of journal entries in a single ObjectBox write.
+  ///
+  /// Preserves the `@Unique entryId` update semantics used by
+  /// [saveJournalEntry]: any entry whose [JournalEntry.id] already exists keeps
+  /// that row's ObjectBox id, so the write updates the existing row in place
+  /// instead of throwing a UniqueViolation. Within [entries], a later duplicate
+  /// of the same id wins (last-write-wins).
+  Future<void> putManyJournalEntries(List<JournalEntry> entries) async {
+    if (entries.isEmpty) return;
+
+    // Collapse intra-batch duplicates so we never try to insert two rows with
+    // the same unique entryId in one transaction.
+    final deduped = dedupeByEntryIdKeepingLast(entries);
+
+    // Convert (serialize) all entries up front.
+    final converted = <ObjectBoxJournalEntry>[];
+    for (final e in deduped) {
+      converted.add(await ObjectBoxJournalEntry.fromFreezed(e));
+    }
+    final obByEntryId = {for (final ob in converted) ob.entryId: ob};
+
+    // One query maps already-persisted entryIds -> their ObjectBox ids.
+    final query = _journalBox
+        .query(ObjectBoxJournalEntry_.entryId.oneOf(obByEntryId.keys.toList()))
+        .build();
+    try {
+      for (final existing in query.find()) {
+        obByEntryId[existing.entryId]?.id = existing.id;
+      }
+    } finally {
+      query.close();
+    }
+
+    _journalBox.putMany(converted);
+  }
+
+  /// Collapse a list of entries to one-per-[JournalEntry.id], keeping the last
+  /// occurrence of each id. Order of the surviving entries follows first-seen
+  /// id order. Pure + exposed for unit testing.
+  @visibleForTesting
+  static List<JournalEntry> dedupeByEntryIdKeepingLast(
+      List<JournalEntry> entries) {
+    final byId = <String, JournalEntry>{};
+    for (final e in entries) {
+      byId[e.id] = e; // later occurrence overwrites earlier
+    }
+    return byId.values.toList();
   }
 
   // ─── Rankings ───────────────────────────────────────────────────────────

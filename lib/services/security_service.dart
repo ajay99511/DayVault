@@ -38,12 +38,30 @@ class SecurityService {
 
   // Security constants
   static const int _maxAttempts = SecurityConstants.maxAttempts;
-  static const int _lockoutDurationSeconds = SecurityConstants.lockoutDurationSeconds;
   static const String _saltKey = 'security_salt';
   static const String _encryptionSaltKey = 'encryption_salt';
   static const String _pinHashKey = 'pin_hash';
   static const String _attemptCountKey = 'attempt_count';
   static const String _lockoutUntilKey = 'lockout_until';
+  static const String _lockoutCycleCountKey = 'lockout_cycle_count';
+
+  /// Exponential backoff lockout duration for a given (1-based) lockout
+  /// [cycleCount]: base * 2^(cycle-1), clamped to
+  /// [SecurityConstants.maxLockoutDurationSeconds].
+  ///
+  /// Cycle 1 returns the base duration, preserving the previous fixed-lockout
+  /// behavior for a first offense. Pure + exposed for property testing.
+  @visibleForTesting
+  static int computeLockoutDurationSeconds(int cycleCount) {
+    if (cycleCount <= 1) return SecurityConstants.lockoutDurationSeconds;
+    final exponent = cycleCount - 1;
+    // Guard the shift against overflow / runaway growth before computing.
+    if (exponent >= 20) return SecurityConstants.maxLockoutDurationSeconds;
+    final scaled = SecurityConstants.lockoutDurationSeconds * (1 << exponent);
+    return scaled > SecurityConstants.maxLockoutDurationSeconds
+        ? SecurityConstants.maxLockoutDurationSeconds
+        : scaled;
+  }
 
   // Security questions storage keys
   static const String _securityQuestionsKey = 'security_questions';
@@ -123,6 +141,17 @@ class SecurityService {
     return _cachedEncryptionKey;
   }
 
+  /// Read several secure-storage keys concurrently, returning values in the
+  /// same order as [keys].
+  ///
+  /// Equivalent in result to reading the keys one-by-one, but issues the I/O in
+  /// parallel via [Future.wait]. As with any [Future.wait], if any read throws,
+  /// the returned future completes with that error.
+  @visibleForTesting
+  Future<List<String?>> readKeysInParallel(List<String> keys) {
+    return Future.wait(keys.map((k) => _storage.read(key: k)));
+  }
+
   @visibleForTesting
   void setCachedEncryptionKeyForTesting(Uint8List? key) {
     _cachedEncryptionKey = key;
@@ -172,7 +201,11 @@ class SecurityService {
       );
     }
 
-    final storedHash = await _storage.read(key: _pinHashKey);
+    // The PIN hash and salt are independent reads — fetch them concurrently.
+    // (Ordering vs. _checkLockout above is preserved: the lockout gate, which
+    // has side effects, still runs first.)
+    final reads = await readKeysInParallel([_pinHashKey, _saltKey]);
+    final storedHash = reads[0];
     if (storedHash == null) {
       return PinVerificationResult(
         success: false,
@@ -190,12 +223,12 @@ class SecurityService {
       );
     }
 
-    final salt = await _storage.read(key: _saltKey) ?? '';
+    final salt = reads[1] ?? '';
     final inputHash = await _hashPin(pin, salt);
 
     if (inputHash == storedHash) {
-      // Success - reset attempts and derive encryption key
-      await _resetAttempts();
+      // Success - reset attempts (and escalation) and derive encryption key
+      await _resetAttempts(clearBackoff: true);
       await _deriveAndCacheEncryptionKey(pin);
       return PinVerificationResult(success: true);
     } else {
@@ -241,20 +274,27 @@ class SecurityService {
     final remainingAttempts = _maxAttempts - attempts;
 
     if (remainingAttempts <= 0) {
-      // Lockout
+      // Escalating lockout — bump the persisted cycle count so each successive
+      // lockout (within the same failure streak) lasts longer. The cycle count
+      // survives lockout expiry and is only cleared on a successful unlock.
+      final cycleStr = await _storage.read(key: _lockoutCycleCountKey) ?? '0';
+      final cycle = (int.tryParse(cycleStr) ?? 0) + 1;
+      await _storage.write(key: _lockoutCycleCountKey, value: cycle.toString());
+
+      final lockoutSeconds = computeLockoutDurationSeconds(cycle);
       final lockoutUntil = DateTime.now().add(
-        const Duration(seconds: _lockoutDurationSeconds),
+        Duration(seconds: lockoutSeconds),
       );
       await _storage.write(
-        key: _lockoutUntilKey, 
+        key: _lockoutUntilKey,
         value: lockoutUntil.millisecondsSinceEpoch.toString(),
       );
       await _storage.delete(key: _attemptCountKey);
-      
+
       return PinVerificationResult(
         success: false,
-        error: 'Too many failed attempts. Locked for $_lockoutDurationSeconds seconds.',
-        remainingLockoutSeconds: _lockoutDurationSeconds,
+        error: 'Too many failed attempts. Locked for $lockoutSeconds seconds.',
+        remainingLockoutSeconds: lockoutSeconds,
       );
     }
 
@@ -265,10 +305,18 @@ class SecurityService {
     );
   }
 
-  /// Reset failed attempt counter
-  Future<void> _resetAttempts() async {
+  /// Reset failed attempt counter (and the active lockout).
+  ///
+  /// [clearBackoff] additionally resets the escalating lockout cycle count;
+  /// pass `true` only when the user has successfully proven identity (correct
+  /// PIN, biometric/security-question reset, or PIN removal). It must stay
+  /// `false` on mere lockout expiry so repeated lock cycles keep escalating.
+  Future<void> _resetAttempts({bool clearBackoff = false}) async {
     await _storage.delete(key: _attemptCountKey);
     await _storage.delete(key: _lockoutUntilKey);
+    if (clearBackoff) {
+      await _storage.delete(key: _lockoutCycleCountKey);
+    }
   }
 
   /// Change PIN (requires old PIN verification)
@@ -307,7 +355,7 @@ class SecurityService {
     final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
     final hash = await _hashPin(newPin, salt);
     await _storage.write(key: _pinHashKey, value: hash);
-    await _resetAttempts();
+    await _resetAttempts(clearBackoff: true);
     return PinVerificationResult(success: true);
   }
 
@@ -321,7 +369,7 @@ class SecurityService {
     await _storage.delete(key: _pinHashKey);
     await _storage.delete(key: _saltKey);
     await _storage.delete(key: _encryptionSaltKey);
-    await _resetAttempts();
+    await _resetAttempts(clearBackoff: true);
 
     return PinVerificationResult(success: true);
   }
@@ -471,7 +519,7 @@ class SecurityService {
     await _storage.write(key: _pinHashKey, value: hash);
 
     // Reset lockout and attempts
-    await _resetAttempts();
+    await _resetAttempts(clearBackoff: true);
 
     return PinVerificationResult(success: true);
   }
@@ -521,7 +569,7 @@ class SecurityService {
         await _storage.write(key: _pinHashKey, value: hash);
 
         // Reset lockout and attempts
-        await _resetAttempts();
+        await _resetAttempts(clearBackoff: true);
 
         return PinVerificationResult(success: true);
       } else {

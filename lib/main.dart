@@ -10,6 +10,7 @@ import 'screens/identity_screen.dart';
 import 'screens/profile_screen.dart';
 import 'config/constants.dart';
 import 'widgets/glass_widgets.dart';
+import 'providers/auth_provider.dart';
 import 'services/storage_service.dart';
 import 'services/objectbox_service.dart';
 import 'services/security_service.dart';
@@ -134,8 +135,8 @@ class RootOrchestrator extends ConsumerStatefulWidget {
 
 class _RootOrchestratorState extends ConsumerState<RootOrchestrator>
     with WidgetsBindingObserver {
-  bool isAuthenticated = false;
   bool isLoading = true;
+  bool _securityEnabled = false;
   DateTime? _backgroundedAt;
   static const _gracePeriod = Duration(seconds: 30);
 
@@ -165,7 +166,13 @@ class _RootOrchestratorState extends ConsumerState<RootOrchestrator>
     } else if (state == AppLifecycleState.resumed) {
       final bg = _backgroundedAt;
       if (bg != null && DateTime.now().difference(bg) > _gracePeriod) {
-        setState(() => isAuthenticated = false);
+        // Re-lock after the grace period — but only when security is actually
+        // enabled, otherwise there is nothing to unlock and we'd wrongly force
+        // the PIN-setup flow on a user who disabled security.
+        if (_securityEnabled) {
+          SecurityService().lockVault(); // clear the in-memory encryption key
+          ref.read(authStateProvider.notifier).unauthenticate();
+        }
       }
     }
   }
@@ -208,13 +215,11 @@ class _RootOrchestratorState extends ConsumerState<RootOrchestrator>
     // If migration failed or cancelled, we might not have a storage provider ready
     try {
       final settings = ref.read(storageServiceProvider).getSettings();
-      setState(() {
-        isAuthenticated = !settings.securityEnabled; // If disabled, auto-auth
-        isLoading = false;
-      });
+      _securityEnabled = settings.securityEnabled;
+      if (mounted) setState(() => isLoading = false);
     } catch (e) {
       debugPrint("Security check failed: $e");
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
@@ -222,8 +227,14 @@ class _RootOrchestratorState extends ConsumerState<RootOrchestrator>
   Widget build(BuildContext context) {
     if (isLoading) return const Scaffold(backgroundColor: AppColors.slate950);
 
-    if (!isAuthenticated) {
-      return LockScreen(onUnlock: () => setState(() => isAuthenticated = true));
+    // The provider tracks whether the user has unlocked via the lock screen.
+    // When security is disabled there is nothing to unlock, so we bypass it
+    // entirely (no provider mutation needed during init).
+    final unlocked = ref.watch(authStateProvider);
+    if (_securityEnabled && !unlocked) {
+      return LockScreen(
+        onUnlock: () => ref.read(authStateProvider.notifier).authenticate(),
+      );
     }
 
     return const MainShell();
@@ -238,7 +249,7 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   int _idx = 0;
   late AnimationController _bgCtrl;
   late final List<Widget> _screens;
@@ -246,6 +257,7 @@ class _MainShellState extends State<MainShell>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _screens = const [
       JournalScreen(),
       CalendarScreen(),
@@ -260,8 +272,27 @@ class _MainShellState extends State<MainShell>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _bgCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Pause the always-on ambient orb animation while the app is not visible —
+    // there is nothing to render off-screen and it needlessly burns battery.
+    switch (state) {
+      case AppLifecycleState.resumed:
+        if (!_bgCtrl.isAnimating) _bgCtrl.repeat(reverse: true);
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+        if (_bgCtrl.isAnimating) _bgCtrl.stop();
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        break;
+    }
   }
 
   @override

@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +10,18 @@ import 'encryption_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum BackupStage { idle, serializing, encrypting, writing, reading, decrypting, restoring }
+
+/// Progress callback for staged backup/restore operations.
+typedef BackupProgress = void Function(BackupStage stage);
+
+/// Pretty-print the export map to JSON. Top-level + pure so it can run off the
+/// main isolate via [compute] (serializing a large journal is CPU-heavy).
+String encodeBackupJson(Map<String, dynamic> data) =>
+    const JsonEncoder.withIndent('  ').convert(data);
+
+/// Parse a backup JSON document. Top-level + pure for off-isolate [compute].
+Map<String, dynamic> decodeBackupJson(String jsonString) =>
+    jsonDecode(jsonString) as Map<String, dynamic>;
 
 /// Service for exporting and importing user data.
 /// 
@@ -72,18 +84,25 @@ class BackupService {
   Future<BackupResult> exportToFile({
     bool encrypted = true,
     String? password,
+    BackupProgress? onProgress,
   }) async {
     try {
+      onProgress?.call(BackupStage.serializing);
       final data = await exportData();
-      final jsonString = const JsonEncoder.withIndent('  ').convert(data);
+      // Serialize off the main isolate — large journals are CPU-heavy to encode.
+      final jsonString = await compute(encodeBackupJson, data);
 
       String content = jsonString;
       String fileExtension = 'json';
 
       if (encrypted) {
-        // Encrypt the backup
+        // Encrypt the backup. NOTE: kept on the main isolate — encryption is
+        // bound to the in-memory key held by the SecurityService singleton,
+        // which an isolate cannot see.
+        onProgress?.call(BackupStage.encrypting);
         final encryptedContent = await _encryptionService.encrypt(jsonString);
         if (encryptedContent == null) {
+          onProgress?.call(BackupStage.idle);
           return BackupResult(
             success: false,
             error: 'Encryption failed - no encryption key available',
@@ -93,6 +112,7 @@ class BackupService {
         fileExtension = 'encrypted';
       }
 
+      onProgress?.call(BackupStage.writing);
       // Save to file
       final dir = await getApplicationDocumentsDirectory();
       final backupDir = Directory('${dir.path}/backups');
@@ -118,12 +138,14 @@ class BackupService {
             : 'Backup file from Memory Palace app.',
       );
 
+      onProgress?.call(BackupStage.idle);
       return BackupResult(
         success: true,
         filePath: filePath,
         shareResult: shareResult.status == ShareResultStatus.success,
       );
     } catch (e) {
+      onProgress?.call(BackupStage.idle);
       return BackupResult(
         success: false,
         error: 'Export failed: ${e.toString()}',
@@ -138,12 +160,16 @@ class BackupService {
   Future<BackupResult> importFromJson(
     String jsonString, {
     bool merge = true,
+    BackupProgress? onProgress,
   }) async {
     try {
-      final data = jsonDecode(jsonString) as Map<String, dynamic>;
+      onProgress?.call(BackupStage.reading);
+      // Parse off the main isolate — a large backup is heavy to decode.
+      final data = await compute(decodeBackupJson, jsonString);
 
       // Validate backup format
       if (!data.containsKey('version') || !data.containsKey('journal')) {
+        onProgress?.call(BackupStage.idle);
         return BackupResult(
           success: false,
           error: 'Invalid backup file format',
@@ -155,12 +181,14 @@ class BackupService {
 
       // Enforce maximum entries to prevent resource exhaustion
       if (journalList.length > 10000) {
+        onProgress?.call(BackupStage.idle);
         return BackupResult(
           success: false,
           error: 'Backup contains ${journalList.length} entries; maximum is 10,000',
         );
       }
 
+      onProgress?.call(BackupStage.restoring);
       int importedEntries = 0;
       int skippedEntries = 0;
 
@@ -193,6 +221,7 @@ class BackupService {
         }
       }
 
+      onProgress?.call(BackupStage.idle);
       return BackupResult(
         success: true,
         message:
@@ -200,6 +229,7 @@ class BackupService {
             '${skippedEntries > 0 ? ' ($skippedEntries skipped)' : ''}',
       );
     } catch (e) {
+      onProgress?.call(BackupStage.idle);
       return BackupResult(
         success: false,
         error: 'Import failed: ${e.toString()}',
@@ -207,17 +237,47 @@ class BackupService {
     }
   }
 
-  /// Import from encrypted backup file
-  Future<BackupResult> importEncryptedFile(String filePath) async {
+  /// Import a backup file, dispatching on whether it is encrypted.
+  ///
+  /// Used by the "Restore" action in the Manage Backups sheet.
+  Future<BackupResult> importBackupFile(
+    String filePath, {
+    required bool isEncrypted,
+    BackupProgress? onProgress,
+  }) async {
+    if (isEncrypted) {
+      return importEncryptedFile(filePath, onProgress: onProgress);
+    }
     try {
+      onProgress?.call(BackupStage.reading);
+      final content = await File(filePath).readAsString();
+      return importFromJson(content, onProgress: onProgress);
+    } catch (e) {
+      onProgress?.call(BackupStage.idle);
+      return BackupResult(
+        success: false,
+        error: 'Failed to read backup: ${e.toString()}',
+      );
+    }
+  }
+
+  /// Import from encrypted backup file
+  Future<BackupResult> importEncryptedFile(
+    String filePath, {
+    BackupProgress? onProgress,
+  }) async {
+    try {
+      onProgress?.call(BackupStage.reading);
       final file = File(filePath);
       final encryptedContent = await file.readAsString();
 
-      // Decrypt the content
+      // Decrypt the content (main isolate — key-bound, see exportToFile note).
+      onProgress?.call(BackupStage.decrypting);
       final decryptedJson = await _encryptionService.decrypt(encryptedContent);
 
-      return await importFromJson(decryptedJson);
+      return await importFromJson(decryptedJson, onProgress: onProgress);
     } catch (e) {
+      onProgress?.call(BackupStage.idle);
       return BackupResult(
         success: false,
         error: 'Failed to decrypt or import: ${e.toString()}',

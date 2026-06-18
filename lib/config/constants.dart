@@ -53,5 +53,10 @@ const List<String> essentialFeelings = [
 class SecurityConstants {
   static const int pinLength = 4;
   static const int maxAttempts = 5;
+
+  /// Base lockout duration (seconds) applied on the first lockout cycle.
   static const int lockoutDurationSeconds = 30;
+
+  /// Upper bound for the escalating (exponential) lockout duration.
+  static const int maxLockoutDurationSeconds = 3600; // 1 hour
 }

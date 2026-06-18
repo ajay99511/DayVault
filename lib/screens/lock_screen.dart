@@ -5,7 +5,7 @@ import 'package:local_auth/local_auth.dart';
 import '../config/constants.dart';
 import '../services/security_service.dart';
 import '../services/storage_service.dart';
-import '../models/types.dart';
+import '../utils/idle_timer.dart';
 import 'pin_setup_screen.dart';
 import 'forgot_pin_screen.dart';
 
@@ -33,6 +33,11 @@ class _LockScreenState extends ConsumerState<LockScreen>
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
 
+  /// After this much inactivity on the lock screen we wind down: stop any
+  /// running animation and clear a partially-entered PIN (security hygiene).
+  static const _idleTimeout = Duration(seconds: 5);
+  late final IdleTimer _idleTimer;
+
   @override
   void initState() {
     super.initState();
@@ -43,11 +48,30 @@ class _LockScreenState extends ConsumerState<LockScreen>
     _shakeAnimation = Tween<double>(begin: -10, end: 10).chain(
       CurveTween(curve: Curves.easeInOut),
     ).animate(_shakeController);
+    _idleTimer = IdleTimer(timeout: _idleTimeout, onIdle: _onIdle);
     _initializeSecurity();
+  }
+
+  /// Called when the user has been idle on the lock screen for [_idleTimeout].
+  void _onIdle() {
+    if (!mounted) return;
+    if (_shakeController.isAnimating) {
+      _shakeController.stop();
+      _shakeController.value = 0;
+    }
+    // Drop any half-entered PIN so it isn't left on screen unattended.
+    if (pin.isNotEmpty) {
+      setState(() {
+        pin = '';
+        isError = false;
+        errorMessage = null;
+      });
+    }
   }
 
   @override
   void dispose() {
+    _idleTimer.dispose();
     _shakeController.dispose();
     super.dispose();
   }
@@ -122,6 +146,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
 
   Future<void> handleTap(String val) async {
     if (isLoading) return;
+    _idleTimer.poke();
 
     if (pin.length < SecurityConstants.pinLength) {
       setState(() {
@@ -180,6 +205,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
   }
 
   Future<void> _handleBackspace() async {
+    _idleTimer.poke();
     if (pin.isNotEmpty) {
       setState(() {
         pin = pin.substring(0, pin.length - 1);

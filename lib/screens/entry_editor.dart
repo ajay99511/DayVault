@@ -45,6 +45,8 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
   String? selectedFeeling;
   late TimeBucket selectedBucket;
   late List<ImageReference> images;
+  late List<String> tags;
+  late bool isSpotlight;
   bool showTimePicker = false;
 
   // Auto-save functionality
@@ -64,6 +66,8 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
     selectedFeeling = widget.initialEntry?.feeling;
     selectedBucket = widget.initialEntry?.timeBucket ?? TimeBucket.morning;
     images = List.from(widget.initialEntry?.images ?? []);
+    tags = List.from(widget.initialEntry?.tags ?? const <String>[]);
+    isSpotlight = widget.initialEntry?.isSpotlight ?? false;
     
     // Set draft ID for existing or new entries
     _draftId = widget.initialEntry?.id ?? const Uuid().v4();
@@ -82,15 +86,15 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
     _contentCtrl.addListener(_onTextChanged);
   }
   
-  void _onTextChanged() {
+  void _onTextChanged() => _scheduleAutoSave();
+
+  /// Mark the entry dirty and (re)start the auto-save debounce. Routed through
+  /// by every editable field so drafts capture non-text edits too.
+  void _scheduleAutoSave() {
     if (!_hasChanges) {
       setState(() => _hasChanges = true);
     }
-    
-    // Cancel existing timer
     _autoSaveTimer?.cancel();
-    
-    // Start new timer for auto-save
     _autoSaveTimer = Timer(_autoSaveDelay, _saveDraft);
   }
   
@@ -110,6 +114,8 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
         'feeling': selectedFeeling,
         'timeBucket': selectedBucket.index,
         'images': images.map((img) => img.toJson()).toList(),
+        'tags': tags,
+        'isSpotlight': isSpotlight,
         'timestamp': DateTime.now().toIso8601String(),
       };
 
@@ -162,6 +168,11 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
             selectedFeeling = draftData['feeling'] as String?;
             selectedBucket = TimeBucket.values[draftData['timeBucket'] as int];
             images = _parseDraftImages(draftData['images'] as List?);
+            tags = (draftData['tags'] as List?)
+                    ?.map((e) => e as String)
+                    .toList() ??
+                <String>[];
+            isSpotlight = draftData['isSpotlight'] as bool? ?? false;
           });
 
           // Show recovery message
@@ -217,6 +228,8 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
         feeling: selectedFeeling,
         timeBucket: type == EntryType.event ? selectedBucket : null,
         images: images,
+        tags: tags,
+        isSpotlight: isSpotlight,
       );
       
       await widget.onSave(entry);
@@ -338,29 +351,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
                             hintStyle: const TextStyle(color: Colors.white24),
                             border: InputBorder.none,
                             suffixIcon: _hasChanges
-                                ? Padding(
-                                    padding: const EdgeInsets.all(8.0),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (_isSaving)
-                                          const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: AppColors.emerald500,
-                                            ),
-                                          )
-                                        else
-                                          const Icon(
-                                            Icons.edit,
-                                            color: AppColors.amber500,
-                                            size: 18,
-                                          ),
-                                      ],
-                                    ),
-                                  )
+                                ? _AutoSaveIndicator(isSaving: _isSaving)
                                 : null,
                           ),
                         ),
@@ -382,8 +373,31 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
                           ),
                         ),
 
-                        const SizedBox(height: 40),
-                        _buildImageSection(),
+                        const SizedBox(height: 30),
+                        TagPicker(
+                          tags: tags,
+                          onChanged: (next) {
+                            setState(() => tags = next);
+                            _scheduleAutoSave();
+                          },
+                        ),
+                        const SizedBox(height: 20),
+                        SpotlightToggle(
+                          value: isSpotlight,
+                          onChanged: (v) {
+                            setState(() => isSpotlight = v);
+                            _scheduleAutoSave();
+                          },
+                        ),
+                        const SizedBox(height: 30),
+                        ImageSection(
+                          images: images,
+                          onChanged: (next) {
+                            setState(() => images = next);
+                            _scheduleAutoSave();
+                          },
+                          onError: _showError,
+                        ),
                         const SizedBox(height: 100),
                       ],
                     ),
@@ -567,378 +581,16 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
         const SizedBox(width: 12),
         // Moods
         Expanded(
-          child: SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: moodIcons.entries.map((e) {
-                bool isSel = selectedMood == e.key;
-                return GestureDetector(
-                  onTap: () => setState(() => selectedMood = e.key),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 44,
-                    height: 44,
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      color: isSel ? AppColors.emerald500 : AppColors.slate900,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSel ? AppColors.emerald500 : Colors.white12,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(e.value, style: const TextStyle(fontSize: 20)),
-                  ),
-                );
-              }).toList(),
-            ),
+          child: MoodSelector(
+            selected: selectedMood,
+            onChanged: (m) {
+              setState(() => selectedMood = m);
+              _scheduleAutoSave();
+            },
           ),
         ),
       ],
     );
-  }
-
-  Widget _buildImageSection() {
-    return Column(
-      children: [
-        const Text(
-          'Images',
-          style: TextStyle(
-            color: AppColors.slate400,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1,
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Add image buttons
-        Row(
-          children: [
-            _addImageButton(Icons.photo_library, 'Gallery', _pickFromGallery),
-            const SizedBox(width: 8),
-            _addImageButton(Icons.link, 'URL', _addFromUrl),
-            const SizedBox(width: 8),
-            _addImageButton(Icons.folder_open, 'Files', _pickFromFile),
-          ],
-        ),
-        if (images.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          // Preview of last added image — responsive aspect ratio
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final previewHeight =
-                    (constraints.maxWidth * 9 / 16).clamp(120.0, 250.0);
-                return SizedBox(
-                  height: previewHeight,
-                  width: double.infinity,
-                  child: ImageThumbnailWidget(
-                    imageRef: images.last,
-                    fit: BoxFit.cover,
-                    showTapToZoom: true,
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-        if (images.length > 1) ...[
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 76,
-            child: ReorderableListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: images.length,
-              onReorder: _reorderImages,
-              buildDefaultDragHandles: false,
-              itemBuilder: (context, index) {
-                return Padding(
-                  key: ValueKey('${images[index].source}_$index'),
-                  padding: const EdgeInsets.only(right: 8),
-                  child: SizedBox(
-                    width: 68,
-                    height: 68,
-                    child: Stack(
-                      children: [
-                        // Image thumbnail
-                        Positioned.fill(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: GestureDetector(
-                              onTap: () {
-                                // Move this image to preview
-                                setState(() {
-                                  final item = images.removeAt(index);
-                                  images.add(item);
-                                });
-                              },
-                              child: ImageThumbnailWidget(
-                                imageRef: images[index],
-                                fit: BoxFit.cover,
-                                showTapToZoom: true,
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Delete button
-                        Positioned(
-                          top: 2,
-                          right: 2,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  images.removeAt(index);
-                                });
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.all(3),
-                                decoration: const BoxDecoration(
-                                  color: AppColors.rose500,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.close,
-                                  size: 12,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Drag handle indicator
-                        Positioned(
-                          bottom: 3,
-                          left: 3,
-                          child: Icon(
-                            Icons.drag_indicator,
-                            size: 14,
-                            color: Colors.white.withValues(alpha: 0.7),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _addImageButton(IconData icon, String label, VoidCallback onTap) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: Colors.white24,
-              style: BorderStyle.solid,
-            ),
-            borderRadius: BorderRadius.circular(12),
-            color: Colors.white.withValues(alpha: 0.05),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white54, size: 20),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Colors.white54,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Pick image from device gallery using photo_manager (no copy, persistent ID).
-  Future<void> _pickFromGallery() async {
-    try {
-      // Request permission
-      final PermissionState permState = await PhotoManager.requestPermissionExtend();
-      if (!permState.isAuth) {
-        if (mounted) {
-          _showError('Gallery permission is required. Please enable it in settings.');
-        }
-        return;
-      }
-
-      // Get recent assets
-      final List<AssetPathEntity> paths = await PhotoManager.getAssetPathList(
-        type: RequestType.image,
-        hasAll: true,
-      );
-
-      if (paths.isEmpty) {
-        if (mounted) _showError('No images found in gallery.');
-        return;
-      }
-
-      final AssetPathEntity path = paths.first;
-      final List<AssetEntity> assets = await path.getAssetListPaged(
-        page: 0,
-        size: 30,
-      );
-
-      if (assets.isEmpty) {
-        if (mounted) _showError('No images found in gallery.');
-        return;
-      }
-
-      // Show asset picker dialog
-      final AssetEntity? selected = await showDialog<AssetEntity>(
-        context: context,
-        builder: (ctx) => _GalleryPickerDialog(assets: assets),
-      );
-
-      if (selected != null && mounted) {
-        setState(() {
-          images.add(createGalleryImageRef(selected.id));
-        });
-      }
-    } catch (e) {
-      debugPrint('Gallery pick failed: $e');
-      if (mounted) {
-        _showError('Failed to pick image from gallery. Please try again.');
-      }
-    }
-  }
-
-  /// Add image from URL with validation.
-  Future<void> _addFromUrl() async {
-    final urlCtrl = TextEditingController();
-    String? error;
-    bool isValidating = false;
-
-    await showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            return AlertDialog(
-              backgroundColor: AppColors.slate900,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: const Text(
-                'Add Image from URL',
-                style: TextStyle(color: Colors.white),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: urlCtrl,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'https://example.com/image.jpg',
-                      hintStyle: const TextStyle(color: Colors.white38),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      errorText: error,
-                    ),
-                    keyboardType: TextInputType.url,
-                  ),
-                  if (isValidating)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed: isValidating
-                      ? null
-                      : () async {
-                          final url = urlCtrl.text.trim();
-                          if (url.isEmpty) {
-                            setDialogState(() => error = 'URL cannot be empty');
-                            return;
-                          }
-
-                          setDialogState(() {
-                            error = null;
-                            isValidating = true;
-                          });
-
-                          final (valid, errMsg) = await validateImageUrl(url);
-
-                          setDialogState(() => isValidating = false);
-
-                          if (!valid) {
-                            setDialogState(() => error = errMsg);
-                            return;
-                          }
-
-                          if (mounted) {
-                            setState(() {
-                              images.add(createUrlImageRef(url));
-                            });
-                            Navigator.pop(ctx);
-                          }
-                        },
-                  child: const Text('Add'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  /// Pick image from file system using file_picker (no copy, just path reference).
-  Future<void> _pickFromFile() async {
-    try {
-      final FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-      );
-
-      if (result != null && result.files.single.path != null && mounted) {
-        setState(() {
-          images.add(createFileImageRef(result.files.single.path!));
-        });
-      }
-    } catch (e) {
-      debugPrint('File pick failed: $e');
-      if (mounted) {
-        _showError('Failed to pick image file. Please try again.');
-      }
-    }
-  }
-
-  /// Reorder images via drag and drop.
-  void _reorderImages(int oldIndex, int newIndex) {
-    setState(() {
-      if (oldIndex < newIndex) newIndex -= 1;
-      final item = images.removeAt(oldIndex);
-      images.insert(newIndex, item);
-    });
   }
 
   /// Parse images from draft data (backward compatible).
@@ -1045,6 +697,566 @@ class RadialTimePickerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Small auto-save status chip shown in the headline field's suffix.
+class _AutoSaveIndicator extends StatelessWidget {
+  final bool isSaving;
+  const _AutoSaveIndicator({required this.isSaving});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isSaving)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppColors.emerald500,
+              ),
+            )
+          else
+            const Icon(Icons.edit, color: AppColors.amber500, size: 18),
+        ],
+      ),
+    );
+  }
+}
+
+/// Horizontal emoji mood picker.
+class MoodSelector extends StatelessWidget {
+  final Mood selected;
+  final ValueChanged<Mood> onChanged;
+  const MoodSelector({super.key, required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: moodIcons.entries.map((e) {
+          final isSel = selected == e.key;
+          return GestureDetector(
+            onTap: () => onChanged(e.key),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 44,
+              height: 44,
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: isSel ? AppColors.emerald500 : AppColors.slate900,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSel ? AppColors.emerald500 : Colors.white12,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Text(e.value, style: const TextStyle(fontSize: 20)),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+/// Free-form tag input with removable chips.
+class TagPicker extends StatefulWidget {
+  final List<String> tags;
+  final ValueChanged<List<String>> onChanged;
+  const TagPicker({super.key, required this.tags, required this.onChanged});
+
+  @override
+  State<TagPicker> createState() => _TagPickerState();
+}
+
+class _TagPickerState extends State<TagPicker> {
+  final TextEditingController _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _add() {
+    final raw = _ctrl.text.trim();
+    if (raw.isEmpty) return;
+    // Normalize: lower-case, collapse whitespace; ignore duplicates.
+    final tag = raw.replaceAll(RegExp(r'\s+'), ' ');
+    final exists =
+        widget.tags.any((t) => t.toLowerCase() == tag.toLowerCase());
+    if (!exists) {
+      widget.onChanged([...widget.tags, tag]);
+    }
+    _ctrl.clear();
+  }
+
+  void _remove(String tag) {
+    widget.onChanged(widget.tags.where((t) => t != tag).toList());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Tags',
+          style: TextStyle(
+            color: AppColors.slate400,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _ctrl,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _add(),
+                decoration: InputDecoration(
+                  hintText: 'Add a tag…',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: _add,
+              icon: const Icon(Icons.add_circle, color: AppColors.indigo500),
+              tooltip: 'Add tag',
+            ),
+          ],
+        ),
+        if (widget.tags.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: widget.tags.map((tag) {
+              return Chip(
+                label: Text(tag,
+                    style: const TextStyle(color: Colors.white, fontSize: 12)),
+                backgroundColor: AppColors.indigo500.withValues(alpha: 0.2),
+                side: BorderSide(
+                    color: AppColors.indigo500.withValues(alpha: 0.4)),
+                deleteIcon: const Icon(Icons.close, size: 14),
+                deleteIconColor: Colors.white70,
+                onDeleted: () => _remove(tag),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Toggle that marks an entry as a spotlight memory.
+class SpotlightToggle extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const SpotlightToggle({super.key, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: value
+                ? AppColors.amber500.withValues(alpha: 0.5)
+                : Colors.white12,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              value ? Icons.star : Icons.star_border,
+              color: value ? AppColors.amber500 : Colors.white54,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Spotlight this memory',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: onChanged,
+              activeThumbColor: AppColors.amber500,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Image picker + preview + reorder section. Controlled: it never owns the
+/// list, it reports a new list via [onChanged]. Images are stored by reference
+/// only (no copying into app storage).
+class ImageSection extends StatefulWidget {
+  final List<ImageReference> images;
+  final ValueChanged<List<ImageReference>> onChanged;
+  final void Function(String message) onError;
+
+  const ImageSection({
+    super.key,
+    required this.images,
+    required this.onChanged,
+    required this.onError,
+  });
+
+  @override
+  State<ImageSection> createState() => _ImageSectionState();
+}
+
+class _ImageSectionState extends State<ImageSection> {
+  List<ImageReference> get _images => widget.images;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const Text(
+          'Images',
+          style: TextStyle(
+            color: AppColors.slate400,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _addImageButton(Icons.photo_library, 'Gallery', _pickFromGallery),
+            const SizedBox(width: 8),
+            _addImageButton(Icons.link, 'URL', _addFromUrl),
+            const SizedBox(width: 8),
+            _addImageButton(Icons.folder_open, 'Files', _pickFromFile),
+          ],
+        ),
+        if (_images.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final previewHeight =
+                    (constraints.maxWidth * 9 / 16).clamp(120.0, 250.0);
+                return SizedBox(
+                  height: previewHeight,
+                  width: double.infinity,
+                  child: ImageThumbnailWidget(
+                    imageRef: _images.last,
+                    fit: BoxFit.cover,
+                    showTapToZoom: true,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+        if (_images.length > 1) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 76,
+            child: ReorderableListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _images.length,
+              onReorder: _reorder,
+              buildDefaultDragHandles: false,
+              itemBuilder: (context, index) {
+                return Padding(
+                  key: ValueKey('${_images[index].source}_$index'),
+                  padding: const EdgeInsets.only(right: 8),
+                  child: SizedBox(
+                    width: 68,
+                    height: 68,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: GestureDetector(
+                              onTap: () => _moveToEnd(index),
+                              child: ImageThumbnailWidget(
+                                imageRef: _images[index],
+                                fit: BoxFit.cover,
+                                showTapToZoom: true,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 2,
+                          right: 2,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: GestureDetector(
+                              onTap: () => _removeAt(index),
+                              child: Container(
+                                padding: const EdgeInsets.all(3),
+                                decoration: const BoxDecoration(
+                                  color: AppColors.rose500,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.close,
+                                    size: 12, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 3,
+                          left: 3,
+                          child: Icon(
+                            Icons.drag_indicator,
+                            size: 14,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _addImageButton(IconData icon, String label, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.white24),
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white.withValues(alpha: 0.05),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white54, size: 20),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _reorder(int oldIndex, int newIndex) {
+    final list = [..._images];
+    if (oldIndex < newIndex) newIndex -= 1;
+    final item = list.removeAt(oldIndex);
+    list.insert(newIndex, item);
+    widget.onChanged(list);
+  }
+
+  void _removeAt(int index) {
+    final list = [..._images]..removeAt(index);
+    widget.onChanged(list);
+  }
+
+  /// Move an image to the end so it becomes the preview.
+  void _moveToEnd(int index) {
+    final list = [..._images];
+    final item = list.removeAt(index);
+    list.add(item);
+    widget.onChanged(list);
+  }
+
+  /// Pick image from device gallery using photo_manager (no copy, persistent ID).
+  Future<void> _pickFromGallery() async {
+    try {
+      final PermissionState permState =
+          await PhotoManager.requestPermissionExtend();
+      if (!permState.isAuth) {
+        if (mounted) {
+          widget.onError(
+              'Gallery permission is required. Please enable it in settings.');
+        }
+        return;
+      }
+
+      final List<AssetPathEntity> paths = await PhotoManager.getAssetPathList(
+        type: RequestType.image,
+        hasAll: true,
+      );
+      if (paths.isEmpty) {
+        if (mounted) widget.onError('No images found in gallery.');
+        return;
+      }
+
+      final assets = await paths.first.getAssetListPaged(page: 0, size: 30);
+      if (assets.isEmpty) {
+        if (mounted) widget.onError('No images found in gallery.');
+        return;
+      }
+
+      if (!mounted) return;
+      final AssetEntity? selected = await showDialog<AssetEntity>(
+        context: context,
+        builder: (ctx) => _GalleryPickerDialog(assets: assets),
+      );
+
+      if (selected != null && mounted) {
+        widget.onChanged([..._images, createGalleryImageRef(selected.id)]);
+      }
+    } catch (e) {
+      debugPrint('Gallery pick failed: $e');
+      if (mounted) {
+        widget.onError('Failed to pick image from gallery. Please try again.');
+      }
+    }
+  }
+
+  /// Add image from URL with validation.
+  Future<void> _addFromUrl() async {
+    final urlCtrl = TextEditingController();
+    String? error;
+    bool isValidating = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.slate900,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text('Add Image from URL',
+                  style: TextStyle(color: Colors.white)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: urlCtrl,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'https://example.com/image.jpg',
+                      hintStyle: const TextStyle(color: Colors.white38),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      errorText: error,
+                    ),
+                    keyboardType: TextInputType.url,
+                  ),
+                  if (isValidating)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: isValidating
+                      ? null
+                      : () async {
+                          final url = urlCtrl.text.trim();
+                          if (url.isEmpty) {
+                            setDialogState(() => error = 'URL cannot be empty');
+                            return;
+                          }
+                          setDialogState(() {
+                            error = null;
+                            isValidating = true;
+                          });
+                          final (valid, errMsg) = await validateImageUrl(url);
+                          setDialogState(() => isValidating = false);
+                          if (!valid) {
+                            setDialogState(() => error = errMsg);
+                            return;
+                          }
+                          if (mounted) {
+                            widget.onChanged([..._images, createUrlImageRef(url)]);
+                            Navigator.pop(ctx);
+                          }
+                        },
+                  child: const Text('Add'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Pick image from file system using file_picker (no copy, just path reference).
+  Future<void> _pickFromFile() async {
+    try {
+      final FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+      if (result != null && result.files.single.path != null && mounted) {
+        widget.onChanged(
+            [..._images, createFileImageRef(result.files.single.path!)]);
+      }
+    } catch (e) {
+      debugPrint('File pick failed: $e');
+      if (mounted) {
+        widget.onError('Failed to pick image file. Please try again.');
+      }
+    }
+  }
 }
 
 /// Simple gallery picker dialog showing thumbnails in a grid.
