@@ -687,23 +687,30 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   if (!_isSearching)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Preference Drift",
-                          style: GoogleFonts.outfit(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w300,
-                            color: context.tokens.textPrimary,
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Preference Drift",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.outfit(
+                              fontSize: 32,
+                              fontWeight: FontWeight.w300,
+                              color: context.tokens.textPrimary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "The evolution of your taste.",
-                          style: TextStyle(color: context.tokens.textTertiary),
-                        ),
-                      ],
+                          const SizedBox(height: 4),
+                          Text(
+                            "The evolution of your taste.",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style:
+                                TextStyle(color: context.tokens.textTertiary),
+                          ),
+                        ],
+                      ),
                     ),
 
                   // Search and Actions
@@ -756,37 +763,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                               ),
                             ),
                           ),
-                        if (!_isSearching) ...[
-                          IconButton(
-                            onPressed: () => setState(() => _isMasked = !_isMasked),
-                            icon: Icon(
-                              _isMasked ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                              color: _isMasked ? AppColors.indigo500 : AppColors.slate400,
-                            ),
-                            tooltip: 'Toggle Privacy Mode',
-                          ),
-                          IconButton(
-                            onPressed: () {
-                              setState(() =>
-                                  _showFavoritesOnly = !_showFavoritesOnly);
-                              _load();
-                            },
-                            icon: Icon(
-                              _showFavoritesOnly
-                                  ? Icons.star
-                                  : Icons.star_border,
-                              color: _showFavoritesOnly
-                                  ? AppColors.amber500
-                                  : AppColors.slate400,
-                            ),
-                          ),
-                          IconButton(
-                            onPressed: () => _showCategoryDialog(),
-                            tooltip: 'New category',
-                            icon: Icon(Icons.add_box_outlined,
-                                color: context.tokens.textPrimary),
-                          ),
-                        ],
+                        if (!_isSearching) _buildTopActions(),
                         const SizedBox(width: 4),
                         GestureDetector(
                           onTap: () {
@@ -1016,6 +993,98 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
               ),
       ),
     );
+  }
+
+  // ─── Top Actions (adaptive) ───────────────────────────────────────────
+  // On wide layouts the actions are shown as inline icons. On phones they
+  // collapse into a single overflow menu so they never overflow / clip the
+  // header as the title competes for width.
+
+  Widget _buildTopActions() {
+    final compact = MediaQuery.sizeOf(context).width < Breakpoints.mobile;
+    return compact ? _compactTopActions() : _inlineTopActions();
+  }
+
+  Widget _inlineTopActions() {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          onPressed: () => setState(() => _isMasked = !_isMasked),
+          tooltip: 'Toggle Privacy Mode',
+          icon: Icon(
+            _isMasked
+                ? Icons.visibility_off_outlined
+                : Icons.visibility_outlined,
+            color: _isMasked ? AppColors.indigo500 : context.tokens.textTertiary,
+          ),
+        ),
+        IconButton(
+          onPressed: _toggleFavoritesOnly,
+          tooltip: 'Show favourites only',
+          icon: Icon(
+            _showFavoritesOnly ? Icons.star : Icons.star_border,
+            color: _showFavoritesOnly
+                ? AppColors.amber500
+                : context.tokens.textTertiary,
+          ),
+        ),
+        IconButton(
+          onPressed: () => _showCategoryDialog(),
+          tooltip: 'New category',
+          icon: Icon(Icons.add_box_outlined, color: context.tokens.textPrimary),
+        ),
+      ],
+    );
+  }
+
+  Widget _compactTopActions() {
+    return PopupMenuButton<String>(
+      tooltip: 'More options',
+      color: context.tokens.surfaceBase,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      icon: Icon(Icons.more_horiz, color: context.tokens.textPrimary),
+      onSelected: (value) {
+        switch (value) {
+          case 'privacy':
+            setState(() => _isMasked = !_isMasked);
+            break;
+          case 'favorites':
+            _toggleFavoritesOnly();
+            break;
+          case 'add':
+            _showCategoryDialog();
+            break;
+        }
+      },
+      itemBuilder: (ctx) => [
+        CheckedPopupMenuItem(
+          value: 'privacy',
+          checked: _isMasked,
+          child: const Text('Privacy mode'),
+        ),
+        CheckedPopupMenuItem(
+          value: 'favorites',
+          checked: _showFavoritesOnly,
+          child: const Text('Favourites only'),
+        ),
+        const PopupMenuItem(
+          value: 'add',
+          child: Row(
+            children: [
+              Icon(Icons.add_box_outlined, size: 20),
+              SizedBox(width: 12),
+              Text('New category'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _toggleFavoritesOnly() {
+    setState(() => _showFavoritesOnly = !_showFavoritesOnly);
+    _load();
   }
 
   // ─── Drag Proxy ───────────────────────────────────────────────────────
