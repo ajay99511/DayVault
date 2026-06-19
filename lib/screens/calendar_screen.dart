@@ -7,6 +7,7 @@ import '../widgets/image_widgets.dart';
 import '../services/storage_service.dart';
 import '../widgets/glass_widgets.dart';
 import '../config/constants.dart';
+import '../theme/app_tokens.dart';
 import 'entry_editor.dart';
 
 class CalendarScreen extends ConsumerStatefulWidget {
@@ -174,7 +175,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       style: GoogleFonts.outfit(
                         fontSize: 40,
                         fontWeight: FontWeight.w300,
-                        color: Colors.white,
+                        color: context.tokens.textPrimary,
                       ),
                     ),
                     GestureDetector(
@@ -183,12 +184,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         children: [
                           Text(
                             DateFormat('yyyy').format(_currentDate),
-                            style: const TextStyle(
-                                fontSize: 18, color: AppColors.slate400),
+                            style: TextStyle(
+                                fontSize: 18,
+                                color: context.tokens.textTertiary),
                           ),
                           const SizedBox(width: 4),
-                          const Icon(Icons.arrow_drop_down,
-                              color: AppColors.slate400, size: 20),
+                          Icon(Icons.arrow_drop_down,
+                              color: context.tokens.textTertiary, size: 20),
                         ],
                       ),
                     ),
@@ -219,8 +221,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
                           .map((d) => Text(d,
-                              style: const TextStyle(
-                                  color: AppColors.slate400,
+                              style: TextStyle(
+                                  color: context.tokens.textTertiary,
                                   fontWeight: FontWeight.bold)))
                           .toList(),
                     ),
@@ -291,7 +293,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                           style: TextStyle(
                                               color: isToday
                                                   ? Colors.white
-                                                  : AppColors.slate400,
+                                                  : context.tokens.textSecondary,
                                               fontWeight: isToday
                                                   ? FontWeight.bold
                                                   : FontWeight.normal)),
@@ -359,10 +361,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
+          color: context.tokens.surfaceGlassFill,
           shape: BoxShape.circle,
+          border: Border.all(color: context.tokens.glassBorder),
         ),
-        child: Icon(icon, color: Colors.white, size: 20),
+        child: Icon(icon, color: context.tokens.textPrimary, size: 20),
       ),
     );
   }

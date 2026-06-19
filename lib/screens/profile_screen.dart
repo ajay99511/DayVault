@@ -9,7 +9,11 @@ import '../models/types.dart';
 import '../models/stats.dart';
 import '../providers/stats_provider.dart';
 import '../config/constants.dart';
+import '../theme/app_tokens.dart';
+import '../theme/motion.dart';
+import '../providers/theme_provider.dart';
 import '../widgets/glass_widgets.dart';
+import '../widgets/app_components.dart';
 import 'pin_management_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -310,6 +314,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final statsAsync = ref.watch(statsProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     // Non-blocking notification on stats failure (Req 1.7). Using ref.listen
     // (not a build-time side effect) ensures the SnackBar fires only on the
@@ -380,16 +385,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               : 'Journaler',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.tokens.textPrimary,
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
                           headerSubtitle,
-                          style: const TextStyle(
-                            color: AppColors.slate400,
+                          style: TextStyle(
+                            color: context.tokens.textTertiary,
                             fontSize: 12,
                           ),
                         ),
@@ -408,15 +413,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const SizedBox(height: 32),
 
             // Stats Grid
-            const Text(
-              "COGNITIVE METRICS",
-              style: TextStyle(
-                color: AppColors.slate400,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
-              ),
-            ),
+            const SectionLabel("COGNITIVE METRICS"),
             const SizedBox(height: 16),
             statsAsync.when(
               data: (stats) => _statsGrid(stats),
@@ -428,15 +425,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             const SizedBox(height: 40),
 
             // Settings
-            const Text(
-              "SYSTEM CONFIGURATION",
-              style: TextStyle(
-                color: AppColors.slate400,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
-              ),
-            ),
+            const SectionLabel("SYSTEM CONFIGURATION"),
             const SizedBox(height: 16),
 
             GlassContainer(
@@ -470,10 +459,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 "Neural Encryption",
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: context.tokens.textPrimary,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -481,8 +470,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 settings.biometricsEnabled
                                     ? "Biometric Access Enrolled"
                                     : "Require security on launch",
-                                style: const TextStyle(
-                                  color: AppColors.slate400,
+                                style: TextStyle(
+                                  color: context.tokens.textTertiary,
                                   fontSize: 12,
                                 ),
                               ),
@@ -526,16 +515,62 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             const SizedBox(height: 32),
 
-            // Data Management
-            const Text(
-              "DATA MANAGEMENT",
-              style: TextStyle(
-                color: AppColors.slate400,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
+            // Appearance
+            const SectionLabel("APPEARANCE"),
+            const SizedBox(height: 16),
+            GlassContainer(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.palette_outlined,
+                          color: context.tokens.accent, size: 20),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Theme',
+                        style: TextStyle(
+                          color: context.tokens.textPrimary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<ThemeMode>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                          value: ThemeMode.system,
+                          label: Text('System'),
+                          icon: Icon(Icons.brightness_auto, size: 18),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.light,
+                          label: Text('Light'),
+                          icon: Icon(Icons.light_mode, size: 18),
+                        ),
+                        ButtonSegment(
+                          value: ThemeMode.dark,
+                          label: Text('Dark'),
+                          icon: Icon(Icons.dark_mode, size: 18),
+                        ),
+                      ],
+                      selected: {themeMode},
+                      onSelectionChanged: (sel) => ref
+                          .read(themeModeProvider.notifier)
+                          .setMode(sel.first),
+                    ),
+                  ),
+                ],
               ),
             ),
+            const SizedBox(height: 32),
+
+            // Data Management
+            const SectionLabel("DATA MANAGEMENT"),
             const SizedBox(height: 16),
 
             GlassContainer(
@@ -552,18 +587,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       child: const Icon(Icons.security,
                           color: AppColors.fuchsia500, size: 24),
                     ),
-                    title: const Text(
+                    title: Text(
                       'PIN & Security',
                       style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w600),
+                          color: context.tokens.textPrimary,
+                          fontWeight: FontWeight.w600),
                     ),
-                    subtitle: const Text(
+                    subtitle: Text(
                       'Manage PIN, security questions & biometrics',
-                      style:
-                          TextStyle(color: AppColors.slate400, fontSize: 11),
+                      style: TextStyle(
+                          color: context.tokens.textTertiary, fontSize: 11),
                     ),
-                    trailing: const Icon(Icons.chevron_right,
-                        color: AppColors.slate400),
+                    trailing: Icon(Icons.chevron_right,
+                        color: context.tokens.textTertiary),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -573,7 +609,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       );
                     },
                   ),
-                  Divider(color: Colors.white.withValues(alpha: 0.1)),
+                  Divider(color: context.tokens.divider),
                   _backupTile(
                     context,
                     ref,
@@ -583,7 +619,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     iconColor: AppColors.emerald500,
                     encrypted: true,
                   ),
-                  Divider(color: Colors.white.withValues(alpha: 0.1)),
+                  Divider(color: context.tokens.divider),
                   _backupTile(
                     context,
                     ref,
@@ -593,7 +629,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     iconColor: AppColors.amber500,
                     encrypted: false,
                   ),
-                  Divider(color: Colors.white.withValues(alpha: 0.1)),
+                  Divider(color: context.tokens.divider),
                   _manageBackupsTile(context, ref),
                 ],
               ),
@@ -624,11 +660,11 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         child: Icon(icon, color: iconColor, size: 20),
       ),
       title: Text(title,
-          style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w600)),
+          style: TextStyle(
+              color: context.tokens.textPrimary, fontWeight: FontWeight.w600)),
       subtitle: Text(subtitle,
-          style: const TextStyle(color: AppColors.slate400, fontSize: 11)),
-      trailing: const Icon(Icons.chevron_right, color: AppColors.slate400),
+          style: TextStyle(color: context.tokens.textTertiary, fontSize: 11)),
+      trailing: Icon(Icons.chevron_right, color: context.tokens.textTertiary),
       onTap: () async {
         final backupService = ref.read(backupServiceProvider);
         if (!context.mounted) return;
@@ -670,12 +706,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         child: const Icon(Icons.folder,
             color: AppColors.fuchsia500, size: 20),
       ),
-      title: const Text('Manage Backups',
-          style:
-              TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-      subtitle: const Text('View and restore previous backups',
-          style: TextStyle(color: AppColors.slate400, fontSize: 11)),
-      trailing: const Icon(Icons.chevron_right, color: AppColors.slate400),
+      title: Text('Manage Backups',
+          style: TextStyle(
+              color: context.tokens.textPrimary, fontWeight: FontWeight.w600)),
+      subtitle: Text('View and restore previous backups',
+          style: TextStyle(color: context.tokens.textTertiary, fontSize: 11)),
+      trailing: Icon(Icons.chevron_right, color: context.tokens.textTertiary),
       onTap: () => _showBackupsDialog(context, ref),
     );
   }
@@ -957,35 +993,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     double valueFontSize = 24,
     int valueMaxLines = 1,
   }) {
-    return Expanded(
-      child: GlassContainer(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              textAlign: TextAlign.center,
-              maxLines: valueMaxLines,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  color: Colors.white,
-                  fontSize: valueFontSize,
-                  fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label.toUpperCase(),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  color: AppColors.slate400,
-                  fontSize: 8,
-                  letterSpacing: 1.5),
-            ),
-          ],
-        ),
-      ),
+    return StatCard(
+      label: label,
+      value: value,
+      icon: icon,
+      color: color,
+      valueFontSize: valueFontSize,
+      valueMaxLines: valueMaxLines,
     );
   }
 }
@@ -1013,19 +1027,25 @@ class _ShimmerCardState extends State<_ShimmerCard>
 
   @override
   Widget build(BuildContext context) {
+    const card = GlassContainer(
+      padding: EdgeInsets.symmetric(vertical: 20),
+      child: SizedBox(
+        height: 56,
+        child: Center(
+          child: Icon(Icons.hourglass_empty,
+              color: AppColors.slate600, size: 20),
+        ),
+      ),
+    );
+    // Skip the pulsing animation when the user prefers reduced motion.
+    if (Motion.reduceMotion(context)) {
+      if (_controller.isAnimating) _controller.stop();
+      return const Expanded(child: Opacity(opacity: 0.55, child: card));
+    }
     return Expanded(
       child: FadeTransition(
         opacity: Tween<double>(begin: 0.35, end: 0.75).animate(_controller),
-        child: const GlassContainer(
-          padding: EdgeInsets.symmetric(vertical: 20),
-          child: SizedBox(
-            height: 56,
-            child: Center(
-              child: Icon(Icons.hourglass_empty,
-                  color: AppColors.slate600, size: 20),
-            ),
-          ),
-        ),
+        child: card,
       ),
     );
   }

@@ -7,6 +7,7 @@ import '../utils/debouncer.dart';
 import '../widgets/glass_widgets.dart';
 import '../widgets/image_widgets.dart';
 import '../config/constants.dart';
+import '../theme/app_tokens.dart';
 import 'entry_editor.dart';
 import 'journal_viewer_screen.dart';
 
@@ -179,7 +180,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                         style: GoogleFonts.outfit(
                           fontSize: 40,
                           fontWeight: FontWeight.w300,
-                          color: Colors.white,
+                          color: context.tokens.textPrimary,
                         ),
                       ),
 
@@ -196,8 +197,9 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                                 borderRadius: 20,
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.search,
-                                        color: AppColors.slate400, size: 18),
+                                    Icon(Icons.search,
+                                        color: context.tokens.textTertiary,
+                                        size: 18),
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: TextField(
@@ -205,11 +207,12 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                                         autofocus: true,
                                         onChanged: _onSearchChanged,
                                         style: GoogleFonts.outfit(
-                                            color: Colors.white, fontSize: 14),
+                                            color: context.tokens.textPrimary,
+                                            fontSize: 14),
                                         decoration: InputDecoration(
                                           hintText: 'Search memories...',
                                           hintStyle: GoogleFonts.outfit(
-                                              color: Colors.white54,
+                                              color: context.tokens.textTertiary,
                                               fontSize: 14),
                                           border: InputBorder.none,
                                           isDense: true,
@@ -219,8 +222,8 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                                     if (_searchQuery.isNotEmpty)
                                       GestureDetector(
                                         onTap: _clearSearch,
-                                        child: const Icon(Icons.close,
-                                            color: AppColors.slate400,
+                                        child: Icon(Icons.close,
+                                            color: context.tokens.textTertiary,
                                             size: 16),
                                       ),
                                   ],
@@ -236,8 +239,8 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                               borderRadius: 20,
                               child: Text(
                                 "${entries.length} Memories",
-                                style: const TextStyle(
-                                  color: AppColors.slate400,
+                                style: TextStyle(
+                                  color: context.tokens.textTertiary,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -258,12 +261,14 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.1),
+                                color: context.tokens.surfaceGlassFill,
                                 shape: BoxShape.circle,
+                                border:
+                                    Border.all(color: context.tokens.glassBorder),
                               ),
                               child: Icon(
                                 _isSearching ? Icons.close : Icons.search,
-                                color: Colors.white,
+                                color: context.tokens.textPrimary,
                                 size: 20,
                               ),
                             ),
@@ -355,13 +360,14 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
               ),
               selected: _spotlightOnly,
               showCheckmark: false,
-              labelStyle: const TextStyle(fontSize: 12, color: Colors.white),
-              backgroundColor: Colors.white.withValues(alpha: 0.05),
+              labelStyle: TextStyle(
+                  fontSize: 12, color: context.tokens.textPrimary),
+              backgroundColor: context.tokens.surfaceGlassFill,
               selectedColor: AppColors.amber500.withValues(alpha: 0.25),
               side: BorderSide(
                 color: _spotlightOnly
                     ? AppColors.amber500.withValues(alpha: 0.5)
-                    : Colors.white12,
+                    : context.tokens.glassBorder,
               ),
               onSelected: (v) => setState(() => _spotlightOnly = v),
             ),
@@ -375,13 +381,14 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                 label: Text(tag),
                 selected: selected,
                 showCheckmark: false,
-                labelStyle: const TextStyle(fontSize: 12, color: Colors.white),
-                backgroundColor: Colors.white.withValues(alpha: 0.05),
+                labelStyle: TextStyle(
+                    fontSize: 12, color: context.tokens.textPrimary),
+                backgroundColor: context.tokens.surfaceGlassFill,
                 selectedColor: AppColors.indigo500.withValues(alpha: 0.3),
                 side: BorderSide(
                   color: selected
                       ? AppColors.indigo500.withValues(alpha: 0.6)
-                      : Colors.white12,
+                      : context.tokens.glassBorder,
                 ),
                 onSelected: (v) => setState(() {
                   if (v) {
@@ -406,14 +413,14 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
           Icon(
             _isSearching ? Icons.search_off : Icons.menu_book,
             size: 48,
-            color: Colors.white.withValues(alpha: 0.2),
+            color: context.tokens.textDisabled,
           ),
           const SizedBox(height: 16),
           Text(
             _isSearching
                 ? "No matching memories found."
                 : "Your journal is waiting.",
-            style: const TextStyle(color: Colors.white24),
+            style: TextStyle(color: context.tokens.textTertiary),
           ),
         ],
       ),
@@ -433,19 +440,19 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
               color: Colors.red.withValues(alpha: 0.6),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               "Failed to Load Memories",
               style: TextStyle(
-                color: Colors.white,
+                color: context.tokens.textPrimary,
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
               ),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               "There was a problem loading your journal entries.",
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(color: context.tokens.textTertiary),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
@@ -483,7 +490,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
               child: Stack(
                 alignment: Alignment.topCenter,
                 children: [
-                  Container(width: 2, color: AppColors.slate800),
+                  Container(width: 2, color: context.tokens.divider),
                   Container(
                     margin: const EdgeInsets.only(top: 24),
                     width: 10,
@@ -491,7 +498,8 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                     decoration: BoxDecoration(
                       color: color,
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.slate950, width: 2),
+                      border:
+                          Border.all(color: context.tokens.surfaceBase, width: 2),
                       boxShadow: [
                         BoxShadow(
                           color: color.withValues(alpha: 0.5),
@@ -618,12 +626,12 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                                   ? GoogleFonts.libreBaskerville(
                                       fontSize: 20,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.white,
+                                      color: context.tokens.textPrimary,
                                     )
                                   : GoogleFonts.outfit(
                                       fontSize: 20,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.white,
+                                      color: context.tokens.textPrimary,
                                     ),
                             ),
                             const SizedBox(height: 8),
@@ -631,27 +639,27 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                               entry.content,
                               maxLines: 3,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.slate400,
+                              style: TextStyle(
+                                color: context.tokens.textSecondary,
                                 fontSize: 14,
                                 height: 1.5,
                               ),
                             ),
                             const SizedBox(height: 16),
-                            Divider(color: Colors.white.withValues(alpha: 0.1)),
+                            Divider(color: context.tokens.divider),
                             const SizedBox(height: 8),
                             Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.calendar_today,
                                   size: 12,
-                                  color: AppColors.slate400,
+                                  color: context.tokens.textTertiary,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   "${entry.date.day}/${entry.date.month}",
-                                  style: const TextStyle(
-                                    color: AppColors.slate400,
+                                  style: TextStyle(
+                                    color: context.tokens.textTertiary,
                                     fontSize: 10,
                                   ),
                                 ),
@@ -666,8 +674,8 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                                   Expanded(
                                     child: Text(
                                       entry.location!.name,
-                                      style: const TextStyle(
-                                        color: AppColors.slate400,
+                                      style: TextStyle(
+                                        color: context.tokens.textTertiary,
                                         fontSize: 10,
                                         overflow: TextOverflow.ellipsis,
                                       ),

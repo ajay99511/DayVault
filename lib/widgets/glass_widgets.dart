@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../theme/app_tokens.dart';
 
 class GlassContainer extends StatelessWidget {
   /// Lower bound for the backdrop blur sigma (see [build]).
@@ -37,14 +38,21 @@ class GlassContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Pull frosted-glass defaults from the active theme so the surface adapts to
+    // light/dark automatically. Explicit [color]/[border]/[gradient] still win,
+    // and [opacity] is honored when a caller relies on it.
+    final tokens = context.tokens;
     final container = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: color ?? Colors.white.withValues(alpha: opacity),
+        color: color ??
+            (opacity == 0.05
+                ? tokens.surfaceGlassFill
+                : Colors.white.withValues(alpha: opacity)),
         borderRadius: BorderRadius.circular(borderRadius),
         border: border ??
             Border.all(
-              color: Colors.white.withValues(alpha: 0.1),
+              color: tokens.glassBorder,
               width: 1,
             ),
         gradient: gradient ??
@@ -52,8 +60,8 @@ class GlassContainer extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Colors.white.withValues(alpha: 0.07),
-                Colors.white.withValues(alpha: 0.03),
+                tokens.glassGradientHi,
+                tokens.glassGradientLo,
               ],
             ),
       ),

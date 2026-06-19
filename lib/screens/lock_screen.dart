@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 import '../config/constants.dart';
+import '../theme/motion.dart';
 import '../services/security_service.dart';
 import '../services/storage_service.dart';
 import '../utils/idle_timer.dart';
@@ -131,7 +132,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
         errorMessage = message;
       });
       HapticFeedback.mediumImpact();
-      _shakeController.forward(from: 0);
+      if (!Motion.reduceMotion(context)) _shakeController.forward(from: 0);
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
           setState(() {
@@ -166,6 +167,8 @@ class _LockScreenState extends ConsumerState<LockScreen>
   Future<void> _verifyPin() async {
     if (pin.length < SecurityConstants.pinLength) return;
 
+    // Capture before the async gap so we don't read context afterwards.
+    final reduceMotion = Motion.reduceMotion(context);
     final result = await _securityService.verifyPin(pin);
 
     if (result.success) {
@@ -187,8 +190,8 @@ class _LockScreenState extends ConsumerState<LockScreen>
         remainingLockoutSeconds = result.remainingLockoutSeconds;
       });
       HapticFeedback.mediumImpact();
-      _shakeController.forward(from: 0);
-      
+      if (!reduceMotion) _shakeController.forward(from: 0);
+
       if (result.success == false && result.remainingLockoutSeconds == null) {
         // Clear PIN after short delay if not locked out
         Future.delayed(const Duration(milliseconds: 800), () {

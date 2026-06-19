@@ -4,6 +4,7 @@ import '../services/storage_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../config/constants.dart';
+import '../theme/app_tokens.dart';
 import '../widgets/glass_widgets.dart';
 
 class IdentityScreen extends ConsumerStatefulWidget {
@@ -265,7 +266,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                               style: GoogleFonts.outfit(
                                 fontSize: 22,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.white,
+                                color: context.tokens.textPrimary,
                               ),
                             ),
                           ],
@@ -304,7 +305,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                           style: GoogleFonts.outfit(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: AppColors.slate400,
+                            color: context.tokens.textTertiary,
                             letterSpacing: 1.5,
                           ),
                         ),
@@ -477,7 +478,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                           Text(
                             item.name,
                             style: GoogleFonts.libreBaskerville(
-                              color: Colors.white,
+                              color: context.tokens.textPrimary,
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                             ),
@@ -488,7 +489,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                               child: Text(
                                 item.subtitle,
                                 style: GoogleFonts.outfit(
-                                  color: AppColors.slate400,
+                                  color: context.tokens.textSecondary,
                                   fontSize: 13,
                                 ),
                               ),
@@ -503,7 +504,8 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                 // Stars row
                 Row(
                   children: [
-                    _buildStarRow(item.rating, size: 22),
+                    _buildStarRow(item.rating,
+                        size: 22, emptyColor: context.tokens.textDisabled),
                     const SizedBox(width: 10),
                     Text(
                       item.rating.toStringAsFixed(1),
@@ -524,7 +526,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                     style: GoogleFonts.outfit(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.slate400,
+                      color: context.tokens.textTertiary,
                       letterSpacing: 1.5,
                     ),
                   ),
@@ -533,16 +535,14 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.04),
+                      color: context.tokens.surfaceGlassFill,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.06),
-                      ),
+                      border: Border.all(color: context.tokens.glassBorder),
                     ),
                     child: Text(
                       _isMasked ? '••••••••••••••••' : item.notes,
                       style: GoogleFonts.outfit(
-                        color: Colors.white70,
+                        color: context.tokens.textSecondary,
                         fontSize: 14,
                         height: 1.5,
                       ),
@@ -554,13 +554,13 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                 // Date
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today_rounded,
-                        size: 14, color: AppColors.slate400),
+                    Icon(Icons.calendar_today_rounded,
+                        size: 14, color: context.tokens.textTertiary),
                     const SizedBox(width: 6),
                     Text(
                       'Added ${_formatDate(item.dateAdded)}',
                       style: GoogleFonts.outfit(
-                        color: AppColors.slate400,
+                        color: context.tokens.textTertiary,
                         fontSize: 12,
                       ),
                     ),
@@ -695,13 +695,13 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                           style: GoogleFonts.outfit(
                             fontSize: 32,
                             fontWeight: FontWeight.w300,
-                            color: Colors.white,
+                            color: context.tokens.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 4),
-                        const Text(
+                        Text(
                           "The evolution of your taste.",
-                          style: TextStyle(color: AppColors.slate400),
+                          style: TextStyle(color: context.tokens.textTertiary),
                         ),
                       ],
                     ),
@@ -719,8 +719,9 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                               borderRadius: 20,
                               child: Row(
                                 children: [
-                                  const Icon(Icons.search,
-                                      color: AppColors.slate400, size: 18),
+                                  Icon(Icons.search,
+                                      color: context.tokens.textTertiary,
+                                      size: 18),
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: TextField(
@@ -729,11 +730,12 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                                       onChanged: (val) =>
                                           setState(() => _searchQuery = val),
                                       style: GoogleFonts.outfit(
-                                          color: Colors.white, fontSize: 14),
+                                          color: context.tokens.textPrimary,
+                                          fontSize: 14),
                                       decoration: InputDecoration(
                                         hintText: 'Search items...',
                                         hintStyle: GoogleFonts.outfit(
-                                            color: Colors.white54,
+                                            color: context.tokens.textTertiary,
                                             fontSize: 14),
                                         border: InputBorder.none,
                                         isDense: true,
@@ -746,8 +748,9 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                                         _searchCtrl.clear();
                                         setState(() => _searchQuery = '');
                                       },
-                                      child: const Icon(Icons.close,
-                                          color: AppColors.slate400, size: 16),
+                                      child: Icon(Icons.close,
+                                          color: context.tokens.textTertiary,
+                                          size: 16),
                                     ),
                                 ],
                               ),
@@ -779,8 +782,9 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                           ),
                           IconButton(
                             onPressed: () => _showCategoryDialog(),
-                            icon: const Icon(Icons.add_box_outlined,
-                                color: Colors.white),
+                            tooltip: 'New category',
+                            icon: Icon(Icons.add_box_outlined,
+                                color: context.tokens.textPrimary),
                           ),
                         ],
                         const SizedBox(width: 4),
@@ -797,12 +801,14 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.1),
+                              color: context.tokens.surfaceGlassFill,
                               shape: BoxShape.circle,
+                              border:
+                                  Border.all(color: context.tokens.glassBorder),
                             ),
                             child: Icon(
                               _isSearching ? Icons.close : Icons.search,
-                              color: Colors.white,
+                              color: context.tokens.textPrimary,
                               size: 20,
                             ),
                           ),
@@ -834,12 +840,13 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.category_outlined,
-                              size: 60, color: Colors.white24),
+                          Icon(Icons.category_outlined,
+                              size: 60, color: context.tokens.textDisabled),
                           const SizedBox(height: 16),
-                          const Text('No categories found',
+                          Text('No categories found',
                               style: TextStyle(
-                                  color: Colors.white54, fontSize: 16)),
+                                  color: context.tokens.textTertiary,
+                                  fontSize: 16)),
                           const SizedBox(height: 16),
                           TextButton(
                             onPressed: () => _showCategoryDialog(),
@@ -896,14 +903,16 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                                       ? "No matching items found."
                                       : "No favourites ranked yet.",
                                   style: GoogleFonts.outfit(
-                                      color: Colors.white38, fontSize: 16),
+                                      color: context.tokens.textTertiary,
+                                      fontSize: 16),
                                 ),
                                 if (!_isSearching) ...[
                                   const SizedBox(height: 6),
                                   Text(
                                     "Tap + to add your first ${cat.title.toLowerCase()} item",
                                     style: GoogleFonts.outfit(
-                                        color: Colors.white24, fontSize: 13),
+                                        color: context.tokens.textDisabled,
+                                        fontSize: 13),
                                   ),
                                   const SizedBox(height: 16),
                                   TextButton(
@@ -1059,7 +1068,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
           style: GoogleFonts.outfit(
             fontSize: 11,
             fontWeight: FontWeight.bold,
-            color: AppColors.slate400,
+            color: context.tokens.textTertiary,
             letterSpacing: 1.5,
           ),
         ),
@@ -1067,21 +1076,21 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
         TextField(
           controller: controller,
           maxLines: maxLines,
-          style: GoogleFonts.outfit(color: Colors.white, fontSize: 15),
+          style: GoogleFonts.outfit(
+              color: context.tokens.textPrimary, fontSize: 15),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.outfit(color: Colors.white24, fontSize: 14),
+            hintStyle: GoogleFonts.outfit(
+                color: context.tokens.textDisabled, fontSize: 14),
             filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.05),
+            fillColor: context.tokens.surfaceGlassFill,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide:
-                  BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              borderSide: BorderSide(color: context.tokens.glassBorder),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide:
-                  BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+              borderSide: BorderSide(color: context.tokens.glassBorder),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
@@ -1130,7 +1139,8 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     );
   }
 
-  static Widget _buildStarRow(double rating, {double size = 16}) {
+  static Widget _buildStarRow(double rating,
+      {double size = 16, Color emptyColor = Colors.white24}) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: List.generate(5, (i) {
@@ -1143,7 +1153,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
               color: AppColors.amber500, size: size);
         } else {
           return Icon(Icons.star_outline_rounded,
-              color: Colors.white24, size: size);
+              color: emptyColor, size: size);
         }
       }),
     );
@@ -1224,7 +1234,7 @@ class _RankedItemTile extends StatelessWidget {
                     Text(
                       item.name,
                       style: GoogleFonts.libreBaskerville(
-                        color: Colors.white,
+                        color: context.tokens.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1235,7 +1245,7 @@ class _RankedItemTile extends StatelessWidget {
                         child: Text(
                           isMasked ? '••••••••' : item.subtitle,
                           style: GoogleFonts.outfit(
-                            color: AppColors.slate400,
+                            color: context.tokens.textSecondary,
                             fontSize: 12,
                           ),
                         ),
@@ -1244,7 +1254,7 @@ class _RankedItemTile extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: _IdentityScreenState._buildStarRow(item.rating,
-                            size: 14),
+                            size: 14, emptyColor: context.tokens.textDisabled),
                       ),
                   ],
                 ),
@@ -1255,7 +1265,7 @@ class _RankedItemTile extends StatelessWidget {
                 index: index,
                 child: Icon(
                   Icons.drag_handle_rounded,
-                  color: Colors.white.withValues(alpha: 0.2),
+                  color: context.tokens.textDisabled,
                   size: 22,
                 ),
               ),
@@ -1328,11 +1338,11 @@ class _SyncedTabBarState extends State<_SyncedTabBar> {
             padding: const EdgeInsets.symmetric(horizontal: 8),
             dividerColor: Colors.transparent,
             indicator: BoxDecoration(
-              color: Colors.white,
+              color: context.tokens.accent,
               borderRadius: BorderRadius.circular(20),
             ),
-            labelColor: Colors.black,
-            unselectedLabelColor: AppColors.slate400,
+            labelColor: Colors.white,
+            unselectedLabelColor: context.tokens.textTertiary,
             labelStyle: const TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 10,
@@ -1400,7 +1410,9 @@ class _StarRatingPicker extends StatelessWidget {
                   : isHalf
                       ? Icons.star_half_rounded
                       : Icons.star_outline_rounded,
-              color: isFull || isHalf ? AppColors.amber500 : Colors.white24,
+              color: isFull || isHalf
+                  ? AppColors.amber500
+                  : context.tokens.textDisabled,
               size: 36,
             ),
           ),

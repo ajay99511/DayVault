@@ -114,17 +114,20 @@ class JournalViewerScreen extends ConsumerWidget {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.arrow_back, color: Colors.white),
+                        tooltip: 'Back',
                         onPressed: () => Navigator.pop(context),
                       ),
                       Row(
                         children: [
                           IconButton(
                             icon: const Icon(Icons.edit, color: Colors.white54),
+                            tooltip: 'Edit entry',
                             onPressed: () => _openEditor(context, ref),
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline,
                                 color: AppColors.rose500),
+                            tooltip: 'Delete entry',
                             onPressed: () => _confirmDelete(context, ref),
                           ),
                         ],
