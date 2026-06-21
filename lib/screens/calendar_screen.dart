@@ -9,6 +9,7 @@ import '../widgets/glass_widgets.dart';
 import '../config/constants.dart';
 import '../theme/app_tokens.dart';
 import 'entry_editor.dart';
+import 'journal_viewer_screen.dart';
 
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
@@ -131,8 +132,28 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           Navigator.pop(ctx);
           _openEditor(date, type);
         },
+        onOpenEntry: (entry) => _openEntry(ctx, entry),
       ),
     );
+  }
+
+  /// Open a single entry from the day sheet in the full viewer (same screen the
+  /// Journal tab uses). [sheetCtx] is the bottom-sheet's context so we can
+  /// dismiss the now-stale sheet after an edit/delete.
+  Future<void> _openEntry(BuildContext sheetCtx, JournalEntry entry) async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => JournalViewerScreen(entry: entry),
+      ),
+    );
+    if (changed == true) {
+      // The entry was edited or deleted: refresh the calendar's data and close
+      // the sheet, which still holds the pre-edit snapshot. Reopening shows the
+      // updated day.
+      await _loadData();
+      if (sheetCtx.mounted) Navigator.pop(sheetCtx);
+    }
   }
 
   void _openEditor(DateTime date, EntryType type) {
@@ -476,12 +497,14 @@ class DayDetailSheet extends StatelessWidget {
   final DateTime date;
   final List<JournalEntry> entries;
   final Function(EntryType) onAddEntry;
+  final Function(JournalEntry) onOpenEntry;
 
   const DayDetailSheet(
       {super.key,
       required this.date,
       required this.entries,
-      required this.onAddEntry});
+      required this.onAddEntry,
+      required this.onOpenEntry});
 
   @override
   Widget build(BuildContext context) {
@@ -618,7 +641,9 @@ class DayDetailSheet extends StatelessWidget {
                                 Expanded(
                                   child: Padding(
                                     padding: const EdgeInsets.only(bottom: 24),
-                                    child: GlassContainer(
+                                    child: GestureDetector(
+                                      onTap: () => onOpenEntry(entry),
+                                      child: GlassContainer(
                                       padding: const EdgeInsets.all(16),
                                       borderRadius: 16,
                                       child: Column(
@@ -686,6 +711,7 @@ class DayDetailSheet extends StatelessWidget {
                                                   fontSize: 12)),
                                         ],
                                       ),
+                                    ),
                                     ),
                                   ),
                                 )

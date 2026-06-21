@@ -966,23 +966,53 @@ class _ImageSectionState extends State<ImageSection> {
         ),
         if (_images.isNotEmpty) ...[
           const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final previewHeight =
-                    (constraints.maxWidth * 9 / 16).clamp(120.0, 250.0);
-                return SizedBox(
-                  height: previewHeight,
-                  width: double.infinity,
-                  child: ImageThumbnailWidget(
-                    imageRef: _images.last,
-                    fit: BoxFit.cover,
-                    showTapToZoom: true,
-                  ),
-                );
-              },
-            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final previewHeight =
+                  (constraints.maxWidth * 9 / 16).clamp(120.0, 250.0);
+              return SizedBox(
+                height: previewHeight,
+                width: double.infinity,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: ImageThumbnailWidget(
+                          imageRef: _images.last,
+                          fit: BoxFit.cover,
+                          showTapToZoom: true,
+                        ),
+                      ),
+                    ),
+                    // Remove the previewed image. Reference-only: this drops the
+                    // image from the entry; the source file on the device is
+                    // never touched. Always available so single-image entries
+                    // can be cleared (the thumbnail strip below only appears
+                    // when there is more than one image).
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: GestureDetector(
+                          onTap: () => _removeAt(_images.length - 1),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(
+                              color: AppColors.rose500,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.close,
+                                size: 16, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
         if (_images.length > 1) ...[
