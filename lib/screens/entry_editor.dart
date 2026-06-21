@@ -2,10 +2,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:photo_manager/photo_manager.dart';
 import 'package:file_picker/file_picker.dart';
 import '../models/types.dart';
 import '../config/constants.dart';
@@ -961,8 +959,6 @@ class _ImageSectionState extends State<ImageSection> {
         const SizedBox(height: 8),
         Row(
           children: [
-            _addImageButton(Icons.photo_library, 'Gallery', _pickFromGallery),
-            const SizedBox(width: 8),
             _addImageButton(Icons.link, 'URL', _addFromUrl),
             const SizedBox(width: 8),
             _addImageButton(Icons.folder_open, 'Files', _pickFromFile),
@@ -1112,51 +1108,6 @@ class _ImageSectionState extends State<ImageSection> {
     widget.onChanged(list);
   }
 
-  /// Pick image from device gallery using photo_manager (no copy, persistent ID).
-  Future<void> _pickFromGallery() async {
-    try {
-      final PermissionState permState =
-          await PhotoManager.requestPermissionExtend();
-      if (!permState.isAuth) {
-        if (mounted) {
-          widget.onError(
-              'Gallery permission is required. Please enable it in settings.');
-        }
-        return;
-      }
-
-      final List<AssetPathEntity> paths = await PhotoManager.getAssetPathList(
-        type: RequestType.image,
-        hasAll: true,
-      );
-      if (paths.isEmpty) {
-        if (mounted) widget.onError('No images found in gallery.');
-        return;
-      }
-
-      final assets = await paths.first.getAssetListPaged(page: 0, size: 30);
-      if (assets.isEmpty) {
-        if (mounted) widget.onError('No images found in gallery.');
-        return;
-      }
-
-      if (!mounted) return;
-      final AssetEntity? selected = await showDialog<AssetEntity>(
-        context: context,
-        builder: (ctx) => _GalleryPickerDialog(assets: assets),
-      );
-
-      if (selected != null && mounted) {
-        widget.onChanged([..._images, createGalleryImageRef(selected.id)]);
-      }
-    } catch (e) {
-      debugPrint('Gallery pick failed: $e');
-      if (mounted) {
-        widget.onError('Failed to pick image from gallery. Please try again.');
-      }
-    }
-  }
-
   /// Add image from URL with validation.
   Future<void> _addFromUrl() async {
     final urlCtrl = TextEditingController();
@@ -1258,95 +1209,5 @@ class _ImageSectionState extends State<ImageSection> {
         widget.onError('Failed to pick image file. Please try again.');
       }
     }
-  }
-}
-
-/// Simple gallery picker dialog showing thumbnails in a grid.
-class _GalleryPickerDialog extends StatefulWidget {
-  final List<AssetEntity> assets;
-  const _GalleryPickerDialog({required this.assets});
-
-  @override
-  State<_GalleryPickerDialog> createState() => _GalleryPickerDialogState();
-}
-
-class _GalleryPickerDialogState extends State<_GalleryPickerDialog> {
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: AppColors.slate900,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: SizedBox(
-        width: MediaQuery.of(context).size.width * 0.9,
-        height: MediaQuery.of(context).size.height * 0.7,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Select Image',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white54),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.all(8),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  crossAxisSpacing: 4,
-                  mainAxisSpacing: 4,
-                ),
-                itemCount: widget.assets.length,
-                itemBuilder: (context, index) {
-                  final asset = widget.assets[index];
-                  return GestureDetector(
-                    onTap: () => Navigator.pop(context, asset),
-                    child: FutureBuilder<Uint8List?>(
-                      future: asset.thumbnailDataWithSize(
-                        const ThumbnailSize.square(150),
-                      ),
-                      builder: (context, snapshot) {
-                        if (snapshot.hasData && snapshot.data != null) {
-                          return Image.memory(
-                            snapshot.data!,
-                            fit: BoxFit.cover,
-                          );
-                        }
-                        return Container(
-                          color: AppColors.slate800,
-                          child: const Center(
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.indigo500,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

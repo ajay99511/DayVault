@@ -99,15 +99,6 @@ Future<(bool, String?)> validateImageUrl(
   }
 }
 
-/// Helper to create an ImageReference from a gallery asset ID.
-ImageReference createGalleryImageRef(String assetId, {String? displayName}) {
-  return ImageReference(
-    source: assetId,
-    type: ImageSourceType.galleryAsset,
-    displayName: displayName,
-  );
-}
-
 /// Helper to create an ImageReference from a web URL.
 ImageReference createUrlImageRef(String url, {String? displayName}) {
   return ImageReference(
