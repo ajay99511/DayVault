@@ -1,7 +1,6 @@
 // ignore_for_file: use_build_context_synchronously
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
@@ -22,6 +21,9 @@ class EntryEditor extends ConsumerStatefulWidget {
   final Function(JournalEntry) onSave;
   final VoidCallback onCancel;
 
+  /// Existing tags from the journal, surfaced as quick-add suggestions.
+  final List<String> tagSuggestions;
+
   const EntryEditor({
     super.key,
     required this.initialDate,
@@ -29,6 +31,7 @@ class EntryEditor extends ConsumerStatefulWidget {
     this.initialEntry,
     required this.onSave,
     required this.onCancel,
+    this.tagSuggestions = const [],
   });
 
   @override
@@ -37,8 +40,10 @@ class EntryEditor extends ConsumerStatefulWidget {
 
 class _EntryEditorState extends ConsumerState<EntryEditor> {
   late EntryType type;
+  late DateTime selectedDate;
   late final TextEditingController _headlineCtrl;
   late final TextEditingController _contentCtrl;
+  late final TextEditingController _locationCtrl;
   late Mood selectedMood;
   String? selectedFeeling;
   late TimeBucket selectedBucket;
@@ -58,8 +63,11 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
   void initState() {
     super.initState();
     type = widget.initialEntry?.type ?? widget.initialType;
+    selectedDate = widget.initialEntry?.date ?? widget.initialDate;
     _headlineCtrl = TextEditingController(text: widget.initialEntry?.headline ?? '');
     _contentCtrl = TextEditingController(text: widget.initialEntry?.content ?? '');
+    _locationCtrl = TextEditingController(
+        text: widget.initialEntry?.location?.name ?? '');
     selectedMood = widget.initialEntry?.mood ?? Mood.happy;
     selectedFeeling = widget.initialEntry?.feeling;
     selectedBucket = widget.initialEntry?.timeBucket ?? TimeBucket.morning;
@@ -82,6 +90,22 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
   void _setupAutoSave() {
     _headlineCtrl.addListener(_onTextChanged);
     _contentCtrl.addListener(_onTextChanged);
+    _locationCtrl.addListener(_onTextChanged);
+  }
+
+  /// Build the entry's location from the text field. Returns null when blank so
+  /// an empty field clears the location. Latitude/longitude are preserved from
+  /// the entry being edited (0,0 for name-only entries) — coordinate capture is
+  /// a future enhancement.
+  LocationData? _buildLocation() {
+    final name = _locationCtrl.text.trim();
+    if (name.isEmpty) return null;
+    final existing = widget.initialEntry?.location;
+    return LocationData(
+      name: name,
+      latitude: existing?.latitude ?? 0,
+      longitude: existing?.longitude ?? 0,
+    );
   }
   
   void _onTextChanged() => _scheduleAutoSave();
@@ -105,11 +129,12 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
       final draftData = {
         'id': _draftId,
         'type': type.index,
-        'date': widget.initialDate.toIso8601String(),
+        'date': selectedDate.toIso8601String(),
         'headline': _headlineCtrl.text,
         'content': _contentCtrl.text,
         'mood': selectedMood.index,
         'feeling': selectedFeeling,
+        'location': _buildLocation()?.toJson(),
         'timeBucket': selectedBucket.index,
         'images': images.map((img) => img.toJson()).toList(),
         'tags': tags,
@@ -119,7 +144,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
 
       final draftJson = jsonEncode(draftData);
 
-      // Store draft as plain text JSON (no encryption)
+      // StorageService.saveDraft encrypts the payload at rest in secure storage.
       await ref
           .read(storageServiceProvider)
           .saveDraft(_draftId!, draftJson);
@@ -160,10 +185,16 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
         if (mounted) {
           setState(() {
             type = EntryType.values[draftData['type'] as int];
+            final draftDate = draftData['date'] as String?;
+            if (draftDate != null) {
+              selectedDate = DateTime.tryParse(draftDate) ?? selectedDate;
+            }
             _headlineCtrl.text = draftData['headline'] as String;
             _contentCtrl.text = draftData['content'] as String;
             selectedMood = Mood.values[draftData['mood'] as int];
             selectedFeeling = draftData['feeling'] as String?;
+            final loc = draftData['location'] as Map<String, dynamic>?;
+            _locationCtrl.text = loc != null ? (loc['name'] as String? ?? '') : '';
             selectedBucket = TimeBucket.values[draftData['timeBucket'] as int];
             images = _parseDraftImages(draftData['images'] as List?);
             tags = (draftData['tags'] as List?)
@@ -219,11 +250,12 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
       final entry = JournalEntry(
         id: widget.initialEntry?.id ?? _draftId ?? DateTime.now().millisecondsSinceEpoch.toString(),
         type: type,
-        date: widget.initialDate,
+        date: selectedDate,
         headline: _headlineCtrl.text,
         content: _contentCtrl.text,
         mood: selectedMood,
         feeling: selectedFeeling,
+        location: _buildLocation(),
         timeBucket: type == EntryType.event ? selectedBucket : null,
         images: images,
         tags: tags,
@@ -262,8 +294,10 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
     _autoSaveTimer?.cancel();
     _headlineCtrl.removeListener(_onTextChanged);
     _contentCtrl.removeListener(_onTextChanged);
+    _locationCtrl.removeListener(_onTextChanged);
     _headlineCtrl.dispose();
     _contentCtrl.dispose();
+    _locationCtrl.dispose();
     super.dispose();
   }
 
@@ -305,14 +339,26 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 20),
-                        // Date
-                        Text(
-                          "${_getWeekday(widget.initialDate.weekday)}, ${widget.initialDate.day}",
-                          style: const TextStyle(
-                            color: AppColors.slate400,
-                            letterSpacing: 2,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                        // Date — tap to change (backfill / correct the date).
+                        GestureDetector(
+                          onTap: _pickDate,
+                          behavior: HitTestBehavior.opaque,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                "${_getWeekday(selectedDate.weekday)}, ${selectedDate.day}",
+                                style: const TextStyle(
+                                  color: AppColors.slate400,
+                                  letterSpacing: 2,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Icon(Icons.edit_calendar,
+                                  size: 14, color: AppColors.slate400),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -373,8 +419,11 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
                         ),
 
                         const SizedBox(height: 30),
+                        _buildLocationField(),
+                        const SizedBox(height: 30),
                         TagPicker(
                           tags: tags,
+                          suggestions: widget.tagSuggestions,
                           onChanged: (next) {
                             setState(() => tags = next);
                             _scheduleAutoSave();
@@ -416,6 +465,44 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
   String _getWeekday(int weekday) {
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     return days[weekday - 1];
+  }
+
+  /// Let the user change the entry's date (e.g. backfilling a past day). The
+  /// time-of-day component is preserved so entry ordering stays stable. The
+  /// picker is forced dark to match the always-dark editor surface.
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(2000),
+      // Allow today plus a little headroom for near-future events without
+      // tripping the picker's initialDate<=lastDate assertion.
+      lastDate: selectedDate.isAfter(now) ? selectedDate : now,
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: AppColors.indigo500,
+            onPrimary: Colors.white,
+            surface: AppColors.slate900,
+            onSurface: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked == null) return;
+    setState(() {
+      selectedDate = DateTime(
+        picked.year,
+        picked.month,
+        picked.day,
+        selectedDate.hour,
+        selectedDate.minute,
+        selectedDate.second,
+      );
+    });
+    _scheduleAutoSave();
   }
 
   Widget _buildHeader() {
@@ -490,18 +577,72 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
     );
   }
 
+  /// Free-form place input. Backs the `location` field that the journal card
+  /// and viewer already display.
+  Widget _buildLocationField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Location',
+          style: TextStyle(
+            color: AppColors.slate400,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _locationCtrl,
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          textInputAction: TextInputAction.done,
+          decoration: InputDecoration(
+            hintText: 'Add a place…',
+            hintStyle: const TextStyle(color: Colors.white38),
+            isDense: true,
+            prefixIcon: const Icon(Icons.location_on_outlined,
+                color: AppColors.emerald500, size: 18),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildStoryFeelings() {
-    return SizedBox(
-      height: 40,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: essentialFeelings.map((f) {
-          bool isSel = selectedFeeling == f;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: GestureDetector(
-              onTap: () => setState(() => selectedFeeling = f),
-              child: AnimatedContainer(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Mood is now editable for stories too (previously only events could
+        // set it, so every story silently defaulted to "happy").
+        MoodSelector(
+          selected: selectedMood,
+          onChanged: (m) {
+            setState(() => selectedMood = m);
+            _scheduleAutoSave();
+          },
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 40,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: essentialFeelings.map((f) {
+              bool isSel = selectedFeeling == f;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  // Tap again to clear the feeling.
+                  onTap: () {
+                    setState(() => selectedFeeling = isSel ? null : f);
+                    _scheduleAutoSave();
+                  },
+                  child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -513,19 +654,21 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
                       : Colors.white.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(
-                  f,
-                  style: TextStyle(
-                    color: isSel ? AppColors.indigo500 : Colors.white70,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
+                    child: Text(
+                      f,
+                      style: TextStyle(
+                        color: isSel ? AppColors.indigo500 : Colors.white70,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 
@@ -565,7 +708,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
                       ),
                     ),
                     Text(
-                      selectedBucket.toString().split('.').last,
+                      timeBucketLabel(selectedBucket),
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -623,80 +766,87 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
           child: Container(color: Colors.black87),
         ),
         Center(
-          child: GlassContainer(
-            borderRadius: 32,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  "Select Time",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: 250,
-                  height: 250,
-                  child: CustomPaint(
-                    painter: RadialTimePickerPainter(),
-                    child: GestureDetector(
-                      onPanDown: (details) {
-                        setState(() {
-                          selectedBucket = TimeBucket.evening;
-                          showTimePicker = false;
-                        });
-                      },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: GlassContainer(
+              borderRadius: 32,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      "When did it happen?",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 20),
+                    ...TimeBucket.values.map(_buildTimeBucketOption),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
       ],
     );
   }
-}
 
-class RadialTimePickerPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 40;
-
-    const colors = [
-      AppColors.indigo500,
-      AppColors.rose500,
-      AppColors.amber500,
-      AppColors.emerald500,
-      AppColors.fuchsia500,
-      AppColors.slate400,
-    ];
-
-    double startAngle = -math.pi / 2;
-    const sweepAngle = 2 * math.pi / 6;
-
-    for (int i = 0; i < 6; i++) {
-      paint.color = colors[i].withValues(alpha: 0.8);
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: radius - 20),
-        startAngle,
-        sweepAngle - 0.1,
-        false,
-        paint,
-      );
-      startAngle += sweepAngle;
-    }
+  /// A single selectable row in the time-of-day picker.
+  Widget _buildTimeBucketOption(TimeBucket bucket) {
+    final isSel = selectedBucket == bucket;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            selectedBucket = bucket;
+            showTimePicker = false;
+          });
+          _scheduleAutoSave();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: isSel
+                ? AppColors.emerald500.withValues(alpha: 0.2)
+                : Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSel ? AppColors.emerald500 : Colors.white12,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                timeBucketIcon(bucket),
+                size: 18,
+                color: isSel ? AppColors.emerald500 : Colors.white54,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                timeBucketLabel(bucket),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: isSel ? FontWeight.bold : FontWeight.w500,
+                  fontSize: 14,
+                ),
+              ),
+              const Spacer(),
+              if (isSel)
+                const Icon(Icons.check,
+                    size: 18, color: AppColors.emerald500),
+            ],
+          ),
+        ),
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 /// Small auto-save status chip shown in the headline field's suffix.
@@ -770,7 +920,17 @@ class MoodSelector extends StatelessWidget {
 class TagPicker extends StatefulWidget {
   final List<String> tags;
   final ValueChanged<List<String>> onChanged;
-  const TagPicker({super.key, required this.tags, required this.onChanged});
+
+  /// Known tags from the rest of the journal, offered as quick-add suggestions
+  /// so the user reuses an existing tag instead of creating a near-duplicate.
+  final List<String> suggestions;
+
+  const TagPicker({
+    super.key,
+    required this.tags,
+    required this.onChanged,
+    this.suggestions = const [],
+  });
 
   @override
   State<TagPicker> createState() => _TagPickerState();
@@ -785,21 +945,36 @@ class _TagPickerState extends State<TagPicker> {
     super.dispose();
   }
 
-  void _add() {
-    final raw = _ctrl.text.trim();
-    if (raw.isEmpty) return;
-    // Normalize: lower-case, collapse whitespace; ignore duplicates.
-    final tag = raw.replaceAll(RegExp(r'\s+'), ' ');
+  void _addTag(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return;
+    // Normalize: collapse whitespace; ignore case-insensitive duplicates.
+    final tag = trimmed.replaceAll(RegExp(r'\s+'), ' ');
     final exists =
         widget.tags.any((t) => t.toLowerCase() == tag.toLowerCase());
     if (!exists) {
       widget.onChanged([...widget.tags, tag]);
     }
     _ctrl.clear();
+    setState(() {}); // refresh suggestion list
   }
+
+  void _add() => _addTag(_ctrl.text);
 
   void _remove(String tag) {
     widget.onChanged(widget.tags.where((t) => t != tag).toList());
+  }
+
+  /// Suggestions not yet added, matching the current input substring. Capped so
+  /// the editor never floods with chips.
+  List<String> _visibleSuggestions() {
+    final added = widget.tags.map((t) => t.toLowerCase()).toSet();
+    final q = _ctrl.text.trim().toLowerCase();
+    return widget.suggestions
+        .where((s) => !added.contains(s.toLowerCase()))
+        .where((s) => q.isEmpty || s.toLowerCase().contains(q))
+        .take(8)
+        .toList();
   }
 
   @override
@@ -825,6 +1000,8 @@ class _TagPickerState extends State<TagPicker> {
                 style: const TextStyle(color: Colors.white, fontSize: 14),
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _add(),
+                // Re-filter suggestions as the user types.
+                onChanged: (_) => setState(() {}),
                 decoration: InputDecoration(
                   hintText: 'Add a tag…',
                   hintStyle: const TextStyle(color: Colors.white38),
@@ -845,6 +1022,26 @@ class _TagPickerState extends State<TagPicker> {
             ),
           ],
         ),
+        // Quick-add suggestions drawn from the user's existing tags.
+        if (_visibleSuggestions().isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _visibleSuggestions().map((s) {
+              return ActionChip(
+                label: Text(s,
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 12)),
+                avatar: const Icon(Icons.add, size: 14, color: Colors.white54),
+                backgroundColor: Colors.white.withValues(alpha: 0.05),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+                onPressed: () => _addTag(s),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              );
+            }).toList(),
+          ),
+        ],
         if (widget.tags.isNotEmpty) ...[
           const SizedBox(height: 8),
           Wrap(

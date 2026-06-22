@@ -8,10 +8,32 @@ import '../widgets/image_widgets.dart';
 import '../config/constants.dart';
 import 'entry_editor.dart';
 
-class JournalViewerScreen extends ConsumerWidget {
+class JournalViewerScreen extends ConsumerStatefulWidget {
   final JournalEntry entry;
 
   const JournalViewerScreen({super.key, required this.entry});
+
+  @override
+  ConsumerState<JournalViewerScreen> createState() =>
+      _JournalViewerScreenState();
+}
+
+class _JournalViewerScreenState extends ConsumerState<JournalViewerScreen> {
+  // Local mutable copy so an edit reflects in place rather than popping the
+  // screen back to the list.
+  late JournalEntry _entry;
+
+  // Whether anything changed this session. Returned on back so the calendar's
+  // day sheet (which holds a pre-edit snapshot) can close/refresh.
+  bool _changed = false;
+
+  JournalEntry get entry => _entry;
+
+  @override
+  void initState() {
+    super.initState();
+    _entry = widget.entry;
+  }
 
   void _confirmDelete(BuildContext context, WidgetRef ref) {
     showDialog(
@@ -37,6 +59,8 @@ class JournalViewerScreen extends ConsumerWidget {
               await ref
                   .read(storageServiceProvider)
                   .deleteJournalEntry(entry.id);
+              // Refresh any journal-backed screens still alive.
+              ref.read(journalRevisionProvider.notifier).bump();
               if (context.mounted) {
                 Navigator.pop(context,
                     true); // Close screen, return true to signify deletion
@@ -62,20 +86,21 @@ class JournalViewerScreen extends ConsumerWidget {
         onCancel: () => Navigator.pop(ctx),
         onSave: (updatedEntry) async {
           await ref.read(storageServiceProvider).saveJournalEntry(updatedEntry);
-          if (ctx.mounted) {
-            Navigator.pop(ctx); // Close editor
-            // Pops the viewer screen returning the updated entry so the previous screen can refresh
-            // Alternatively, we could update the state of the ViewerScreen itself if it were Stateful,
-            // but popping achieves a clean refresh flow.
-            Navigator.pop(context, true);
-          }
+          // Refresh any journal-backed screens still alive.
+          ref.read(journalRevisionProvider.notifier).bump();
+          if (!ctx.mounted) return;
+          Navigator.pop(ctx); // Close editor, stay on the updated viewer.
+          setState(() {
+            _entry = updatedEntry;
+            _changed = true;
+          });
         },
       ),
     );
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final isStory = entry.type == EntryType.story;
     final color = isStory ? AppColors.indigo500 : AppColors.emerald500;
 
@@ -115,7 +140,9 @@ class JournalViewerScreen extends ConsumerWidget {
                       IconButton(
                         icon: const Icon(Icons.arrow_back, color: Colors.white),
                         tooltip: 'Back',
-                        onPressed: () => Navigator.pop(context),
+                        // Report whether anything changed so the calendar's day
+                        // sheet can close its stale snapshot.
+                        onPressed: () => Navigator.pop(context, _changed),
                       ),
                       Row(
                         children: [
@@ -262,11 +289,10 @@ class JournalViewerScreen extends ConsumerWidget {
                                       isStory
                                           ? (entry.feeling ?? 'STORY')
                                               .toUpperCase()
-                                          : (entry.timeBucket
-                                                      ?.toString()
-                                                      .split('.')
-                                                      .last ??
-                                                  'EVENT')
+                                          : (entry.timeBucket != null
+                                                  ? timeBucketLabel(
+                                                      entry.timeBucket!)
+                                                  : 'EVENT')
                                               .toUpperCase(),
                                       style: TextStyle(
                                         color: color,

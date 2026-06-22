@@ -148,10 +148,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       ),
     );
     if (changed == true) {
-      // The entry was edited or deleted: refresh the calendar's data and close
-      // the sheet, which still holds the pre-edit snapshot. Reopening shows the
-      // updated day.
-      await _loadData();
+      // The entry was edited or deleted. The viewer already bumped the shared
+      // journal revision, so this screen's listener reloads _entriesByDay; we
+      // just close the sheet, which still holds the pre-edit snapshot.
       if (sheetCtx.mounted) Navigator.pop(sheetCtx);
     }
   }
@@ -167,7 +166,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         onCancel: () => Navigator.pop(ctx),
         onSave: (entry) async {
           await ref.read(storageServiceProvider).saveJournalEntry(entry);
-          await _loadData();
+          // Bump the shared revision so this screen (via its listener) and any
+          // other journal-backed screen refresh consistently.
+          ref.read(journalRevisionProvider.notifier).bump();
           if (ctx.mounted) Navigator.pop(ctx);
         },
       ),
@@ -176,6 +177,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Refresh the month grid whenever a journal entry changes anywhere.
+    ref.listen(journalRevisionProvider, (_, __) => _loadData());
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: ResponsiveCenter(

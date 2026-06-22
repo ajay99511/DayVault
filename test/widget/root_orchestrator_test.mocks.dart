@@ -128,6 +128,16 @@ class MockStorageService extends _i1.Mock implements _i5.StorageService {
       ) as _i6.Future<List<_i3.JournalEntry>>);
 
   @override
+  int journalCount() => (super.noSuchMethod(
+        Invocation.method(
+          #journalCount,
+          [],
+        ),
+        returnValue: 0,
+        returnValueForMissingStub: 0,
+      ) as int);
+
+  @override
   _i6.Future<void> saveJournalEntry(_i3.JournalEntry? entry) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -177,6 +187,19 @@ class MockStorageService extends _i1.Mock implements _i5.StorageService {
       ) as _i6.Future<_i2.PagedResult<_i3.JournalEntry>>);
 
   @override
+  _i6.Future<List<_i3.JournalEntry>> getOnThisDay(DateTime? reference) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getOnThisDay,
+          [reference],
+        ),
+        returnValue:
+            _i6.Future<List<_i3.JournalEntry>>.value(<_i3.JournalEntry>[]),
+        returnValueForMissingStub:
+            _i6.Future<List<_i3.JournalEntry>>.value(<_i3.JournalEntry>[]),
+      ) as _i6.Future<List<_i3.JournalEntry>>);
+
+  @override
   _i6.Future<void> deleteJournalEntry(String? entryId) => (super.noSuchMethod(
         Invocation.method(
           #deleteJournalEntry,
@@ -197,6 +220,28 @@ class MockStorageService extends _i1.Mock implements _i5.StorageService {
         returnValueForMissingStub:
             _i6.Future<_i7.ObjectBoxJournalEntry?>.value(),
       ) as _i6.Future<_i7.ObjectBoxJournalEntry?>);
+
+  @override
+  _i6.Future<int?> getObjectBoxIdForEntry(String? entryId) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #getObjectBoxIdForEntry,
+          [entryId],
+        ),
+        returnValue: _i6.Future<int?>.value(),
+        returnValueForMissingStub: _i6.Future<int?>.value(),
+      ) as _i6.Future<int?>);
+
+  @override
+  _i6.Future<void> putManyJournalEntries(List<_i3.JournalEntry>? entries) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #putManyJournalEntries,
+          [entries],
+        ),
+        returnValue: _i6.Future<void>.value(),
+        returnValueForMissingStub: _i6.Future<void>.value(),
+      ) as _i6.Future<void>);
 
   @override
   _i6.Future<List<_i3.RankingCategory>> getFavoriteRankings() =>

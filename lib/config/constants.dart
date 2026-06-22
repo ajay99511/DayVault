@@ -33,6 +33,44 @@ const Map<Mood, String> moodIcons = {
   Mood.creative: '🎨',
 };
 
+/// Human-readable label for a [TimeBucket] (e.g. earlyMorning -> "Early
+/// Morning"). Used by the editor's time picker and the read-only displays so
+/// they never surface raw enum text like "earlyMorning".
+String timeBucketLabel(TimeBucket bucket) {
+  switch (bucket) {
+    case TimeBucket.midnight:
+      return 'Midnight';
+    case TimeBucket.earlyMorning:
+      return 'Early Morning';
+    case TimeBucket.morning:
+      return 'Morning';
+    case TimeBucket.afternoon:
+      return 'Afternoon';
+    case TimeBucket.evening:
+      return 'Evening';
+    case TimeBucket.night:
+      return 'Night';
+  }
+}
+
+/// Representative icon for a [TimeBucket], shown in the time picker.
+IconData timeBucketIcon(TimeBucket bucket) {
+  switch (bucket) {
+    case TimeBucket.midnight:
+      return Icons.bedtime;
+    case TimeBucket.earlyMorning:
+      return Icons.wb_twilight;
+    case TimeBucket.morning:
+      return Icons.wb_sunny;
+    case TimeBucket.afternoon:
+      return Icons.light_mode;
+    case TimeBucket.evening:
+      return Icons.nights_stay;
+    case TimeBucket.night:
+      return Icons.nightlight_round;
+  }
+}
+
 const List<String> essentialFeelings = [
   "Grateful",
   "Inspired",

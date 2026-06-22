@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
+import '../models/paged_result.dart';
 import '../services/storage_service.dart';
 import '../utils/debouncer.dart';
 import '../widgets/glass_widgets.dart';
@@ -25,12 +26,22 @@ class JournalScreen extends ConsumerStatefulWidget {
     String query = '',
     bool spotlightOnly = false,
     Set<String> selectedTags = const {},
+    Set<EntryType> selectedTypes = const {},
+    Set<Mood> selectedMoods = const {},
   }) {
     final q = query.trim().toLowerCase();
     final wanted = selectedTags.map((t) => t.toLowerCase()).toSet();
 
     return entries.where((e) {
       if (spotlightOnly && !e.isSpotlight) return false;
+
+      if (selectedTypes.isNotEmpty && !selectedTypes.contains(e.type)) {
+        return false;
+      }
+
+      if (selectedMoods.isNotEmpty && !selectedMoods.contains(e.mood)) {
+        return false;
+      }
 
       if (wanted.isNotEmpty) {
         final entryTags = e.tags.map((t) => t.toLowerCase()).toSet();
@@ -71,6 +82,21 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
   bool isLoading = true;
   String? loadError;
 
+  // Pagination state. The list is loaded a page at a time while browsing
+  // (no filter). When a search/filter is active we load the full set once so
+  // results are correct across the entire journal, then filter in memory.
+  static const int _pageSize = 20;
+  PaginationCursor? _cursor;
+  bool _hasMore = false;
+  bool _isLoadingMore = false;
+  bool _showingFullSet = false;
+  int _totalCount = 0;
+  final ScrollController _scrollController = ScrollController();
+
+  // "On this day" — past-year memories for today's calendar day.
+  List<JournalEntry> _onThisDay = const [];
+  bool _onThisDayDismissed = false;
+
   // Search state
   bool _isSearching = false;
   final TextEditingController _searchCtrl = TextEditingController();
@@ -79,13 +105,27 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
   // Filter state
   bool _spotlightOnly = false;
   final Set<String> _selectedTags = {};
+  final Set<EntryType> _selectedTypes = {};
+  final Set<Mood> _selectedMoods = {};
   final Debouncer _searchDebouncer =
       Debouncer(delay: const Duration(milliseconds: 300));
+
+  /// True when any search/filter is active — in this mode we need the complete
+  /// entry set for correct results and disable lazy pagination.
+  bool get _isFilterActive =>
+      _searchQuery.trim().isNotEmpty ||
+      _spotlightOnly ||
+      _selectedTags.isNotEmpty ||
+      _selectedTypes.isNotEmpty ||
+      _selectedMoods.isNotEmpty;
 
   /// Debounced search update — coalesces rapid keystrokes into one rebuild.
   void _onSearchChanged(String value) {
     _searchDebouncer.run(() {
-      if (mounted) setState(() => _searchQuery = value);
+      if (mounted) {
+        setState(() => _searchQuery = value);
+        _syncLoadMode();
+      }
     });
   }
 
@@ -94,31 +134,85 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
     _searchDebouncer.cancel();
     _searchCtrl.clear();
     setState(() => _searchQuery = '');
+    _syncLoadMode();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+    _reload();
+    _loadOnThisDay();
+  }
+
+  /// Load past-year memories for today. Best-effort: failures just hide the
+  /// banner and are never surfaced as errors.
+  Future<void> _loadOnThisDay() async {
+    try {
+      final memories =
+          await ref.read(storageServiceProvider).getOnThisDay(DateTime.now());
+      if (mounted) setState(() => _onThisDay = memories);
+    } catch (e, st) {
+      debugPrint('On this day load failed: $e\n$st');
+    }
   }
 
   @override
   void dispose() {
     _searchDebouncer.dispose();
     _searchCtrl.dispose();
+    _scrollController
+      ..removeListener(_onScroll)
+      ..dispose();
     super.dispose();
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
+  /// Append the next page when the user scrolls within ~600px of the bottom.
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - 600) {
+      _loadNextPage();
+    }
   }
 
-  Future<void> _loadData() async {
+  /// Reload from scratch using whichever mode the current filter state implies.
+  Future<void> _reload() async {
+    if (_isFilterActive) {
+      await _loadFullSet();
+    } else {
+      await _loadFirstPage();
+    }
+  }
+
+  /// Switch between paged browsing and full-set filtering when the active
+  /// filter state changes. Re-filtering within the full set (e.g. extra
+  /// keystrokes) needs no reload — only the mode transitions do.
+  void _syncLoadMode() {
+    if (_isFilterActive && !_showingFullSet) {
+      _loadFullSet();
+    } else if (!_isFilterActive && _showingFullSet) {
+      _loadFirstPage();
+    }
+  }
+
+  Future<void> _loadFirstPage() async {
+    setState(() {
+      isLoading = true;
+      loadError = null;
+    });
     try {
-      final data = await ref.read(storageServiceProvider).getJournal();
-      if (mounted) {
-        setState(() {
-          entries = data;
-          isLoading = false;
-          loadError = null;
-        });
-      }
+      final page =
+          await ref.read(storageServiceProvider).getJournalPage(_pageSize);
+      if (!mounted) return;
+      setState(() {
+        entries = page.items;
+        _cursor = page.nextCursor;
+        _hasMore = page.nextCursor != null;
+        _showingFullSet = false;
+        _totalCount = ref.read(storageServiceProvider).journalCount();
+        isLoading = false;
+      });
     } catch (e, st) {
       debugPrint('Journal loading failed: $e\n$st');
       if (mounted) {
@@ -130,6 +224,61 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
     }
   }
 
+  Future<void> _loadFullSet() async {
+    setState(() {
+      isLoading = true;
+      loadError = null;
+    });
+    try {
+      final data = await ref.read(storageServiceProvider).getJournal();
+      if (!mounted) return;
+      setState(() {
+        entries = data;
+        _cursor = null;
+        _hasMore = false;
+        _showingFullSet = true;
+        _totalCount = data.length;
+        isLoading = false;
+      });
+    } catch (e, st) {
+      debugPrint('Journal loading failed: $e\n$st');
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          loadError = e.toString();
+        });
+      }
+    }
+  }
+
+  /// Append the next page while browsing. No-op while filtering or when there
+  /// is nothing more to load. On failure the list and cursor are preserved so
+  /// scrolling again retries (Req 6.7).
+  Future<void> _loadNextPage() async {
+    if (_isLoadingMore || !_hasMore || _showingFullSet) return;
+    setState(() => _isLoadingMore = true);
+    try {
+      final page = await ref
+          .read(storageServiceProvider)
+          .getJournalPage(_pageSize, _cursor);
+      if (!mounted) return;
+      setState(() {
+        entries = [...entries, ...page.items];
+        _cursor = page.nextCursor;
+        _hasMore = page.nextCursor != null;
+        _isLoadingMore = false;
+      });
+    } catch (e, st) {
+      debugPrint('Journal page load failed: $e\n$st');
+      if (mounted) {
+        setState(() => _isLoadingMore = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load more entries.')),
+        );
+      }
+    }
+  }
+
   void _openEditor() {
     showModalBottomSheet(
       context: context,
@@ -137,10 +286,13 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => EntryEditor(
         initialDate: DateTime.now(),
+        tagSuggestions: JournalScreen.availableTags(entries),
         onCancel: () => Navigator.pop(ctx),
         onSave: (entry) async {
           await ref.read(storageServiceProvider).saveJournalEntry(entry);
-          await _loadData();
+          // Notify all journal-backed screens (including this one, via the
+          // revision listener in build) to refresh.
+          ref.read(journalRevisionProvider.notifier).bump();
           if (ctx.mounted) Navigator.pop(ctx);
         },
       ),
@@ -149,12 +301,21 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // A mutation anywhere (this screen, the calendar, or the viewer) bumps the
+    // revision — reload so the list never shows stale data.
+    ref.listen(journalRevisionProvider, (_, __) {
+      _reload();
+      _loadOnThisDay();
+    });
+
     // Filtered entries
     final filteredEntries = JournalScreen.filterEntries(
       entries,
       query: _searchQuery,
       spotlightOnly: _spotlightOnly,
       selectedTags: _selectedTags,
+      selectedTypes: _selectedTypes,
+      selectedMoods: _selectedMoods,
     );
     final availableTags = JournalScreen.availableTags(entries);
 
@@ -238,7 +399,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                               ),
                               borderRadius: 20,
                               child: Text(
-                                "${entries.length} Memories",
+                                "$_totalCount Memories",
                                 style: TextStyle(
                                   color: context.tokens.textTertiary,
                                   fontSize: 10,
@@ -257,6 +418,9 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                                   _searchQuery = '';
                                 }
                               });
+                              // Leaving search may clear the active filter —
+                              // switch back to paged browsing if so.
+                              _syncLoadMode();
                             },
                             child: Container(
                               padding: const EdgeInsets.all(8),
@@ -282,6 +446,11 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
               const SizedBox(height: 12),
               if (!isLoading && loadError == null && entries.isNotEmpty)
                 _buildFilterBar(availableTags),
+              // "On this day" memory banner — only when browsing (not filtering).
+              if (!_isFilterActive &&
+                  !_onThisDayDismissed &&
+                  _onThisDay.isNotEmpty)
+                _buildOnThisDayBanner(),
               const SizedBox(height: 8),
               Expanded(
                 child: isLoading
@@ -291,11 +460,18 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                         : filteredEntries.isEmpty
                             ? _buildEmptyState()
                             : ListView.builder(
+                                controller: _scrollController,
                                 padding:
                                     const EdgeInsets.only(bottom: 120, top: 20),
-                                itemCount: filteredEntries.length,
-                                itemBuilder: (ctx, i) =>
-                                    _buildEntryItem(filteredEntries[i]),
+                                // One extra slot for the paging footer.
+                                itemCount: filteredEntries.length +
+                                    (_hasMore ? 1 : 0),
+                                itemBuilder: (ctx, i) {
+                                  if (i >= filteredEntries.length) {
+                                    return _buildPagingFooter();
+                                  }
+                                  return _buildEntryItem(filteredEntries[i]);
+                                },
                               ),
               ),
             ],
@@ -369,9 +545,17 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                     ? AppColors.amber500.withValues(alpha: 0.5)
                     : context.tokens.glassBorder,
               ),
-              onSelected: (v) => setState(() => _spotlightOnly = v),
+              onSelected: (v) {
+                setState(() => _spotlightOnly = v);
+                _syncLoadMode();
+              },
             ),
           ),
+          // Type filters (Story / Event).
+          _typeChip(EntryType.story, 'Stories', AppColors.indigo500),
+          _typeChip(EntryType.event, 'Events', AppColors.emerald500),
+          // Mood filter (multi-select via a bottom sheet).
+          _moodFilterChip(),
           // Tag filters.
           ...availableTags.map((tag) {
             final selected = _selectedTags.contains(tag);
@@ -390,17 +574,364 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                       ? AppColors.indigo500.withValues(alpha: 0.6)
                       : context.tokens.glassBorder,
                 ),
-                onSelected: (v) => setState(() {
-                  if (v) {
-                    _selectedTags.add(tag);
-                  } else {
-                    _selectedTags.remove(tag);
-                  }
-                }),
+                onSelected: (v) {
+                  setState(() {
+                    if (v) {
+                      _selectedTags.add(tag);
+                    } else {
+                      _selectedTags.remove(tag);
+                    }
+                  });
+                  _syncLoadMode();
+                },
               ),
             );
           }),
         ],
+      ),
+    );
+  }
+
+  /// A Story/Event type filter chip.
+  Widget _typeChip(EntryType type, String label, Color color) {
+    final selected = _selectedTypes.contains(type);
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        label: Text(label),
+        selected: selected,
+        showCheckmark: false,
+        labelStyle:
+            TextStyle(fontSize: 12, color: context.tokens.textPrimary),
+        backgroundColor: context.tokens.surfaceGlassFill,
+        selectedColor: color.withValues(alpha: 0.3),
+        side: BorderSide(
+          color: selected
+              ? color.withValues(alpha: 0.6)
+              : context.tokens.glassBorder,
+        ),
+        onSelected: (v) {
+          setState(() {
+            if (v) {
+              _selectedTypes.add(type);
+            } else {
+              _selectedTypes.remove(type);
+            }
+          });
+          _syncLoadMode();
+        },
+      ),
+    );
+  }
+
+  /// Mood filter chip — opens a multi-select sheet of moods.
+  Widget _moodFilterChip() {
+    final active = _selectedMoods.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        label: Text(active ? 'Mood (${_selectedMoods.length})' : 'Mood'),
+        avatar: Icon(Icons.mood,
+            size: 16,
+            color: active ? AppColors.fuchsia500 : Colors.white54),
+        selected: active,
+        showCheckmark: false,
+        labelStyle:
+            TextStyle(fontSize: 12, color: context.tokens.textPrimary),
+        backgroundColor: context.tokens.surfaceGlassFill,
+        selectedColor: AppColors.fuchsia500.withValues(alpha: 0.3),
+        side: BorderSide(
+          color: active
+              ? AppColors.fuchsia500.withValues(alpha: 0.6)
+              : context.tokens.glassBorder,
+        ),
+        onSelected: (_) => _openMoodFilterSheet(),
+      ),
+    );
+  }
+
+  /// Bottom sheet to pick which moods to keep. Mutates a local copy and applies
+  /// on close so the list isn't rebuilt on every toggle.
+  Future<void> _openMoodFilterSheet() async {
+    final working = {..._selectedMoods};
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.slate900,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Filter by mood',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold)),
+                        if (working.isNotEmpty)
+                          TextButton(
+                            onPressed: () =>
+                                setSheetState(() => working.clear()),
+                            child: const Text('Clear'),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: Mood.values.map((mood) {
+                        final sel = working.contains(mood);
+                        return GestureDetector(
+                          onTap: () => setSheetState(() {
+                            if (sel) {
+                              working.remove(mood);
+                            } else {
+                              working.add(mood);
+                            }
+                          }),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: sel
+                                  ? AppColors.fuchsia500.withValues(alpha: 0.25)
+                                  : Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: sel
+                                    ? AppColors.fuchsia500
+                                    : Colors.white12,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(moodIcons[mood] ?? '',
+                                    style: const TextStyle(fontSize: 18)),
+                                const SizedBox(width: 6),
+                                Text(mood.name,
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.indigo500,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Apply'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (!mounted) return;
+    setState(() {
+      _selectedMoods
+        ..clear()
+        ..addAll(working);
+    });
+    _syncLoadMode();
+  }
+
+  /// "On this day" banner summarising past-year memories for today.
+  Widget _buildOnThisDayBanner() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      child: GestureDetector(
+        onTap: _showOnThisDaySheet,
+        child: GlassContainer(
+          borderRadius: 16,
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.fuchsia500.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.auto_awesome,
+                    color: AppColors.fuchsia500, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'On this day',
+                      style: TextStyle(
+                        color: context.tokens.textPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _onThisDay.length == 1
+                          ? '1 memory from a previous year'
+                          : '${_onThisDay.length} memories from previous years',
+                      style: TextStyle(
+                        color: context.tokens.textTertiary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.close,
+                    size: 18, color: context.tokens.textTertiary),
+                tooltip: 'Dismiss',
+                onPressed: () => setState(() => _onThisDayDismissed = true),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Bottom sheet listing the "On this day" memories; tapping one opens it.
+  void _showOnThisDaySheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.slate900,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('On this day',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                const Text('Memories from previous years',
+                    style: TextStyle(color: AppColors.slate400, fontSize: 13)),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _onThisDay.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (ctx, i) {
+                      final entry = _onThisDay[i];
+                      final isStory = entry.type == EntryType.story;
+                      final color = isStory
+                          ? AppColors.indigo500
+                          : AppColors.emerald500;
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  JournalViewerScreen(entry: entry),
+                            ),
+                          );
+                        },
+                        child: GlassContainer(
+                          borderRadius: 14,
+                          padding: const EdgeInsets.all(14),
+                          child: Row(
+                            children: [
+                              if (entry.images.isNotEmpty) ...[
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: SizedBox(
+                                    width: 48,
+                                    height: 48,
+                                    child: ImageThumbnailWidget(
+                                      imageRef: entry.images.first,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                              ],
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text('${entry.date.year}',
+                                        style: TextStyle(
+                                            color: color,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold)),
+                                    const SizedBox(height: 2),
+                                    Text(entry.headline,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                              Text(moodIcons[entry.mood] ?? '',
+                                  style: const TextStyle(fontSize: 18)),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Footer shown beneath the list while the next page is being fetched.
+  Widget _buildPagingFooter() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 24),
+      child: Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
       ),
     );
   }
@@ -456,7 +987,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: _loadData,
+              onPressed: _reload,
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
@@ -515,17 +1046,14 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
             // Card
             Expanded(
               child: GestureDetector(
-                onTap: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => JournalViewerScreen(entry: entry),
-                    ),
-                  );
-                  if (result == true) {
-                    _loadData(); // Refresh list if entry was edited or deleted
-                  }
-                },
+                // Edits/deletes in the viewer bump the journal revision, which
+                // the build-method listener picks up to refresh the list.
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => JournalViewerScreen(entry: entry),
+                  ),
+                ),
                 child: GlassContainer(
                   borderRadius: 24,
                   padding: EdgeInsets.zero,
@@ -605,11 +1133,10 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                                     child: Text(
                                       isStory
                                           ? (entry.feeling ?? 'STORY')
-                                          : (entry.timeBucket
-                                                  ?.toString()
-                                                  .split('.')
-                                                  .last ??
-                                              'EVENT'),
+                                          : (entry.timeBucket != null
+                                              ? timeBucketLabel(
+                                                  entry.timeBucket!)
+                                              : 'EVENT'),
                                       style: TextStyle(
                                         color: color,
                                         fontSize: 10,

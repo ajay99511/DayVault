@@ -14,6 +14,21 @@ final storageServiceProvider = Provider<StorageService>((ref) {
   return StorageService(ObjectBoxService.instance.store);
 });
 
+/// Monotonic counter bumped on every journal create/update/delete. Screens that
+/// render journal data (`JournalScreen`, `CalendarScreen`) watch this and
+/// reload, so a mutation made from one surface (e.g. editing in the viewer)
+/// refreshes the others even when they are kept alive in the background.
+final journalRevisionProvider =
+    NotifierProvider<JournalRevisionNotifier, int>(JournalRevisionNotifier.new);
+
+class JournalRevisionNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  /// Signal that journal data changed so dependent screens reload.
+  void bump() => state++;
+}
+
 /// Default categories seeded on first launch (empty — no mock items).
 const List<RankingCategory> _defaultCategories = [
   RankingCategory(id: 'movies', title: 'Movies', iconName: 'movie', items: []),
@@ -87,6 +102,10 @@ class StorageService {
     }
   }
 
+  /// Total number of stored journal entries. O(1) — used for the header count
+  /// when the list is only partially loaded via pagination.
+  int journalCount() => _journalBox.count();
+
   Future<void> saveJournalEntry(JournalEntry entry) async {
     final obEntry = await ObjectBoxJournalEntry.fromFreezed(entry);
 
@@ -152,6 +171,20 @@ class StorageService {
     final nextCursor =
         hasMore ? PaginationCursor.fromLastId(page.last.id) : null;
     return PagedResult(items: items, nextCursor: nextCursor);
+  }
+
+  /// Entries from the same calendar day (month + day) as [reference] in earlier
+  /// years — powers the "On this day" memory resurfacing. Entries from
+  /// [reference]'s own year are excluded so only genuinely past memories show.
+  /// Returned most-recent first.
+  Future<List<JournalEntry>> getOnThisDay(DateTime reference) async {
+    final all = await getJournal(); // already ordered date-descending
+    return all
+        .where((e) =>
+            e.date.month == reference.month &&
+            e.date.day == reference.day &&
+            e.date.year != reference.year)
+        .toList();
   }
 
   /// Delete a journal entry.
