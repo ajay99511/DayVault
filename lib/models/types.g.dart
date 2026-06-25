@@ -109,6 +109,18 @@ const _$TimeBucketEnumMap = {
   TimeBucket.night: 'night',
 };
 
+_RankSnapshot _$RankSnapshotFromJson(Map<String, dynamic> json) =>
+    _RankSnapshot(
+      date: DateTime.parse(json['date'] as String),
+      rank: (json['rank'] as num).toInt(),
+    );
+
+Map<String, dynamic> _$RankSnapshotToJson(_RankSnapshot instance) =>
+    <String, dynamic>{
+      'date': instance.date.toIso8601String(),
+      'rank': instance.rank,
+    };
+
 _RankedItem _$RankedItemFromJson(Map<String, dynamic> json) => _RankedItem(
       id: json['id'] as String,
       rank: (json['rank'] as num).toInt(),
@@ -117,6 +129,13 @@ _RankedItem _$RankedItemFromJson(Map<String, dynamic> json) => _RankedItem(
       subtitle: json['subtitle'] as String? ?? '',
       notes: json['notes'] as String? ?? '',
       dateAdded: DateTime.parse(json['dateAdded'] as String),
+      image: json['image'] == null
+          ? null
+          : ImageReference.fromJson(json['image'] as Map<String, dynamic>),
+      history: (json['history'] as List<dynamic>?)
+              ?.map((e) => RankSnapshot.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
     );
 
 Map<String, dynamic> _$RankedItemToJson(_RankedItem instance) =>
@@ -128,6 +147,8 @@ Map<String, dynamic> _$RankedItemToJson(_RankedItem instance) =>
       'subtitle': instance.subtitle,
       'notes': instance.notes,
       'dateAdded': instance.dateAdded.toIso8601String(),
+      'image': instance.image,
+      'history': instance.history,
     };
 
 _RankingCategory _$RankingCategoryFromJson(Map<String, dynamic> json) =>
@@ -140,6 +161,7 @@ _RankingCategory _$RankingCategoryFromJson(Map<String, dynamic> json) =>
               .toList() ??
           const [],
       isFavorite: json['isFavorite'] as bool? ?? false,
+      colorValue: (json['colorValue'] as num?)?.toInt() ?? 0,
     );
 
 Map<String, dynamic> _$RankingCategoryToJson(_RankingCategory instance) =>
@@ -149,6 +171,7 @@ Map<String, dynamic> _$RankingCategoryToJson(_RankingCategory instance) =>
       'iconName': instance.iconName,
       'items': instance.items,
       'isFavorite': instance.isFavorite,
+      'colorValue': instance.colorValue,
     };
 
 _UserSettings _$UserSettingsFromJson(Map<String, dynamic> json) =>

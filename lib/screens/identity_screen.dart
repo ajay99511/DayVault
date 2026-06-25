@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:file_picker/file_picker.dart';
 import '../services/storage_service.dart';
+import '../services/image_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../config/constants.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/glass_widgets.dart';
+import '../widgets/image_widgets.dart';
+
+/// How the active category's items are ordered for display. [manual] keeps the
+/// user's drag-ordered rank; the others are derived (and disable reordering).
+enum _ItemSort { manual, ratingDesc, dateDesc }
 
 class IdentityScreen extends ConsumerStatefulWidget {
   const IdentityScreen({super.key});
@@ -23,8 +30,25 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
 
   // Search state
   bool _isSearching = false;
+  bool _globalSearch = false; // search across all categories
   final TextEditingController _searchCtrl = TextEditingController();
   String _searchQuery = '';
+
+  // Sort mode for the active category list.
+  _ItemSort _sortMode = _ItemSort.manual;
+
+  /// Apply the active sort to [items]. [manual] preserves the incoming (rank)
+  /// order. Non-manual sorts return a new list and are pure for testability.
+  List<RankedItem> _applySort(List<RankedItem> items) {
+    switch (_sortMode) {
+      case _ItemSort.manual:
+        return items;
+      case _ItemSort.ratingDesc:
+        return [...items]..sort((a, b) => b.rating.compareTo(a.rating));
+      case _ItemSort.dateDesc:
+        return [...items]..sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
+    }
+  }
 
   @override
   void dispose() {
@@ -63,42 +87,93 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
   Future<void> _showCategoryDialog({RankingCategory? existingCat}) async {
     final titleCtrl = TextEditingController(text: existingCat?.title ?? '');
     bool isFav = existingCat?.isFavorite ?? false;
+    String selectedIcon = existingCat?.iconName ?? 'category';
+    int selectedColor = existingCat?.colorValue ?? 0;
     final isEditing = existingCat != null;
 
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setModalState) {
         return AlertDialog(
-          backgroundColor: AppColors.slate900,
+          backgroundColor: ctx.tokens.surfaceBase,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Text(isEditing ? 'Edit Category' : 'New Category',
-              style: const TextStyle(color: Colors.white)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'e.g. Video Games',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  filled: true,
-                  fillColor: Colors.white10,
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12)),
+              style: TextStyle(color: ctx.tokens.textPrimary)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: titleCtrl,
+                  style: TextStyle(color: ctx.tokens.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'e.g. Video Games',
+                    hintStyle: TextStyle(color: ctx.tokens.textTertiary),
+                    filled: true,
+                    fillColor: ctx.tokens.surfaceGlassFill,
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              SwitchListTile(
-                title: const Text('Favourite',
-                    style: TextStyle(color: Colors.white)),
-                value: isFav,
-                activeThumbColor: AppColors.amber500,
-                onChanged: (val) => setModalState(() => isFav = val),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ],
+                const SizedBox(height: 20),
+                _dialogLabel(ctx, 'ICON'),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: categoryIcons.keys.map((key) {
+                    final sel = key == selectedIcon;
+                    final accent = selectedColor == 0
+                        ? AppColors.indigo500
+                        : Color(selectedColor);
+                    return GestureDetector(
+                      onTap: () => setModalState(() => selectedIcon = key),
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: sel
+                              ? accent.withValues(alpha: 0.25)
+                              : ctx.tokens.surfaceGlassFill,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: sel ? accent : ctx.tokens.glassBorder,
+                          ),
+                        ),
+                        child: Icon(categoryIconFor(key),
+                            size: 20,
+                            color: sel ? accent : ctx.tokens.textSecondary),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+                _dialogLabel(ctx, 'COLOR'),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _colorDot(ctx, 0, selectedColor == 0,
+                        () => setModalState(() => selectedColor = 0)),
+                    ...categoryColors.map((c) {
+                      final v = c.toARGB32();
+                      return _colorDot(ctx, v, selectedColor == v,
+                          () => setModalState(() => selectedColor = v));
+                    }),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                SwitchListTile(
+                  title: Text('Favourite',
+                      style: TextStyle(color: ctx.tokens.textPrimary)),
+                  value: isFav,
+                  activeThumbColor: AppColors.amber500,
+                  onChanged: (val) => setModalState(() => isFav = val),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -113,9 +188,10 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                   id: existingCat?.id ??
                       DateTime.now().millisecondsSinceEpoch.toString(),
                   title: titleCtrl.text.trim(),
-                  iconName: existingCat?.iconName ?? 'category',
+                  iconName: selectedIcon,
                   items: existingCat?.items ?? [],
                   isFavorite: isFav,
+                  colorValue: selectedColor,
                 );
                 await storage.addRankingCategory(cat);
                 if (ctx.mounted) Navigator.pop(ctx, true);
@@ -136,25 +212,25 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
   void _showCategoryOptions(RankingCategory cat) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.slate900,
+      backgroundColor: context.tokens.surfaceBase,
       builder: (ctx) => Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
-            leading: const Icon(Icons.edit, color: Colors.white),
-            title: const Text('Edit Category',
-                style: TextStyle(color: Colors.white)),
+            leading: Icon(Icons.edit, color: context.tokens.textPrimary),
+            title: Text('Edit Category',
+                style: TextStyle(color: context.tokens.textPrimary)),
             onTap: () {
               Navigator.pop(ctx);
               _showCategoryDialog(existingCat: cat);
             },
           ),
           ListTile(
-            leading: Icon(cat.isFavorite ? Icons.star_border : Icons.star,
+            leading: Icon(cat.isFavorite ? Icons.star : Icons.star_border,
                 color: AppColors.amber500),
             title: Text(
                 cat.isFavorite ? 'Remove from Favourites' : 'Add to Favourites',
-                style: const TextStyle(color: Colors.white)),
+                style: TextStyle(color: context.tokens.textPrimary)),
             onTap: () async {
               Navigator.pop(ctx);
               final updated = cat.copyWith(isFavorite: !cat.isFavorite);
@@ -173,12 +249,12 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
               final confirmed = await showDialog<bool>(
                 context: context,
                 builder: (c) => AlertDialog(
-                  backgroundColor: AppColors.slate900,
-                  title: const Text('Delete Category?',
-                      style: TextStyle(color: Colors.white)),
-                  content: const Text(
+                  backgroundColor: c.tokens.surfaceBase,
+                  title: Text('Delete Category?',
+                      style: TextStyle(color: c.tokens.textPrimary)),
+                  content: Text(
                       'This will delete the category and all its items.',
-                      style: TextStyle(color: Colors.white70)),
+                      style: TextStyle(color: c.tokens.textSecondary)),
                   actions: [
                     TextButton(
                         onPressed: () => Navigator.pop(c, false),
@@ -213,6 +289,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
         TextEditingController(text: existingItem?.subtitle ?? '');
     final notesCtrl = TextEditingController(text: existingItem?.notes ?? '');
     double rating = existingItem?.rating ?? 0;
+    ImageReference? selectedImage = existingItem?.image;
     final isEditing = existingItem != null;
 
     final result = await showModalBottomSheet<RankedItem>(
@@ -299,6 +376,82 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                         ),
                         const SizedBox(height: 18),
 
+                        // Cover image
+                        Text(
+                          'COVER',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: context.tokens.textTertiary,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            if (selectedImage != null) ...[
+                              SizedBox(
+                                width: 56,
+                                height: 56,
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Positioned.fill(
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: ImageThumbnailWidget(
+                                          imageRef: selectedImage!,
+                                          fit: BoxFit.cover,
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: -6,
+                                      right: -6,
+                                      child: GestureDetector(
+                                        onTap: () => setModalState(
+                                            () => selectedImage = null),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(3),
+                                          decoration: const BoxDecoration(
+                                            color: AppColors.rose500,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.close,
+                                              size: 12, color: Colors.white),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                            ],
+                            _coverSourceButton(
+                              icon: Icons.link,
+                              label: 'URL',
+                              onTap: () async {
+                                final img = await _promptImageUrl();
+                                if (img != null) {
+                                  setModalState(() => selectedImage = img);
+                                }
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            _coverSourceButton(
+                              icon: Icons.folder_open,
+                              label: 'File',
+                              onTap: () async {
+                                final img = await _pickImageFromFile();
+                                if (img != null) {
+                                  setModalState(() => selectedImage = img);
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+
                         // Rating
                         Text(
                           'RATING',
@@ -382,6 +535,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                                       notes: notesCtrl.text.trim(),
                                       dateAdded: existingItem?.dateAdded ??
                                           DateTime.now(),
+                                      image: selectedImage,
                                     );
                                     Navigator.pop(ctx, item);
                                   },
@@ -450,6 +604,22 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Cover image (hidden in privacy mode).
+                if (item.image != null && !_isMasked) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 160,
+                      child: ImageThumbnailWidget(
+                        imageRef: item.image!,
+                        fit: BoxFit.cover,
+                        showTapToZoom: true,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 // Rank badge + title
                 Row(
                   children: [
@@ -476,7 +646,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            item.name,
+                            _isMasked ? '••••••••' : item.name,
                             style: GoogleFonts.libreBaskerville(
                               color: context.tokens.textPrimary,
                               fontSize: 20,
@@ -487,7 +657,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                             Padding(
                               padding: const EdgeInsets.only(top: 2),
                               child: Text(
-                                item.subtitle,
+                                _isMasked ? '••••••••' : item.subtitle,
                                 style: GoogleFonts.outfit(
                                   color: context.tokens.textSecondary,
                                   fontSize: 13,
@@ -551,6 +721,31 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                   const SizedBox(height: 16),
                 ],
 
+                // Preference drift (only once there's movement to show).
+                if (item.history.length >= 2 && !_isMasked) ...[
+                  Text(
+                    'PREFERENCE DRIFT',
+                    style: GoogleFonts.outfit(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: context.tokens.textTertiary,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _RankSparkline(
+                      history: item.history, color: AppColors.indigo500),
+                  const SizedBox(height: 6),
+                  Text(
+                    _driftSummary(item),
+                    style: GoogleFonts.outfit(
+                      color: context.tokens.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
                 // Date
                 Row(
                   children: [
@@ -608,16 +803,16 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.slate900,
+        backgroundColor: ctx.tokens.surfaceBase,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Remove "${item.name}"?',
           style: GoogleFonts.outfit(
-              color: Colors.white, fontWeight: FontWeight.bold),
+              color: ctx.tokens.textPrimary, fontWeight: FontWeight.bold),
         ),
         content: Text(
           'This will remove it from your rankings. You can always add it back later.',
-          style: GoogleFonts.outfit(color: AppColors.slate400),
+          style: GoogleFonts.outfit(color: ctx.tokens.textSecondary),
         ),
         actions: [
           TextButton(
@@ -649,8 +844,59 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     final items = List<RankedItem>.from(_activeCategory.items);
     final moved = items.removeAt(oldIndex);
     items.insert(newIndex, moved);
-    await ref.read(storageServiceProvider).reorderRankedItems(activeId, items);
+
+    // Record a drift snapshot for every item whose rank changed. The new rank
+    // is its 1-based position; reorderRankedItems re-stamps the same rank from
+    // position, so this stays consistent.
+    final now = DateTime.now();
+    final stamped = [
+      for (int i = 0; i < items.length; i++)
+        _withRankSnapshot(items[i], i + 1, now),
+    ];
+
+    await ref
+        .read(storageServiceProvider)
+        .reorderRankedItems(activeId, stamped);
     await _load();
+  }
+
+  /// Append a [newRank] snapshot to an item's drift history if its rank
+  /// changed. Seeds the pre-move rank as the first point so a delta exists
+  /// after the first reorder. History is capped to the most recent 30 points.
+  RankedItem _withRankSnapshot(RankedItem item, int newRank, DateTime when) {
+    if (item.rank == newRank) return item;
+    final history = [...item.history];
+    if (history.isEmpty) {
+      history.add(RankSnapshot(date: item.dateAdded, rank: item.rank));
+    }
+    history.add(RankSnapshot(date: when, rank: newRank));
+    final capped =
+        history.length > 30 ? history.sublist(history.length - 30) : history;
+    return item.copyWith(history: capped);
+  }
+
+  /// Drift delta from the last two recorded snapshots: positive = moved up
+  /// (toward #1), negative = moved down, null = not enough history.
+  static int? _driftDelta(RankedItem item) {
+    if (item.history.length < 2) return null;
+    final prev = item.history[item.history.length - 2].rank;
+    final last = item.history.last.rank;
+    return prev - last;
+  }
+
+  /// Human summary of an item's overall drift since first ranked.
+  String _driftSummary(RankedItem item) {
+    final first = item.history.first.rank;
+    final last = item.history.last.rank;
+    final diff = first - last; // positive = improved (toward #1)
+    if (diff > 0) {
+      return 'Climbed $diff ${diff == 1 ? 'spot' : 'spots'} since first ranked';
+    }
+    if (diff < 0) {
+      final n = diff.abs();
+      return 'Fell $n ${n == 1 ? 'spot' : 'spots'} since first ranked';
+    }
+    return 'Back to where it started';
   }
 
   // ─── Build ────────────────────────────────────────────────────────────
@@ -749,6 +995,38 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                                       ),
                                     ),
                                   ),
+                                  // Toggle: search this list vs all categories.
+                                  GestureDetector(
+                                    onTap: () => setState(
+                                        () => _globalSearch = !_globalSearch),
+                                    child: Container(
+                                      margin: const EdgeInsets.only(right: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: _globalSearch
+                                            ? AppColors.indigo500
+                                                .withValues(alpha: 0.3)
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: _globalSearch
+                                              ? AppColors.indigo500
+                                              : context.tokens.glassBorder,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        'ALL',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: _globalSearch
+                                              ? Colors.white
+                                              : context.tokens.textTertiary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                   if (_searchQuery.isNotEmpty)
                                     GestureDetector(
                                       onTap: () {
@@ -764,6 +1042,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                             ),
                           ),
                         if (!_isSearching) _buildTopActions(),
+                        _sortButton(),
                         const SizedBox(width: 4),
                         GestureDetector(
                           onTap: () {
@@ -800,8 +1079,9 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
 
             // Tabs — _SyncedTabBar is a descendant of DefaultTabController
             // so it can safely call DefaultTabController.of(context) in
-            // didChangeDependencies without throwing.
-            if (categories.isNotEmpty)
+            // didChangeDependencies without throwing. Hidden while showing
+            // global (cross-category) search results.
+            if (categories.isNotEmpty && !_isGlobalResults)
               _SyncedTabBar(
                 categories: categories,
                 activeId: activeId,
@@ -810,9 +1090,11 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
               ),
             const SizedBox(height: 24),
 
-            // TabBarView Content (Swipeable lists)
+            // TabBarView Content (Swipeable lists), or global search results.
             Expanded(
-              child: categories.isEmpty
+              child: _isGlobalResults
+                  ? _buildGlobalResults()
+                  : categories.isEmpty
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -838,16 +1120,24 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                     )
                   : TabBarView(
                       children: categories.map((cat) {
-                        // Filter items
-                        final filteredItems = _searchQuery.isEmpty
+                        // Filter items. Searching is inert while masked so
+                        // hidden content can't be probed via the query.
+                        final effectiveQuery = _isMasked ? '' : _searchQuery;
+                        final filteredItems = effectiveQuery.isEmpty
                             ? cat.items
                             : cat.items.where((item) {
-                                final q = _searchQuery.toLowerCase();
+                                final q = effectiveQuery.toLowerCase();
                                 return item.name.toLowerCase().contains(q) ||
                                     item.subtitle.toLowerCase().contains(q);
                               }).toList();
 
-                        if (filteredItems.isEmpty) {
+                        // Apply sort. Reordering is only possible in manual
+                        // sort while not searching.
+                        final displayItems = _applySort(filteredItems);
+                        final reorderable =
+                            _sortMode == _ItemSort.manual && !_isSearching;
+
+                        if (displayItems.isEmpty) {
                           return Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -926,36 +1216,46 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                           );
                         }
 
+                        _RankedItemTile buildTile(int i) {
+                          final item = displayItems[i];
+                          return _RankedItemTile(
+                            key: ValueKey(item.id),
+                            index: i,
+                            item: item,
+                            isMasked: _isMasked,
+                            showHandle: reorderable,
+                            getRankGradient: _getRankGradient,
+                            onTap: () {
+                              if (activeId != cat.id) {
+                                setState(() => activeId = cat.id);
+                              }
+                              _showItemDetail(item);
+                            },
+                          );
+                        }
+
+                        // Non-manual sort or active search → a plain,
+                        // non-reorderable list.
+                        if (!reorderable) {
+                          return ListView.builder(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 24),
+                            itemCount: displayItems.length,
+                            itemBuilder: (ctx, i) => buildTile(i),
+                          );
+                        }
+
                         return ReorderableListView.builder(
                           padding: const EdgeInsets.symmetric(horizontal: 24),
                           proxyDecorator: _proxyDecorator,
                           onReorder: (oldIndex, newIndex) {
-                            if (_isSearching) {
-                              return; // Disable reorder while searching
-                            }
-
                             if (activeId != cat.id) {
                               setState(() => activeId = cat.id);
                             }
                             _onReorder(oldIndex, newIndex);
                           },
-                          itemCount: filteredItems.length,
-                          itemBuilder: (ctx, i) {
-                            final item = filteredItems[i];
-                            return _RankedItemTile(
-                              key: ValueKey(item.id),
-                              index: i,
-                              item: item,
-                              isMasked: _isMasked,
-                              getRankGradient: _getRankGradient,
-                              onTap: () {
-                                if (activeId != cat.id) {
-                                  setState(() => activeId = cat.id);
-                                }
-                                _showItemDetail(item);
-                              },
-                            );
-                          },
+                          itemCount: displayItems.length,
+                          itemBuilder: (ctx, i) => buildTile(i),
                         );
                       }).toList(),
                     ),
@@ -1010,7 +1310,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
-          onPressed: () => setState(() => _isMasked = !_isMasked),
+          onPressed: _toggleMask,
           tooltip: 'Toggle Privacy Mode',
           icon: Icon(
             _isMasked
@@ -1047,7 +1347,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
       onSelected: (value) {
         switch (value) {
           case 'privacy':
-            setState(() => _isMasked = !_isMasked);
+            _toggleMask();
             break;
           case 'favorites':
             _toggleFavoritesOnly();
@@ -1085,6 +1385,139 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
   void _toggleFavoritesOnly() {
     setState(() => _showFavoritesOnly = !_showFavoritesOnly);
     _load();
+  }
+
+  /// Toggle privacy masking. Entering privacy mode also exits search so masked
+  /// content can't be probed through the query field.
+  void _toggleMask() {
+    setState(() {
+      _isMasked = !_isMasked;
+      if (_isMasked && _isSearching) {
+        _isSearching = false;
+        _searchCtrl.clear();
+        _searchQuery = '';
+      }
+    });
+  }
+
+  /// Sort selector for the active category list.
+  Widget _sortButton() {
+    return PopupMenuButton<_ItemSort>(
+      tooltip: 'Sort',
+      color: context.tokens.surfaceBase,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      icon: Icon(
+        Icons.sort_rounded,
+        color: _sortMode == _ItemSort.manual
+            ? context.tokens.textTertiary
+            : AppColors.indigo500,
+      ),
+      onSelected: (m) => setState(() => _sortMode = m),
+      itemBuilder: (ctx) => [
+        CheckedPopupMenuItem(
+          value: _ItemSort.manual,
+          checked: _sortMode == _ItemSort.manual,
+          child: const Text('Manual (rank)'),
+        ),
+        CheckedPopupMenuItem(
+          value: _ItemSort.ratingDesc,
+          checked: _sortMode == _ItemSort.ratingDesc,
+          child: const Text('Rating (high → low)'),
+        ),
+        CheckedPopupMenuItem(
+          value: _ItemSort.dateDesc,
+          checked: _sortMode == _ItemSort.dateDesc,
+          child: const Text('Recently added'),
+        ),
+      ],
+    );
+  }
+
+  /// True when the global (cross-category) search results should be shown
+  /// instead of the per-tab list.
+  bool get _isGlobalResults =>
+      _isSearching &&
+      _globalSearch &&
+      !_isMasked &&
+      _searchQuery.trim().isNotEmpty;
+
+  /// Flat list of items across every category matching the current query.
+  Widget _buildGlobalResults() {
+    final q = _searchQuery.trim().toLowerCase();
+    final results = <(RankingCategory, RankedItem)>[];
+    for (final cat in categories) {
+      for (final item in cat.items) {
+        if (item.name.toLowerCase().contains(q) ||
+            item.subtitle.toLowerCase().contains(q)) {
+          results.add((cat, item));
+        }
+      }
+    }
+
+    if (results.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off,
+                size: 48, color: context.tokens.textDisabled),
+            const SizedBox(height: 16),
+            Text('No matching items found.',
+                style: GoogleFonts.outfit(
+                    color: context.tokens.textTertiary, fontSize: 16)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      itemCount: results.length,
+      itemBuilder: (ctx, i) {
+        final (cat, item) = results[i];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 4),
+              child: Row(
+                children: [
+                  Icon(categoryIconFor(cat.iconName),
+                      size: 12,
+                      color: cat.colorValue == 0
+                          ? context.tokens.textTertiary
+                          : Color(cat.colorValue)),
+                  const SizedBox(width: 6),
+                  Text(
+                    cat.title.toUpperCase(),
+                    style: GoogleFonts.outfit(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                      color: context.tokens.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _RankedItemTile(
+              key: ValueKey('global_${cat.id}_${item.id}'),
+              index: i,
+              item: item,
+              isMasked: _isMasked,
+              showHandle: false,
+              getRankGradient: _getRankGradient,
+              onTap: () {
+                if (activeId != cat.id) {
+                  setState(() => activeId = cat.id);
+                }
+                _showItemDetail(item);
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // ─── Drag Proxy ───────────────────────────────────────────────────────
@@ -1208,6 +1641,167 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     );
   }
 
+  /// Compact outlined button used to add a cover image from a source.
+  Widget _coverSourceButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: context.tokens.surfaceGlassFill,
+          border: Border.all(color: context.tokens.glassBorder),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: context.tokens.textSecondary),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.outfit(
+                color: context.tokens.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Pick a cover image file (reference-only — no copy into app storage).
+  Future<ImageReference?> _pickImageFromFile() async {
+    try {
+      final res = await FilePicker.platform
+          .pickFiles(type: FileType.image, allowMultiple: false);
+      final path = res?.files.single.path;
+      if (path != null) return createFileImageRef(path);
+    } catch (e) {
+      debugPrint('Item image pick failed: $e');
+    }
+    return null;
+  }
+
+  /// Prompt for a validated image URL; returns an [ImageReference] or null.
+  Future<ImageReference?> _promptImageUrl() async {
+    final urlCtrl = TextEditingController();
+    String? error;
+    bool validating = false;
+    return showDialog<ImageReference?>(
+      context: context,
+      builder: (dctx) => StatefulBuilder(builder: (dctx, setD) {
+        return AlertDialog(
+          backgroundColor: dctx.tokens.surfaceBase,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('Image from URL',
+              style: TextStyle(color: dctx.tokens.textPrimary)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: urlCtrl,
+                style: TextStyle(color: dctx.tokens.textPrimary),
+                keyboardType: TextInputType.url,
+                decoration: InputDecoration(
+                  hintText: 'https://example.com/cover.jpg',
+                  hintStyle: TextStyle(color: dctx.tokens.textTertiary),
+                  errorText: error,
+                ),
+              ),
+              if (validating)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dctx),
+                child: const Text('Cancel')),
+            TextButton(
+              onPressed: validating
+                  ? null
+                  : () async {
+                      final url = urlCtrl.text.trim();
+                      if (url.isEmpty) {
+                        setD(() => error = 'URL cannot be empty');
+                        return;
+                      }
+                      setD(() {
+                        error = null;
+                        validating = true;
+                      });
+                      final (valid, msg) = await validateImageUrl(url);
+                      setD(() => validating = false);
+                      if (!valid) {
+                        setD(() => error = msg);
+                        return;
+                      }
+                      if (dctx.mounted) {
+                        Navigator.pop(dctx, createUrlImageRef(url));
+                      }
+                    },
+              child: const Text('Add'),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+
+  Widget _dialogLabel(BuildContext ctx, String text) {
+    return Text(
+      text,
+      style: GoogleFonts.outfit(
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+        color: ctx.tokens.textTertiary,
+        letterSpacing: 1.5,
+      ),
+    );
+  }
+
+  /// A selectable color swatch. [value] 0 is the "use theme accent" default.
+  Widget _colorDot(
+      BuildContext ctx, int value, bool selected, VoidCallback onTap) {
+    final color = value == 0 ? ctx.tokens.accent : Color(value);
+    return Padding(
+      padding: const EdgeInsets.only(right: 10),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: selected ? ctx.tokens.textPrimary : Colors.transparent,
+              width: 2,
+            ),
+          ),
+          child: value == 0
+              ? Icon(Icons.format_color_reset,
+                  size: 15, color: ctx.tokens.textPrimary)
+              : (selected
+                  ? const Icon(Icons.check, size: 15, color: Colors.white)
+                  : null),
+        ),
+      ),
+    );
+  }
+
   static Widget _buildStarRow(double rating,
       {double size = 16, Color emptyColor = Colors.white24}) {
     return Row(
@@ -1253,6 +1847,7 @@ class _RankedItemTile extends StatelessWidget {
   final int index;
   final RankedItem item;
   final bool isMasked;
+  final bool showHandle;
   final LinearGradient Function(int) getRankGradient;
   final VoidCallback onTap;
 
@@ -1263,6 +1858,7 @@ class _RankedItemTile extends StatelessWidget {
     required this.isMasked,
     required this.getRankGradient,
     required this.onTap,
+    this.showHandle = true,
   });
 
   @override
@@ -1275,24 +1871,67 @@ class _RankedItemTile extends StatelessWidget {
           padding: const EdgeInsets.all(14),
           child: Row(
             children: [
-              // Rank badge
-              Container(
-                width: 42,
-                height: 42,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  gradient: getRankGradient(item.rank),
-                ),
-                child: Text(
-                  "${item.rank}",
-                  style: GoogleFonts.outfit(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                    fontSize: 16,
+              // Cover image (if present and not masked) with a small rank chip,
+              // else the gradient rank badge.
+              if (item.image != null && !isMasked)
+                SizedBox(
+                  width: 42,
+                  height: 42,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: ImageThumbnailWidget(
+                            imageRef: item.image!,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            borderRadius: const BorderRadius.only(
+                              topRight: Radius.circular(6),
+                              bottomLeft: Radius.circular(10),
+                            ),
+                            gradient: getRankGradient(item.rank),
+                          ),
+                          child: Text(
+                            "${item.rank}",
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    gradient: getRankGradient(item.rank),
+                  ),
+                  child: Text(
+                    "${item.rank}",
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
-              ),
               const SizedBox(width: 16),
 
               // Info
@@ -1301,7 +1940,7 @@ class _RankedItemTile extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.name,
+                      isMasked ? '••••••••' : item.name,
                       style: GoogleFonts.libreBaskerville(
                         color: context.tokens.textPrimary,
                         fontSize: 15,
@@ -1325,25 +1964,135 @@ class _RankedItemTile extends StatelessWidget {
                         child: _IdentityScreenState._buildStarRow(item.rating,
                             size: 14, emptyColor: context.tokens.textDisabled),
                       ),
+                    _DriftIndicator(delta: _IdentityScreenState._driftDelta(item)),
                   ],
                 ),
               ),
 
-              // Drag handle
-              ReorderableDragStartListener(
-                index: index,
-                child: Icon(
-                  Icons.drag_handle_rounded,
-                  color: context.tokens.textDisabled,
-                  size: 22,
+              // Drag handle (only when manual reordering is available)
+              if (showHandle)
+                ReorderableDragStartListener(
+                  index: index,
+                  child: Icon(
+                    Icons.drag_handle_rounded,
+                    color: context.tokens.textDisabled,
+                    size: 22,
+                  ),
                 ),
-              ),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+// ━━━ Drift Indicator ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/// Small ▲/▼ chip showing how far an item moved on its last reorder. Renders
+/// nothing when there's no recorded movement.
+class _DriftIndicator extends StatelessWidget {
+  final int? delta;
+  const _DriftIndicator({required this.delta});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = delta;
+    if (d == null || d == 0) return const SizedBox.shrink();
+    final up = d > 0;
+    final color = up ? AppColors.emerald500 : AppColors.rose500;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(up ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              size: 12, color: color),
+          const SizedBox(width: 2),
+          Text(
+            '${d.abs()}',
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ━━━ Rank Sparkline ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+/// A tiny line chart of rank over time. Rank 1 (best) is drawn at the top, so
+/// an upward-trending line means improving rank.
+class _RankSparkline extends StatelessWidget {
+  final List<RankSnapshot> history;
+  final Color color;
+  const _RankSparkline({required this.history, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      width: double.infinity,
+      child: CustomPaint(
+        painter: _RankSparklinePainter(history: history, color: color),
+      ),
+    );
+  }
+}
+
+class _RankSparklinePainter extends CustomPainter {
+  final List<RankSnapshot> history;
+  final Color color;
+  _RankSparklinePainter({required this.history, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (history.length < 2) return;
+    final ranks = history.map((s) => s.rank).toList();
+    final minRank = ranks.reduce((a, b) => a < b ? a : b);
+    final maxRank = ranks.reduce((a, b) => a > b ? a : b);
+    final span = (maxRank - minRank);
+
+    // Map each snapshot to a point. Lower rank (better) → higher on screen.
+    double xFor(int i) =>
+        history.length == 1 ? 0 : i / (history.length - 1) * size.width;
+    double yFor(int rank) {
+      if (span == 0) return size.height / 2;
+      final t = (rank - minRank) / span; // 0 = best rank
+      return t * (size.height - 8) + 4; // best at top
+    }
+
+    final path = Path();
+    for (int i = 0; i < history.length; i++) {
+      final p = Offset(xFor(i), yFor(history[i].rank));
+      if (i == 0) {
+        path.moveTo(p.dx, p.dy);
+      } else {
+        path.lineTo(p.dx, p.dy);
+      }
+    }
+
+    final linePaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(path, linePaint);
+
+    // Endpoint dot.
+    final lastPoint =
+        Offset(xFor(history.length - 1), yFor(history.last.rank));
+    canvas.drawCircle(lastPoint, 3, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RankSparklinePainter old) =>
+      old.history != history || old.color != color;
 }
 
 // ━━━ Synced Tab Bar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1424,6 +2173,14 @@ class _SyncedTabBarState extends State<_SyncedTabBar> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      Icon(
+                        categoryIconFor(cat.iconName),
+                        size: 13,
+                        color: cat.colorValue == 0
+                            ? null
+                            : Color(cat.colorValue),
+                      ),
+                      const SizedBox(width: 6),
                       if (cat.isFavorite) ...[
                         const Icon(Icons.star,
                             size: 12, color: AppColors.amber500),

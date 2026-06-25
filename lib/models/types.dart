@@ -79,6 +79,19 @@ abstract class JournalEntry with _$JournalEntry {
       _$JournalEntryFromJson(json);
 }
 
+/// A timestamped rank position, recorded each time an item is manually
+/// reordered. Powers "Preference Drift" — how a ranking evolves over time.
+@freezed
+abstract class RankSnapshot with _$RankSnapshot {
+  const factory RankSnapshot({
+    required DateTime date,
+    required int rank,
+  }) = _RankSnapshot;
+
+  factory RankSnapshot.fromJson(Map<String, dynamic> json) =>
+      _$RankSnapshotFromJson(json);
+}
+
 @freezed
 abstract class RankedItem with _$RankedItem {
   const factory RankedItem({
@@ -89,6 +102,8 @@ abstract class RankedItem with _$RankedItem {
     @Default('') String subtitle, // e.g. director, author, cuisine type
     @Default('') String notes, // free-form personal notes
     required DateTime dateAdded,
+    ImageReference? image, // optional cover art (reference-only, like journal)
+    @Default([]) List<RankSnapshot> history, // rank-over-time for drift
   }) = _RankedItem;
 
   factory RankedItem.fromJson(Map<String, dynamic> json) =>
@@ -103,6 +118,7 @@ abstract class RankingCategory with _$RankingCategory {
     required String iconName,
     @Default([]) List<RankedItem> items,
     @Default(false) bool isFavorite,
+    @Default(0) int colorValue, // ARGB accent; 0 = use theme accent
   }) = _RankingCategory;
 
   factory RankingCategory.fromJson(Map<String, dynamic> json) =>

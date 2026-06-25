@@ -17,6 +17,43 @@ class AppColors {
   static const fuchsia500 = Color(0xFFD946EF);
 }
 
+/// Selectable icons for ranking categories, keyed by a stable string stored on
+/// the category (`RankingCategory.iconName`). The keys for the seeded default
+/// categories (movie/restaurant/place/person/book) are included.
+const Map<String, IconData> categoryIcons = {
+  'category': Icons.category_rounded,
+  'movie': Icons.movie_rounded,
+  'restaurant': Icons.restaurant_rounded,
+  'place': Icons.place_rounded,
+  'person': Icons.person_rounded,
+  'book': Icons.menu_book_rounded,
+  'music': Icons.music_note_rounded,
+  'game': Icons.sports_esports_rounded,
+  'travel': Icons.flight_rounded,
+  'fitness': Icons.fitness_center_rounded,
+  'star': Icons.star_rounded,
+  'favorite': Icons.favorite_rounded,
+  'work': Icons.work_rounded,
+  'shopping': Icons.shopping_bag_rounded,
+  'cafe': Icons.local_cafe_rounded,
+  'tv': Icons.tv_rounded,
+};
+
+/// Resolve a stored [iconName] to an icon, falling back to a generic one.
+IconData categoryIconFor(String iconName) =>
+    categoryIcons[iconName] ?? Icons.category_rounded;
+
+/// Palette of selectable accent colors for ranking categories. The stored
+/// `colorValue` is an ARGB int; 0 means "use the theme accent".
+const List<Color> categoryColors = [
+  AppColors.indigo500,
+  AppColors.fuchsia500,
+  AppColors.emerald500,
+  AppColors.amber500,
+  AppColors.rose500,
+  AppColors.slate400,
+];
+
 const Map<Mood, String> moodIcons = {
   Mood.euphoric: '🤩',
   Mood.happy: '🙂',

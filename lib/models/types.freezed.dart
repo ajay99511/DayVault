@@ -1356,6 +1356,321 @@ class __$JournalEntryCopyWithImpl<$Res>
 }
 
 /// @nodoc
+mixin _$RankSnapshot {
+  DateTime get date;
+  int get rank;
+
+  /// Create a copy of RankSnapshot
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  $RankSnapshotCopyWith<RankSnapshot> get copyWith =>
+      _$RankSnapshotCopyWithImpl<RankSnapshot>(
+          this as RankSnapshot, _$identity);
+
+  /// Serializes this RankSnapshot to a JSON map.
+  Map<String, dynamic> toJson();
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is RankSnapshot &&
+            (identical(other.date, date) || other.date == date) &&
+            (identical(other.rank, rank) || other.rank == rank));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, date, rank);
+
+  @override
+  String toString() {
+    return 'RankSnapshot(date: $date, rank: $rank)';
+  }
+}
+
+/// @nodoc
+abstract mixin class $RankSnapshotCopyWith<$Res> {
+  factory $RankSnapshotCopyWith(
+          RankSnapshot value, $Res Function(RankSnapshot) _then) =
+      _$RankSnapshotCopyWithImpl;
+  @useResult
+  $Res call({DateTime date, int rank});
+}
+
+/// @nodoc
+class _$RankSnapshotCopyWithImpl<$Res> implements $RankSnapshotCopyWith<$Res> {
+  _$RankSnapshotCopyWithImpl(this._self, this._then);
+
+  final RankSnapshot _self;
+  final $Res Function(RankSnapshot) _then;
+
+  /// Create a copy of RankSnapshot
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? date = null,
+    Object? rank = null,
+  }) {
+    return _then(_self.copyWith(
+      date: null == date
+          ? _self.date
+          : date // ignore: cast_nullable_to_non_nullable
+              as DateTime,
+      rank: null == rank
+          ? _self.rank
+          : rank // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// Adds pattern-matching-related methods to [RankSnapshot].
+extension RankSnapshotPatterns on RankSnapshot {
+  /// A variant of `map` that fallback to returning `orElse`.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case _:
+  ///     return orElse();
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>(
+    TResult Function(_RankSnapshot value)? $default, {
+    required TResult orElse(),
+  }) {
+    final _that = this;
+    switch (_that) {
+      case _RankSnapshot() when $default != null:
+        return $default(_that);
+      case _:
+        return orElse();
+    }
+  }
+
+  /// A `switch`-like method, using callbacks.
+  ///
+  /// Callbacks receives the raw object, upcasted.
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case final Subclass2 value:
+  ///     return ...;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>(
+    TResult Function(_RankSnapshot value) $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _RankSnapshot():
+        return $default(_that);
+      case _:
+        throw StateError('Unexpected subclass');
+    }
+  }
+
+  /// A variant of `map` that fallback to returning `null`.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case final Subclass value:
+  ///     return ...;
+  ///   case _:
+  ///     return null;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>(
+    TResult? Function(_RankSnapshot value)? $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _RankSnapshot() when $default != null:
+        return $default(_that);
+      case _:
+        return null;
+    }
+  }
+
+  /// A variant of `when` that fallback to an `orElse` callback.
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case _:
+  ///     return orElse();
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>(
+    TResult Function(DateTime date, int rank)? $default, {
+    required TResult orElse(),
+  }) {
+    final _that = this;
+    switch (_that) {
+      case _RankSnapshot() when $default != null:
+        return $default(_that.date, _that.rank);
+      case _:
+        return orElse();
+    }
+  }
+
+  /// A `switch`-like method, using callbacks.
+  ///
+  /// As opposed to `map`, this offers destructuring.
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case Subclass2(:final field2):
+  ///     return ...;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>(
+    TResult Function(DateTime date, int rank) $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _RankSnapshot():
+        return $default(_that.date, _that.rank);
+      case _:
+        throw StateError('Unexpected subclass');
+    }
+  }
+
+  /// A variant of `when` that fallback to returning `null`
+  ///
+  /// It is equivalent to doing:
+  /// ```dart
+  /// switch (sealedClass) {
+  ///   case Subclass(:final field):
+  ///     return ...;
+  ///   case _:
+  ///     return null;
+  /// }
+  /// ```
+
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>(
+    TResult? Function(DateTime date, int rank)? $default,
+  ) {
+    final _that = this;
+    switch (_that) {
+      case _RankSnapshot() when $default != null:
+        return $default(_that.date, _that.rank);
+      case _:
+        return null;
+    }
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _RankSnapshot implements RankSnapshot {
+  const _RankSnapshot({required this.date, required this.rank});
+  factory _RankSnapshot.fromJson(Map<String, dynamic> json) =>
+      _$RankSnapshotFromJson(json);
+
+  @override
+  final DateTime date;
+  @override
+  final int rank;
+
+  /// Create a copy of RankSnapshot
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @pragma('vm:prefer-inline')
+  _$RankSnapshotCopyWith<_RankSnapshot> get copyWith =>
+      __$RankSnapshotCopyWithImpl<_RankSnapshot>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$RankSnapshotToJson(
+      this,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _RankSnapshot &&
+            (identical(other.date, date) || other.date == date) &&
+            (identical(other.rank, rank) || other.rank == rank));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, date, rank);
+
+  @override
+  String toString() {
+    return 'RankSnapshot(date: $date, rank: $rank)';
+  }
+}
+
+/// @nodoc
+abstract mixin class _$RankSnapshotCopyWith<$Res>
+    implements $RankSnapshotCopyWith<$Res> {
+  factory _$RankSnapshotCopyWith(
+          _RankSnapshot value, $Res Function(_RankSnapshot) _then) =
+      __$RankSnapshotCopyWithImpl;
+  @override
+  @useResult
+  $Res call({DateTime date, int rank});
+}
+
+/// @nodoc
+class __$RankSnapshotCopyWithImpl<$Res>
+    implements _$RankSnapshotCopyWith<$Res> {
+  __$RankSnapshotCopyWithImpl(this._self, this._then);
+
+  final _RankSnapshot _self;
+  final $Res Function(_RankSnapshot) _then;
+
+  /// Create a copy of RankSnapshot
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $Res call({
+    Object? date = null,
+    Object? rank = null,
+  }) {
+    return _then(_RankSnapshot(
+      date: null == date
+          ? _self.date
+          : date // ignore: cast_nullable_to_non_nullable
+              as DateTime,
+      rank: null == rank
+          ? _self.rank
+          : rank // ignore: cast_nullable_to_non_nullable
+              as int,
+    ));
+  }
+}
+
+/// @nodoc
 mixin _$RankedItem {
   String get id;
   int get rank;
@@ -1364,6 +1679,9 @@ mixin _$RankedItem {
   String get subtitle; // e.g. director, author, cuisine type
   String get notes; // free-form personal notes
   DateTime get dateAdded;
+  ImageReference?
+      get image; // optional cover art (reference-only, like journal)
+  List<RankSnapshot> get history;
 
   /// Create a copy of RankedItem
   /// with the given fields replaced by the non-null parameter values.
@@ -1388,17 +1706,19 @@ mixin _$RankedItem {
                 other.subtitle == subtitle) &&
             (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.dateAdded, dateAdded) ||
-                other.dateAdded == dateAdded));
+                other.dateAdded == dateAdded) &&
+            (identical(other.image, image) || other.image == image) &&
+            const DeepCollectionEquality().equals(other.history, history));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(
-      runtimeType, id, rank, name, rating, subtitle, notes, dateAdded);
+  int get hashCode => Object.hash(runtimeType, id, rank, name, rating, subtitle,
+      notes, dateAdded, image, const DeepCollectionEquality().hash(history));
 
   @override
   String toString() {
-    return 'RankedItem(id: $id, rank: $rank, name: $name, rating: $rating, subtitle: $subtitle, notes: $notes, dateAdded: $dateAdded)';
+    return 'RankedItem(id: $id, rank: $rank, name: $name, rating: $rating, subtitle: $subtitle, notes: $notes, dateAdded: $dateAdded, image: $image, history: $history)';
   }
 }
 
@@ -1415,7 +1735,11 @@ abstract mixin class $RankedItemCopyWith<$Res> {
       double rating,
       String subtitle,
       String notes,
-      DateTime dateAdded});
+      DateTime dateAdded,
+      ImageReference? image,
+      List<RankSnapshot> history});
+
+  $ImageReferenceCopyWith<$Res>? get image;
 }
 
 /// @nodoc
@@ -1437,6 +1761,8 @@ class _$RankedItemCopyWithImpl<$Res> implements $RankedItemCopyWith<$Res> {
     Object? subtitle = null,
     Object? notes = null,
     Object? dateAdded = null,
+    Object? image = freezed,
+    Object? history = null,
   }) {
     return _then(_self.copyWith(
       id: null == id
@@ -1467,7 +1793,29 @@ class _$RankedItemCopyWithImpl<$Res> implements $RankedItemCopyWith<$Res> {
           ? _self.dateAdded
           : dateAdded // ignore: cast_nullable_to_non_nullable
               as DateTime,
+      image: freezed == image
+          ? _self.image
+          : image // ignore: cast_nullable_to_non_nullable
+              as ImageReference?,
+      history: null == history
+          ? _self.history
+          : history // ignore: cast_nullable_to_non_nullable
+              as List<RankSnapshot>,
     ));
+  }
+
+  /// Create a copy of RankedItem
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $ImageReferenceCopyWith<$Res>? get image {
+    if (_self.image == null) {
+      return null;
+    }
+
+    return $ImageReferenceCopyWith<$Res>(_self.image!, (value) {
+      return _then(_self.copyWith(image: value));
+    });
   }
 }
 
@@ -1564,16 +1912,32 @@ extension RankedItemPatterns on RankedItem {
 
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>(
-    TResult Function(String id, int rank, String name, double rating,
-            String subtitle, String notes, DateTime dateAdded)?
+    TResult Function(
+            String id,
+            int rank,
+            String name,
+            double rating,
+            String subtitle,
+            String notes,
+            DateTime dateAdded,
+            ImageReference? image,
+            List<RankSnapshot> history)?
         $default, {
     required TResult orElse(),
   }) {
     final _that = this;
     switch (_that) {
       case _RankedItem() when $default != null:
-        return $default(_that.id, _that.rank, _that.name, _that.rating,
-            _that.subtitle, _that.notes, _that.dateAdded);
+        return $default(
+            _that.id,
+            _that.rank,
+            _that.name,
+            _that.rating,
+            _that.subtitle,
+            _that.notes,
+            _that.dateAdded,
+            _that.image,
+            _that.history);
       case _:
         return orElse();
     }
@@ -1594,15 +1958,31 @@ extension RankedItemPatterns on RankedItem {
 
   @optionalTypeArgs
   TResult when<TResult extends Object?>(
-    TResult Function(String id, int rank, String name, double rating,
-            String subtitle, String notes, DateTime dateAdded)
+    TResult Function(
+            String id,
+            int rank,
+            String name,
+            double rating,
+            String subtitle,
+            String notes,
+            DateTime dateAdded,
+            ImageReference? image,
+            List<RankSnapshot> history)
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _RankedItem():
-        return $default(_that.id, _that.rank, _that.name, _that.rating,
-            _that.subtitle, _that.notes, _that.dateAdded);
+        return $default(
+            _that.id,
+            _that.rank,
+            _that.name,
+            _that.rating,
+            _that.subtitle,
+            _that.notes,
+            _that.dateAdded,
+            _that.image,
+            _that.history);
       case _:
         throw StateError('Unexpected subclass');
     }
@@ -1622,15 +2002,31 @@ extension RankedItemPatterns on RankedItem {
 
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>(
-    TResult? Function(String id, int rank, String name, double rating,
-            String subtitle, String notes, DateTime dateAdded)?
+    TResult? Function(
+            String id,
+            int rank,
+            String name,
+            double rating,
+            String subtitle,
+            String notes,
+            DateTime dateAdded,
+            ImageReference? image,
+            List<RankSnapshot> history)?
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _RankedItem() when $default != null:
-        return $default(_that.id, _that.rank, _that.name, _that.rating,
-            _that.subtitle, _that.notes, _that.dateAdded);
+        return $default(
+            _that.id,
+            _that.rank,
+            _that.name,
+            _that.rating,
+            _that.subtitle,
+            _that.notes,
+            _that.dateAdded,
+            _that.image,
+            _that.history);
       case _:
         return null;
     }
@@ -1647,7 +2043,10 @@ class _RankedItem implements RankedItem {
       this.rating = 0,
       this.subtitle = '',
       this.notes = '',
-      required this.dateAdded});
+      required this.dateAdded,
+      this.image,
+      final List<RankSnapshot> history = const []})
+      : _history = history;
   factory _RankedItem.fromJson(Map<String, dynamic> json) =>
       _$RankedItemFromJson(json);
 
@@ -1671,6 +2070,18 @@ class _RankedItem implements RankedItem {
 // free-form personal notes
   @override
   final DateTime dateAdded;
+  @override
+  final ImageReference? image;
+// optional cover art (reference-only, like journal)
+  final List<RankSnapshot> _history;
+// optional cover art (reference-only, like journal)
+  @override
+  @JsonKey()
+  List<RankSnapshot> get history {
+    if (_history is EqualUnmodifiableListView) return _history;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_history);
+  }
 
   /// Create a copy of RankedItem
   /// with the given fields replaced by the non-null parameter values.
@@ -1700,17 +2111,19 @@ class _RankedItem implements RankedItem {
                 other.subtitle == subtitle) &&
             (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.dateAdded, dateAdded) ||
-                other.dateAdded == dateAdded));
+                other.dateAdded == dateAdded) &&
+            (identical(other.image, image) || other.image == image) &&
+            const DeepCollectionEquality().equals(other._history, _history));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(
-      runtimeType, id, rank, name, rating, subtitle, notes, dateAdded);
+  int get hashCode => Object.hash(runtimeType, id, rank, name, rating, subtitle,
+      notes, dateAdded, image, const DeepCollectionEquality().hash(_history));
 
   @override
   String toString() {
-    return 'RankedItem(id: $id, rank: $rank, name: $name, rating: $rating, subtitle: $subtitle, notes: $notes, dateAdded: $dateAdded)';
+    return 'RankedItem(id: $id, rank: $rank, name: $name, rating: $rating, subtitle: $subtitle, notes: $notes, dateAdded: $dateAdded, image: $image, history: $history)';
   }
 }
 
@@ -1729,7 +2142,12 @@ abstract mixin class _$RankedItemCopyWith<$Res>
       double rating,
       String subtitle,
       String notes,
-      DateTime dateAdded});
+      DateTime dateAdded,
+      ImageReference? image,
+      List<RankSnapshot> history});
+
+  @override
+  $ImageReferenceCopyWith<$Res>? get image;
 }
 
 /// @nodoc
@@ -1751,6 +2169,8 @@ class __$RankedItemCopyWithImpl<$Res> implements _$RankedItemCopyWith<$Res> {
     Object? subtitle = null,
     Object? notes = null,
     Object? dateAdded = null,
+    Object? image = freezed,
+    Object? history = null,
   }) {
     return _then(_RankedItem(
       id: null == id
@@ -1781,7 +2201,29 @@ class __$RankedItemCopyWithImpl<$Res> implements _$RankedItemCopyWith<$Res> {
           ? _self.dateAdded
           : dateAdded // ignore: cast_nullable_to_non_nullable
               as DateTime,
+      image: freezed == image
+          ? _self.image
+          : image // ignore: cast_nullable_to_non_nullable
+              as ImageReference?,
+      history: null == history
+          ? _self._history
+          : history // ignore: cast_nullable_to_non_nullable
+              as List<RankSnapshot>,
     ));
+  }
+
+  /// Create a copy of RankedItem
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $ImageReferenceCopyWith<$Res>? get image {
+    if (_self.image == null) {
+      return null;
+    }
+
+    return $ImageReferenceCopyWith<$Res>(_self.image!, (value) {
+      return _then(_self.copyWith(image: value));
+    });
   }
 }
 
@@ -1792,6 +2234,7 @@ mixin _$RankingCategory {
   String get iconName;
   List<RankedItem> get items;
   bool get isFavorite;
+  int get colorValue;
 
   /// Create a copy of RankingCategory
   /// with the given fields replaced by the non-null parameter values.
@@ -1815,17 +2258,19 @@ mixin _$RankingCategory {
                 other.iconName == iconName) &&
             const DeepCollectionEquality().equals(other.items, items) &&
             (identical(other.isFavorite, isFavorite) ||
-                other.isFavorite == isFavorite));
+                other.isFavorite == isFavorite) &&
+            (identical(other.colorValue, colorValue) ||
+                other.colorValue == colorValue));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, id, title, iconName,
-      const DeepCollectionEquality().hash(items), isFavorite);
+      const DeepCollectionEquality().hash(items), isFavorite, colorValue);
 
   @override
   String toString() {
-    return 'RankingCategory(id: $id, title: $title, iconName: $iconName, items: $items, isFavorite: $isFavorite)';
+    return 'RankingCategory(id: $id, title: $title, iconName: $iconName, items: $items, isFavorite: $isFavorite, colorValue: $colorValue)';
   }
 }
 
@@ -1840,7 +2285,8 @@ abstract mixin class $RankingCategoryCopyWith<$Res> {
       String title,
       String iconName,
       List<RankedItem> items,
-      bool isFavorite});
+      bool isFavorite,
+      int colorValue});
 }
 
 /// @nodoc
@@ -1861,6 +2307,7 @@ class _$RankingCategoryCopyWithImpl<$Res>
     Object? iconName = null,
     Object? items = null,
     Object? isFavorite = null,
+    Object? colorValue = null,
   }) {
     return _then(_self.copyWith(
       id: null == id
@@ -1883,6 +2330,10 @@ class _$RankingCategoryCopyWithImpl<$Res>
           ? _self.isFavorite
           : isFavorite // ignore: cast_nullable_to_non_nullable
               as bool,
+      colorValue: null == colorValue
+          ? _self.colorValue
+          : colorValue // ignore: cast_nullable_to_non_nullable
+              as int,
     ));
   }
 }
@@ -1981,7 +2432,7 @@ extension RankingCategoryPatterns on RankingCategory {
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>(
     TResult Function(String id, String title, String iconName,
-            List<RankedItem> items, bool isFavorite)?
+            List<RankedItem> items, bool isFavorite, int colorValue)?
         $default, {
     required TResult orElse(),
   }) {
@@ -1989,7 +2440,7 @@ extension RankingCategoryPatterns on RankingCategory {
     switch (_that) {
       case _RankingCategory() when $default != null:
         return $default(_that.id, _that.title, _that.iconName, _that.items,
-            _that.isFavorite);
+            _that.isFavorite, _that.colorValue);
       case _:
         return orElse();
     }
@@ -2011,14 +2462,14 @@ extension RankingCategoryPatterns on RankingCategory {
   @optionalTypeArgs
   TResult when<TResult extends Object?>(
     TResult Function(String id, String title, String iconName,
-            List<RankedItem> items, bool isFavorite)
+            List<RankedItem> items, bool isFavorite, int colorValue)
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _RankingCategory():
         return $default(_that.id, _that.title, _that.iconName, _that.items,
-            _that.isFavorite);
+            _that.isFavorite, _that.colorValue);
       case _:
         throw StateError('Unexpected subclass');
     }
@@ -2039,14 +2490,14 @@ extension RankingCategoryPatterns on RankingCategory {
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>(
     TResult? Function(String id, String title, String iconName,
-            List<RankedItem> items, bool isFavorite)?
+            List<RankedItem> items, bool isFavorite, int colorValue)?
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _RankingCategory() when $default != null:
         return $default(_that.id, _that.title, _that.iconName, _that.items,
-            _that.isFavorite);
+            _that.isFavorite, _that.colorValue);
       case _:
         return null;
     }
@@ -2061,7 +2512,8 @@ class _RankingCategory implements RankingCategory {
       required this.title,
       required this.iconName,
       final List<RankedItem> items = const [],
-      this.isFavorite = false})
+      this.isFavorite = false,
+      this.colorValue = 0})
       : _items = items;
   factory _RankingCategory.fromJson(Map<String, dynamic> json) =>
       _$RankingCategoryFromJson(json);
@@ -2084,6 +2536,9 @@ class _RankingCategory implements RankingCategory {
   @override
   @JsonKey()
   final bool isFavorite;
+  @override
+  @JsonKey()
+  final int colorValue;
 
   /// Create a copy of RankingCategory
   /// with the given fields replaced by the non-null parameter values.
@@ -2111,17 +2566,19 @@ class _RankingCategory implements RankingCategory {
                 other.iconName == iconName) &&
             const DeepCollectionEquality().equals(other._items, _items) &&
             (identical(other.isFavorite, isFavorite) ||
-                other.isFavorite == isFavorite));
+                other.isFavorite == isFavorite) &&
+            (identical(other.colorValue, colorValue) ||
+                other.colorValue == colorValue));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(runtimeType, id, title, iconName,
-      const DeepCollectionEquality().hash(_items), isFavorite);
+      const DeepCollectionEquality().hash(_items), isFavorite, colorValue);
 
   @override
   String toString() {
-    return 'RankingCategory(id: $id, title: $title, iconName: $iconName, items: $items, isFavorite: $isFavorite)';
+    return 'RankingCategory(id: $id, title: $title, iconName: $iconName, items: $items, isFavorite: $isFavorite, colorValue: $colorValue)';
   }
 }
 
@@ -2138,7 +2595,8 @@ abstract mixin class _$RankingCategoryCopyWith<$Res>
       String title,
       String iconName,
       List<RankedItem> items,
-      bool isFavorite});
+      bool isFavorite,
+      int colorValue});
 }
 
 /// @nodoc
@@ -2159,6 +2617,7 @@ class __$RankingCategoryCopyWithImpl<$Res>
     Object? iconName = null,
     Object? items = null,
     Object? isFavorite = null,
+    Object? colorValue = null,
   }) {
     return _then(_RankingCategory(
       id: null == id
@@ -2181,6 +2640,10 @@ class __$RankingCategoryCopyWithImpl<$Res>
           ? _self.isFavorite
           : isFavorite // ignore: cast_nullable_to_non_nullable
               as bool,
+      colorValue: null == colorValue
+          ? _self.colorValue
+          : colorValue // ignore: cast_nullable_to_non_nullable
+              as int,
     ));
   }
 }

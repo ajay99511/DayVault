@@ -165,6 +165,9 @@ class ObjectBoxRankingCategory {
   String iconName = '';
   bool isFavorite = false;
 
+  /// ARGB accent color; 0 means "use the theme accent".
+  int colorValue = 0;
+
   /// Items stored as JSON-encoded list of RankedItem maps.
   String itemsJson = '[]';
 
@@ -182,6 +185,7 @@ class ObjectBoxRankingCategory {
       iconName: iconName,
       items: items,
       isFavorite: isFavorite,
+      colorValue: colorValue,
     );
   }
 
@@ -191,6 +195,7 @@ class ObjectBoxRankingCategory {
       ..title = category.title
       ..iconName = category.iconName
       ..isFavorite = category.isFavorite
+      ..colorValue = category.colorValue
       ..itemsJson = jsonEncode(category.items.map((i) => i.toJson()).toList());
   }
 }

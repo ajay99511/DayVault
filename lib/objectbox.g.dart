@@ -111,7 +111,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(2, 6201097887440269210),
     name: 'ObjectBoxRankingCategory',
-    lastPropertyId: const obx_int.IdUid(6, 4134302183630457136),
+    lastPropertyId: const obx_int.IdUid(7, 2688526734218146488),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -149,6 +149,12 @@ final _entities = <obx_int.ModelEntity>[
         id: const obx_int.IdUid(6, 4134302183630457136),
         name: 'isFavorite',
         type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(7, 2688526734218146488),
+        name: 'colorValue',
+        type: 6,
         flags: 0,
       ),
     ],
@@ -409,13 +415,14 @@ obx_int.ModelDefinition getObjectBoxModel() {
             final titleOffset = fbb.writeString(object.title);
             final iconNameOffset = fbb.writeString(object.iconName);
             final itemsJsonOffset = fbb.writeString(object.itemsJson);
-            fbb.startTable(7);
+            fbb.startTable(8);
             fbb.addInt64(0, object.id);
             fbb.addOffset(1, categoryIdOffset);
             fbb.addOffset(2, titleOffset);
             fbb.addOffset(3, iconNameOffset);
             fbb.addOffset(4, itemsJsonOffset);
             fbb.addBool(5, object.isFavorite);
+            fbb.addInt64(6, object.colorValue);
             fbb.finish(fbb.endTable());
             return object.id;
           },
@@ -442,6 +449,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
                 rootOffset,
                 14,
                 false,
+              )
+              ..colorValue = const fb.Int64Reader().vTableGet(
+                buffer,
+                rootOffset,
+                16,
+                0,
               );
 
             return object;
@@ -599,6 +612,11 @@ class ObjectBoxRankingCategory_ {
   /// See [ObjectBoxRankingCategory.isFavorite].
   static final isFavorite = obx.QueryBooleanProperty<ObjectBoxRankingCategory>(
     _entities[1].properties[5],
+  );
+
+  /// See [ObjectBoxRankingCategory.colorValue].
+  static final colorValue = obx.QueryIntegerProperty<ObjectBoxRankingCategory>(
+    _entities[1].properties[6],
   );
 }
 
