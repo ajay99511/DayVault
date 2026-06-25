@@ -93,6 +93,13 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
   int _totalCount = 0;
   final ScrollController _scrollController = ScrollController();
 
+  // Scroll-to-top affordance. Appears once the user has scrolled past roughly
+  // one viewport so it never clutters the top of a short list. The flag is only
+  // flipped when the threshold is *crossed* (not on every scroll frame) to keep
+  // scrolling cheap.
+  static const double _scrollTopThreshold = 600;
+  bool _showScrollToTop = false;
+
   // "On this day" — past-year memories for today's calendar day.
   List<JournalEntry> _onThisDay = const [];
   bool _onThisDayDismissed = false;
@@ -167,13 +174,29 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
     super.dispose();
   }
 
-  /// Append the next page when the user scrolls within ~600px of the bottom.
+  /// Append the next page when the user scrolls within ~600px of the bottom,
+  /// and toggle the scroll-to-top affordance when the threshold is crossed.
   void _onScroll() {
     if (!_scrollController.hasClients) return;
     final pos = _scrollController.position;
     if (pos.pixels >= pos.maxScrollExtent - 600) {
       _loadNextPage();
     }
+
+    final shouldShow = pos.pixels > _scrollTopThreshold;
+    if (shouldShow != _showScrollToTop) {
+      setState(() => _showScrollToTop = shouldShow);
+    }
+  }
+
+  /// Smoothly return to the top of the list.
+  void _scrollToTop() {
+    if (!_scrollController.hasClients) return;
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   /// Reload from scratch using whichever mode the current filter state implies.
@@ -211,6 +234,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
         _hasMore = page.nextCursor != null;
         _showingFullSet = false;
         _totalCount = ref.read(storageServiceProvider).journalCount();
+        _showScrollToTop = false;
         isLoading = false;
       });
     } catch (e, st) {
@@ -238,6 +262,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
         _hasMore = false;
         _showingFullSet = true;
         _totalCount = data.length;
+        _showScrollToTop = false;
         isLoading = false;
       });
     } catch (e, st) {
@@ -509,6 +534,52 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                   ),
                 ),
                 child: const Icon(Icons.add, color: Colors.white, size: 32),
+              ),
+            ),
+          ),
+
+          // Scroll-to-top — fades/slides in once past one viewport, sitting just
+          // above the add FAB and sharing its wide-layout right alignment.
+          Positioned(
+            bottom: 196,
+            right: 32 +
+                (MediaQuery.of(context).size.width -
+                            Breakpoints.contentMaxWidth)
+                        .clamp(0, double.infinity) /
+                    2,
+            child: IgnorePointer(
+              ignoring: !_showScrollToTop,
+              child: AnimatedSlide(
+                offset: _showScrollToTop ? Offset.zero : const Offset(0, 0.4),
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                child: AnimatedOpacity(
+                  opacity: _showScrollToTop ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: GestureDetector(
+                    onTap: _scrollToTop,
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: context.tokens.surfaceGlassFill,
+                        border: Border.all(color: context.tokens.glassBorder),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            blurRadius: 12,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.keyboard_arrow_up,
+                        color: context.tokens.textPrimary,
+                        size: 26,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
