@@ -189,19 +189,23 @@ class BackupService {
       }
 
       onProgress?.call(BackupStage.restoring);
-      int importedEntries = 0;
       int skippedEntries = 0;
 
+      // Deserialize first (skipping any malformed entries), then write the whole
+      // batch in a single ObjectBox transaction via putManyJournalEntries —
+      // far cheaper than a per-entry query+put for large restores. Upsert-by
+      // entryId semantics are preserved (existing ids are overwritten).
+      final entries = <JournalEntry>[];
       for (final entryData in journalList) {
         try {
-          final entry = _deserializeEntry(entryData as Map<String, dynamic>);
-          await _storageService.saveJournalEntry(entry);
-          importedEntries++;
+          entries.add(_deserializeEntry(entryData as Map<String, dynamic>));
         } catch (e) {
           debugPrint('Failed to import entry: $e');
           skippedEntries++;
         }
       }
+      await _storageService.putManyJournalEntries(entries);
+      final importedEntries = entries.length;
 
       // Import rankings
       final rankingsList = data['rankings'] as List?;

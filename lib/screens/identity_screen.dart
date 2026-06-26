@@ -903,6 +903,10 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // A restore (or any rankings change made from another surface) bumps the
+    // shared revision — reload so this kept-alive tab never shows stale data.
+    ref.listen(journalRevisionProvider, (_, __) => _load());
+
     if (_isLoading) {
       return const Scaffold(
         backgroundColor: Colors.transparent,

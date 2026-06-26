@@ -316,6 +316,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final statsAsync = ref.watch(statsProvider);
     final themeMode = ref.watch(themeModeProvider);
 
+    // A journal mutation anywhere (this screen's restore, or the Journal/
+    // Calendar/Viewer surfaces) bumps the shared revision. Profile is kept
+    // alive in the IndexedStack, so without this the cached stats would stay
+    // stale for the whole session — invalidate them so the metrics recompute.
+    ref.listen(journalRevisionProvider, (_, __) => ref.invalidate(statsProvider));
+
     // Non-blocking notification on stats failure (Req 1.7). Using ref.listen
     // (not a build-time side effect) ensures the SnackBar fires only on the
     // transition into an error state, not on every rebuild.
@@ -460,7 +466,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "Neural Encryption",
+                                "App Lock",
                                 style: TextStyle(
                                   color: context.tokens.textPrimary,
                                   fontWeight: FontWeight.bold,
@@ -468,8 +474,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               ),
                               Text(
                                 settings.biometricsEnabled
-                                    ? "Biometric Access Enrolled"
-                                    : "Require security on launch",
+                                    ? "Biometric unlock enrolled"
+                                    : "Require a PIN on launch",
                                 style: TextStyle(
                                   color: context.tokens.textTertiary,
                                   fontSize: 12,
@@ -498,8 +504,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           const SizedBox(width: 8),
                           Text(
                             settings.biometricsEnabled
-                                ? "BIOMETRICS + PASSKEY ACTIVE"
-                                : "PASSKEY ACTIVE",
+                                ? "BIOMETRICS + PIN ACTIVE"
+                                : "PIN LOCK ACTIVE",
                             style: const TextStyle(
                               color: AppColors.indigo500,
                               fontSize: 10,
@@ -906,6 +912,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       backup.path,
       isEncrypted: backup.isEncrypted,
     );
+
+    // Imported entries/rankings are now in storage — notify every journal-backed
+    // screen (and trigger the stats invalidation listener above) so the restore
+    // is visible without relaunching.
+    if (result.success) {
+      ref.read(journalRevisionProvider.notifier).bump();
+    }
 
     if (sheetContext.mounted) Navigator.pop(sheetContext);
     if (!screenContext.mounted) return;

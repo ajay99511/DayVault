@@ -305,7 +305,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  isPinSet ? "IDENTITY ENCRYPTED" : "SET YOUR SECURE PIN",
+                  isPinSet ? "ENTER YOUR PIN" : "SET YOUR SECURE PIN",
                   style: TextStyle(
                     color: isError ? AppColors.rose500 : AppColors.slate400,
                     fontSize: 10,
@@ -456,7 +456,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
                     ),
                     SizedBox(width: 6),
                     Text(
-                      "PBKDF2 ENCRYPTED",
+                      "PBKDF2-SECURED PIN",
                       style: TextStyle(
                         color: AppColors.emerald500,
                         fontSize: 9,
