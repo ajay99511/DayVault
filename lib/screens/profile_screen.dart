@@ -934,11 +934,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     );
   }
 
+  /// Capitalize the first letter of a mood name (e.g. "happy" -> "Happy").
+  static String _capitalize(String s) =>
+      s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+
   /// Renders the six journaling stat cards (Req 1.1) in three rows of two,
   /// applying the empty/zero-state formatting rules from Req 1.3.
   Widget _statsGrid(JournalStats stats) {
-    final moodValue =
-        stats.averageMood < 0 ? '—' : stats.averageMood.toStringAsFixed(1);
+    final mood = stats.mostFrequentMood;
+    final moodValue = mood == null
+        ? '—'
+        : '${moodIcons[mood] ?? ''} ${_capitalize(mood.name)}';
     final topTags = stats.topTags.isEmpty
         ? 'No tags yet'
         : stats.topTags.join(', ');
@@ -957,8 +963,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         const SizedBox(height: 12),
         Row(
           children: [
-            _statCard('Avg Mood', moodValue,
-                Icons.sentiment_satisfied_alt, AppColors.fuchsia500),
+            _statCard('Mood', moodValue,
+                Icons.sentiment_satisfied_alt, AppColors.fuchsia500,
+                valueFontSize: 16),
             const SizedBox(width: 12),
             _statCard('Words', '${stats.totalWordCount}',
                 Icons.text_fields, AppColors.emerald500),

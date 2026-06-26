@@ -77,11 +77,21 @@ void main() {
         });
         expect(stats.totalWordCount, expectedWords);
 
-        // averageMood == arithmetic mean of mood.index
-        final expectedMood =
-            entries.map((e) => e.mood.index).reduce((a, b) => a + b) /
-                entries.length;
-        expect(stats.averageMood, closeTo(expectedMood, 1e-9));
+        // mostFrequentMood == the modal mood, ties broken by lowest enum index
+        final moodFreq = <Mood, int>{};
+        for (final e in entries) {
+          moodFreq[e.mood] = (moodFreq[e.mood] ?? 0) + 1;
+        }
+        Mood expectedMood = Mood.values.first;
+        int bestCount = -1;
+        for (final mood in Mood.values) {
+          final c = moodFreq[mood] ?? 0;
+          if (c > bestCount) {
+            bestCount = c;
+            expectedMood = mood;
+          }
+        }
+        expect(stats.mostFrequentMood, expectedMood);
 
         // journalAgeInDays uses the oldest entry date
         final oldest = entries
@@ -112,11 +122,29 @@ void main() {
     test('empty collection returns the canonical empty stats', () {
       final stats = StatsNotifier.computeStats([]);
       expect(stats.totalEntries, 0);
-      expect(stats.averageMood, -1.0);
+      expect(stats.mostFrequentMood, isNull);
       expect(stats.streak, 0);
       expect(stats.totalWordCount, 0);
       expect(stats.journalAgeInDays, 0);
       expect(stats.topTags, isEmpty);
+    });
+
+    test('mostFrequentMood picks the modal mood', () {
+      final entries = [
+        _entry(id: '1', mood: Mood.sad),
+        _entry(id: '2', mood: Mood.happy),
+        _entry(id: '3', mood: Mood.happy),
+      ];
+      expect(StatsNotifier.computeStats(entries).mostFrequentMood, Mood.happy);
+    });
+
+    test('mostFrequentMood breaks ties by lowest enum index', () {
+      // happy (index 1) and sad (index 5) both appear once -> happy wins.
+      final entries = [
+        _entry(id: '1', mood: Mood.sad),
+        _entry(id: '2', mood: Mood.happy),
+      ];
+      expect(StatsNotifier.computeStats(entries).mostFrequentMood, Mood.happy);
     });
 
     test('top tags are alphabetically ordered on frequency ties', () {

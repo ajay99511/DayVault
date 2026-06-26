@@ -64,9 +64,12 @@ void main() {
       };
       
       await backupService.importFromJson(jsonEncode(backup));
-      
-      final captured = verify(mockStorage.saveJournalEntry(captureAny)).captured.first;
-      expect(captured.headline.length, 10000);
+
+      // Entries are restored as a single batch via putManyJournalEntries; the
+      // captured argument is the list of deserialized entries.
+      final captured =
+          verify(mockStorage.putManyJournalEntries(captureAny)).captured.first;
+      expect(captured.first.headline.length, 10000);
     });
   });
 

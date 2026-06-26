@@ -26,7 +26,7 @@ class StatsNotifier extends _$StatsNotifier {
     final todayDate = DateTime(today.year, today.month, today.day);
 
     int totalWordCount = 0;
-    double moodSum = 0;
+    final moodFreq = <Mood, int>{};
     DateTime? oldestDate;
     final tagFreq = <String, int>{};
 
@@ -34,7 +34,7 @@ class StatsNotifier extends _$StatsNotifier {
       totalWordCount += e.content.trim().isEmpty
           ? 0
           : e.content.trim().split(RegExp(r'\s+')).length;
-      moodSum += e.mood.index.toDouble();
+      moodFreq[e.mood] = (moodFreq[e.mood] ?? 0) + 1;
       final entryDay = DateTime(e.date.year, e.date.month, e.date.day);
       if (oldestDate == null || entryDay.isBefore(oldestDate)) {
         oldestDate = entryDay;
@@ -44,7 +44,19 @@ class StatsNotifier extends _$StatsNotifier {
       }
     }
 
-    final averageMood = moodSum / entries.length;
+    // Most frequently recorded mood. Iterating Mood.values in declaration order
+    // with a strict `>` makes ties resolve to the lowest-index mood, so the
+    // result is deterministic. entries is non-empty here, so this is non-null.
+    Mood mostFrequentMood = Mood.values.first;
+    int bestMoodCount = -1;
+    for (final mood in Mood.values) {
+      final count = moodFreq[mood] ?? 0;
+      if (count > bestMoodCount) {
+        bestMoodCount = count;
+        mostFrequentMood = mood;
+      }
+    }
+
     final journalAgeInDays = oldestDate == null
         ? 0
         : todayDate.difference(oldestDate).inDays;
@@ -61,7 +73,7 @@ class StatsNotifier extends _$StatsNotifier {
     return JournalStats(
       streak: _computeStreak(entries, todayDate),
       totalEntries: entries.length,
-      averageMood: averageMood,
+      mostFrequentMood: mostFrequentMood,
       totalWordCount: totalWordCount,
       journalAgeInDays: journalAgeInDays,
       topTags: topTags,
