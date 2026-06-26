@@ -56,15 +56,38 @@ class _JournalViewerScreenState extends ConsumerState<JournalViewerScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx); // Close dialog
-              await ref
-                  .read(storageServiceProvider)
-                  .deleteJournalEntry(entry.id);
-              // Refresh any journal-backed screens still alive.
-              ref.read(journalRevisionProvider.notifier).bump();
+              // Capture the full entry and provider handles BEFORE popping the
+              // screen — this State (and its `ref`) is disposed on pop, but the
+              // SnackBar's UNDO runs afterwards. The root ScaffoldMessenger and
+              // the revision notifier both outlive this route.
+              final deleted = entry;
+              final storage = ref.read(storageServiceProvider);
+              final revision = ref.read(journalRevisionProvider.notifier);
+              final messenger = ScaffoldMessenger.of(context);
+
+              await storage.deleteJournalEntry(deleted.id);
+              revision.bump();
               if (context.mounted) {
                 Navigator.pop(context,
                     true); // Close screen, return true to signify deletion
               }
+
+              messenger
+                ..clearSnackBars()
+                ..showSnackBar(
+                  SnackBar(
+                    content: const Text('Entry deleted'),
+                    behavior: SnackBarBehavior.floating,
+                    action: SnackBarAction(
+                      label: 'UNDO',
+                      onPressed: () async {
+                        // Re-save restores the entry verbatim (upsert by id).
+                        await storage.saveJournalEntry(deleted);
+                        revision.bump();
+                      },
+                    ),
+                  ),
+                );
             },
             child: const Text('Delete',
                 style: TextStyle(color: AppColors.rose500)),

@@ -156,9 +156,18 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
   /// banner and are never surfaced as errors.
   Future<void> _loadOnThisDay() async {
     try {
-      final memories =
-          await ref.read(storageServiceProvider).getOnThisDay(DateTime.now());
-      if (mounted) setState(() => _onThisDay = memories);
+      final storage = ref.read(storageServiceProvider);
+      final now = DateTime.now();
+      final memories = await storage.getOnThisDay(now);
+      // Respect a dismissal the user made earlier today (persisted across
+      // launches); the banner returns on a new calendar day.
+      final dismissed = await storage.isOnThisDayDismissed(now);
+      if (mounted) {
+        setState(() {
+          _onThisDay = memories;
+          _onThisDayDismissed = dismissed;
+        });
+      }
     } catch (e, st) {
       debugPrint('On this day load failed: $e\n$st');
     }
@@ -880,7 +889,13 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                 icon: Icon(Icons.close,
                     size: 18, color: context.tokens.textTertiary),
                 tooltip: 'Dismiss',
-                onPressed: () => setState(() => _onThisDayDismissed = true),
+                onPressed: () {
+                  setState(() => _onThisDayDismissed = true);
+                  // Persist so it stays dismissed for the rest of today.
+                  ref
+                      .read(storageServiceProvider)
+                      .setOnThisDayDismissed(DateTime.now());
+                },
               ),
             ],
           ),

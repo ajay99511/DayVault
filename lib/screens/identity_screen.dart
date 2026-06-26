@@ -830,10 +830,32 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     );
 
     if (confirmed == true) {
-      await ref
-          .read(storageServiceProvider)
-          .deleteRankedItem(activeId, item.id);
+      if (!mounted) return;
+      final storage = ref.read(storageServiceProvider);
+      // Snapshot the whole category (items + ranks) so UNDO restores the exact
+      // prior order, not just an appended copy.
+      final categorySnapshot = _activeCategory;
+      final messenger = ScaffoldMessenger.of(context);
+
+      await storage.deleteRankedItem(activeId, item.id);
       await _load();
+
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(
+          SnackBar(
+            // Don't leak the item name while privacy masking is on.
+            content: Text(_isMasked ? 'Item removed' : 'Removed "${item.name}"'),
+            behavior: SnackBarBehavior.floating,
+            action: SnackBarAction(
+              label: 'UNDO',
+              onPressed: () async {
+                await storage.updateRankingCategory(categorySnapshot);
+                await _load();
+              },
+            ),
+          ),
+        );
     }
   }
 

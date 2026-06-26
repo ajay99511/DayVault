@@ -489,6 +489,25 @@ class StorageService {
     return streak;
   }
 
+  // ─── "On this day" banner dismissal ─────────────────────────────────────
+  // Persist the calendar day the user dismissed the banner on, so it stays
+  // hidden for that day but returns on later days (previously the dismissal was
+  // in-memory only and reset every launch). Stored in the same key-value store
+  // used for drafts; the value is a non-sensitive date string.
+  static const String _onThisDayDismissedKey = 'on_this_day_dismissed';
+
+  static String _dayKey(DateTime day) => '${day.year}-${day.month}-${day.day}';
+
+  Future<void> setOnThisDayDismissed(DateTime day) async {
+    await _draftStorage.write(
+        key: _onThisDayDismissedKey, value: _dayKey(day));
+  }
+
+  Future<bool> isOnThisDayDismissed(DateTime day) async {
+    final stored = await _draftStorage.read(key: _onThisDayDismissedKey);
+    return stored == _dayKey(day);
+  }
+
   // ─── Draft Management ───────────────────────────────────────────────────
 
   /// Save entry draft for auto-save functionality
