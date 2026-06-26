@@ -46,12 +46,14 @@ abstract class ImageReference with _$ImageReference {
       _$ImageReferenceFromJson(json);
 }
 
+/// A named place attached to an entry. Coordinate capture (lat/long, maps) was
+/// never implemented — the editor only ever recorded a free-text place name —
+/// so the unused coordinate fields were removed. Old data / backups that still
+/// carry `latitude`/`longitude` keys deserialize fine; those keys are ignored.
 @freezed
 abstract class LocationData with _$LocationData {
   const factory LocationData({
     required String name,
-    required double latitude,
-    required double longitude,
   }) = _LocationData;
 
   factory LocationData.fromJson(Map<String, dynamic> json) =>

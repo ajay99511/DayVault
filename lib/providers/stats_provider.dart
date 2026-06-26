@@ -29,6 +29,8 @@ class StatsNotifier extends _$StatsNotifier {
     final moodFreq = <Mood, int>{};
     DateTime? oldestDate;
     final tagFreq = <String, int>{};
+    // Entries bucketed into the last 12 weeks (index 11 == current week).
+    final entriesPerWeek = List<int>.filled(12, 0);
 
     for (final e in entries) {
       totalWordCount += e.content.trim().isEmpty
@@ -39,6 +41,11 @@ class StatsNotifier extends _$StatsNotifier {
       if (oldestDate == null || entryDay.isBefore(oldestDate)) {
         oldestDate = entryDay;
       }
+      // Future-dated entries fall in the current week; entries older than 12
+      // weeks are not charted.
+      final daysAgo = todayDate.difference(entryDay).inDays;
+      final weeksAgo = daysAgo < 0 ? 0 : daysAgo ~/ 7;
+      if (weeksAgo < 12) entriesPerWeek[11 - weeksAgo]++;
       for (final tag in e.tags) {
         tagFreq[tag] = (tagFreq[tag] ?? 0) + 1;
       }
@@ -77,6 +84,7 @@ class StatsNotifier extends _$StatsNotifier {
       totalWordCount: totalWordCount,
       journalAgeInDays: journalAgeInDays,
       topTags: topTags,
+      entriesPerWeek: entriesPerWeek,
     );
   }
 

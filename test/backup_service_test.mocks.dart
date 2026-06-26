@@ -335,6 +335,26 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
       ) as _i5.Future<_i3.UserSettings>);
 
   @override
+  _i5.Future<void> setOnThisDayDismissed(DateTime? day) => (super.noSuchMethod(
+        Invocation.method(
+          #setOnThisDayDismissed,
+          [day],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<bool> isOnThisDayDismissed(DateTime? day) => (super.noSuchMethod(
+        Invocation.method(
+          #isOnThisDayDismissed,
+          [day],
+        ),
+        returnValue: _i5.Future<bool>.value(false),
+        returnValueForMissingStub: _i5.Future<bool>.value(false),
+      ) as _i5.Future<bool>);
+
+  @override
   _i5.Future<void> saveDraft(
     String? draftId,
     String? draftData,

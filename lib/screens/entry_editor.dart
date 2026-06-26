@@ -56,7 +56,20 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
   Timer? _autoSaveTimer;
   bool _isSaving = false;
   bool _hasChanges = false;
-  String? _draftId;
+
+  /// Secure-storage key the in-progress draft is written under. For an existing
+  /// entry this is its id (so an interrupted edit is recovered next open); for a
+  /// brand-new entry it's a single stable slot — a fresh UUID per open (the old
+  /// behavior) meant a saved draft could never be found again.
+  late final String _draftId;
+
+  /// Id assigned to a brand-new entry when it is finally saved. Kept separate
+  /// from [_draftId] so the stable new-entry draft key is never reused as an
+  /// entry id (which would collide across new entries).
+  late final String _newEntryId;
+
+  /// Stable draft slot for the "new entry" composer.
+  static const _newEntryDraftKey = '__new_entry_draft__';
   static const _autoSaveDelay = Duration(seconds: 3);
 
   @override
@@ -75,14 +88,14 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
     tags = List.from(widget.initialEntry?.tags ?? const <String>[]);
     isSpotlight = widget.initialEntry?.isSpotlight ?? false;
     
-    // Set draft ID for existing or new entries
-    _draftId = widget.initialEntry?.id ?? const Uuid().v4();
-    
-    // Load any existing draft for new entries
-    if (widget.initialEntry == null) {
-      _loadDraft();
-    }
-    
+    // Draft slot: the entry's id when editing, else the stable new-entry slot.
+    _draftId = widget.initialEntry?.id ?? _newEntryDraftKey;
+    _newEntryId = widget.initialEntry?.id ?? const Uuid().v4();
+
+    // Recover an interrupted draft for both new and existing entries. When none
+    // exists this is a no-op, so a normal open shows the saved content as-is.
+    _loadDraft();
+
     // Setup auto-save listeners
     _setupAutoSave();
   }
@@ -94,18 +107,11 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
   }
 
   /// Build the entry's location from the text field. Returns null when blank so
-  /// an empty field clears the location. Latitude/longitude are preserved from
-  /// the entry being edited (0,0 for name-only entries) — coordinate capture is
-  /// a future enhancement.
+  /// an empty field clears the location. Location is a free-text place name.
   LocationData? _buildLocation() {
     final name = _locationCtrl.text.trim();
     if (name.isEmpty) return null;
-    final existing = widget.initialEntry?.location;
-    return LocationData(
-      name: name,
-      latitude: existing?.latitude ?? 0,
-      longitude: existing?.longitude ?? 0,
-    );
+    return LocationData(name: name);
   }
   
   void _onTextChanged() => _scheduleAutoSave();
@@ -147,7 +153,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
       // StorageService.saveDraft encrypts the payload at rest in secure storage.
       await ref
           .read(storageServiceProvider)
-          .saveDraft(_draftId!, draftJson);
+          .saveDraft(_draftId, draftJson);
 
       if (mounted) {
         setState(() {
@@ -164,12 +170,10 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
   }
 
   Future<void> _loadDraft() async {
-    if (_draftId == null) return;
-
     try {
       final draftJson = await ref
           .read(storageServiceProvider)
-          .getDraft(_draftId!);
+          .getDraft(_draftId);
 
       if (draftJson != null) {
         // Try to decrypt in case old drafts were encrypted
@@ -224,7 +228,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
           label: 'DISCARD',
           textColor: Colors.white,
           onPressed: () async {
-            await ref.read(storageServiceProvider).deleteDraft(_draftId!);
+            await ref.read(storageServiceProvider).deleteDraft(_draftId);
           },
         ),
       ),
@@ -232,9 +236,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
   }
   
   Future<void> _clearDraft() async {
-    if (_draftId != null) {
-      await ref.read(storageServiceProvider).deleteDraft(_draftId!);
-    }
+    await ref.read(storageServiceProvider).deleteDraft(_draftId);
     _autoSaveTimer?.cancel();
   }
 
@@ -248,7 +250,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
     
     try {
       final entry = JournalEntry(
-        id: widget.initialEntry?.id ?? _draftId ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        id: widget.initialEntry?.id ?? _newEntryId,
         type: type,
         date: selectedDate,
         headline: _headlineCtrl.text,

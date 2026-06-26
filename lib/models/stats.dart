@@ -12,6 +12,11 @@ class JournalStats {
   final int journalAgeInDays;
   final List<String> topTags;
 
+  /// Entry counts for the last 12 weeks, oldest first (index 11 == current
+  /// week). Powers the "journaling consistency" chart. Empty when there are no
+  /// entries.
+  final List<int> entriesPerWeek;
+
   const JournalStats({
     required this.streak,
     required this.totalEntries,
@@ -19,6 +24,7 @@ class JournalStats {
     required this.totalWordCount,
     required this.journalAgeInDays,
     required this.topTags,
+    this.entriesPerWeek = const [],
   });
 
   static const empty = JournalStats(
@@ -28,5 +34,6 @@ class JournalStats {
     totalWordCount: 0,
     journalAgeInDays: 0,
     topTags: [],
+    entriesPerWeek: [],
   );
 }

@@ -362,8 +362,6 @@ class __$ImageReferenceCopyWithImpl<$Res>
 /// @nodoc
 mixin _$LocationData {
   String get name;
-  double get latitude;
-  double get longitude;
 
   /// Create a copy of LocationData
   /// with the given fields replaced by the non-null parameter values.
@@ -381,20 +379,16 @@ mixin _$LocationData {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
             other is LocationData &&
-            (identical(other.name, name) || other.name == name) &&
-            (identical(other.latitude, latitude) ||
-                other.latitude == latitude) &&
-            (identical(other.longitude, longitude) ||
-                other.longitude == longitude));
+            (identical(other.name, name) || other.name == name));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, name, latitude, longitude);
+  int get hashCode => Object.hash(runtimeType, name);
 
   @override
   String toString() {
-    return 'LocationData(name: $name, latitude: $latitude, longitude: $longitude)';
+    return 'LocationData(name: $name)';
   }
 }
 
@@ -404,7 +398,7 @@ abstract mixin class $LocationDataCopyWith<$Res> {
           LocationData value, $Res Function(LocationData) _then) =
       _$LocationDataCopyWithImpl;
   @useResult
-  $Res call({String name, double latitude, double longitude});
+  $Res call({String name});
 }
 
 /// @nodoc
@@ -420,22 +414,12 @@ class _$LocationDataCopyWithImpl<$Res> implements $LocationDataCopyWith<$Res> {
   @override
   $Res call({
     Object? name = null,
-    Object? latitude = null,
-    Object? longitude = null,
   }) {
     return _then(_self.copyWith(
       name: null == name
           ? _self.name
           : name // ignore: cast_nullable_to_non_nullable
               as String,
-      latitude: null == latitude
-          ? _self.latitude
-          : latitude // ignore: cast_nullable_to_non_nullable
-              as double,
-      longitude: null == longitude
-          ? _self.longitude
-          : longitude // ignore: cast_nullable_to_non_nullable
-              as double,
     ));
   }
 }
@@ -533,14 +517,13 @@ extension LocationDataPatterns on LocationData {
 
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>(
-    TResult Function(String name, double latitude, double longitude)?
-        $default, {
+    TResult Function(String name)? $default, {
     required TResult orElse(),
   }) {
     final _that = this;
     switch (_that) {
       case _LocationData() when $default != null:
-        return $default(_that.name, _that.latitude, _that.longitude);
+        return $default(_that.name);
       case _:
         return orElse();
     }
@@ -561,12 +544,12 @@ extension LocationDataPatterns on LocationData {
 
   @optionalTypeArgs
   TResult when<TResult extends Object?>(
-    TResult Function(String name, double latitude, double longitude) $default,
+    TResult Function(String name) $default,
   ) {
     final _that = this;
     switch (_that) {
       case _LocationData():
-        return $default(_that.name, _that.latitude, _that.longitude);
+        return $default(_that.name);
       case _:
         throw StateError('Unexpected subclass');
     }
@@ -586,12 +569,12 @@ extension LocationDataPatterns on LocationData {
 
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>(
-    TResult? Function(String name, double latitude, double longitude)? $default,
+    TResult? Function(String name)? $default,
   ) {
     final _that = this;
     switch (_that) {
       case _LocationData() when $default != null:
-        return $default(_that.name, _that.latitude, _that.longitude);
+        return $default(_that.name);
       case _:
         return null;
     }
@@ -601,17 +584,12 @@ extension LocationDataPatterns on LocationData {
 /// @nodoc
 @JsonSerializable()
 class _LocationData implements LocationData {
-  const _LocationData(
-      {required this.name, required this.latitude, required this.longitude});
+  const _LocationData({required this.name});
   factory _LocationData.fromJson(Map<String, dynamic> json) =>
       _$LocationDataFromJson(json);
 
   @override
   final String name;
-  @override
-  final double latitude;
-  @override
-  final double longitude;
 
   /// Create a copy of LocationData
   /// with the given fields replaced by the non-null parameter values.
@@ -633,20 +611,16 @@ class _LocationData implements LocationData {
     return identical(this, other) ||
         (other.runtimeType == runtimeType &&
             other is _LocationData &&
-            (identical(other.name, name) || other.name == name) &&
-            (identical(other.latitude, latitude) ||
-                other.latitude == latitude) &&
-            (identical(other.longitude, longitude) ||
-                other.longitude == longitude));
+            (identical(other.name, name) || other.name == name));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, name, latitude, longitude);
+  int get hashCode => Object.hash(runtimeType, name);
 
   @override
   String toString() {
-    return 'LocationData(name: $name, latitude: $latitude, longitude: $longitude)';
+    return 'LocationData(name: $name)';
   }
 }
 
@@ -658,7 +632,7 @@ abstract mixin class _$LocationDataCopyWith<$Res>
       __$LocationDataCopyWithImpl;
   @override
   @useResult
-  $Res call({String name, double latitude, double longitude});
+  $Res call({String name});
 }
 
 /// @nodoc
@@ -675,22 +649,12 @@ class __$LocationDataCopyWithImpl<$Res>
   @pragma('vm:prefer-inline')
   $Res call({
     Object? name = null,
-    Object? latitude = null,
-    Object? longitude = null,
   }) {
     return _then(_LocationData(
       name: null == name
           ? _self.name
           : name // ignore: cast_nullable_to_non_nullable
               as String,
-      latitude: null == latitude
-          ? _self.latitude
-          : latitude // ignore: cast_nullable_to_non_nullable
-              as double,
-      longitude: null == longitude
-          ? _self.longitude
-          : longitude // ignore: cast_nullable_to_non_nullable
-              as double,
     ));
   }
 }

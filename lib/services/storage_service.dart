@@ -282,6 +282,79 @@ class StorageService {
     return byId.values.toList();
   }
 
+  // ─── Tags ─────────────────────────────────────────────────────────────--
+
+  /// Distinct tags across all entries with their occurrence counts, keyed by the
+  /// first-seen display casing (matching is case-insensitive).
+  Future<Map<String, int>> getTagCounts() async {
+    final all = await getJournal();
+    final counts = <String, int>{};
+    final lowerToDisplay = <String, String>{};
+    for (final e in all) {
+      for (final t in e.tags) {
+        final display = lowerToDisplay.putIfAbsent(t.toLowerCase(), () => t);
+        counts[display] = (counts[display] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }
+
+  /// Rename tag [from] to [to] across every entry (case-insensitive). When an
+  /// entry already carries [to], the two are merged (no duplicate). Returns the
+  /// number of entries changed.
+  Future<int> renameTag(String from, String to) async {
+    final changed = applyTagRename(await getJournal(), from, to);
+    if (changed.isNotEmpty) await putManyJournalEntries(changed);
+    return changed.length;
+  }
+
+  /// Remove [tag] from every entry (case-insensitive). Returns the number of
+  /// entries changed.
+  Future<int> deleteTag(String tag) async {
+    final changed = applyTagDelete(await getJournal(), tag);
+    if (changed.isNotEmpty) await putManyJournalEntries(changed);
+    return changed.length;
+  }
+
+  /// Pure transform powering [renameTag]: returns only the entries whose tag
+  /// list changed, with [from] replaced by [to] (case-insensitive) and any
+  /// resulting duplicate collapsed. An empty/whitespace [to] is a no-op.
+  /// Exposed for unit testing.
+  @visibleForTesting
+  static List<JournalEntry> applyTagRename(
+      List<JournalEntry> entries, String from, String to) {
+    final fromL = from.toLowerCase();
+    final toTrim = to.trim();
+    if (toTrim.isEmpty) return const [];
+    final changed = <JournalEntry>[];
+    for (final e in entries) {
+      if (!e.tags.any((t) => t.toLowerCase() == fromL)) continue;
+      final newTags = <String>[];
+      final seen = <String>{};
+      for (final t in e.tags) {
+        final replacement = t.toLowerCase() == fromL ? toTrim : t;
+        if (seen.add(replacement.toLowerCase())) newTags.add(replacement);
+      }
+      changed.add(e.copyWith(tags: newTags));
+    }
+    return changed;
+  }
+
+  /// Pure transform powering [deleteTag]: returns only the entries whose tag
+  /// list changed, with [tag] removed (case-insensitive). Exposed for testing.
+  @visibleForTesting
+  static List<JournalEntry> applyTagDelete(
+      List<JournalEntry> entries, String tag) {
+    final tagL = tag.toLowerCase();
+    final changed = <JournalEntry>[];
+    for (final e in entries) {
+      if (!e.tags.any((t) => t.toLowerCase() == tagL)) continue;
+      changed.add(e.copyWith(
+          tags: e.tags.where((t) => t.toLowerCase() != tagL).toList()));
+    }
+    return changed;
+  }
+
   // ─── Rankings ───────────────────────────────────────────────────────────
 
   Future<List<RankingCategory>> getFavoriteRankings() async {

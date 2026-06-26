@@ -29,15 +29,11 @@ const _$ImageSourceTypeEnumMap = {
 _LocationData _$LocationDataFromJson(Map<String, dynamic> json) =>
     _LocationData(
       name: json['name'] as String,
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
     );
 
 Map<String, dynamic> _$LocationDataToJson(_LocationData instance) =>
     <String, dynamic>{
       'name': instance.name,
-      'latitude': instance.latitude,
-      'longitude': instance.longitude,
     };
 
 _JournalEntry _$JournalEntryFromJson(Map<String, dynamic> json) =>

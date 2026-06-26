@@ -193,4 +193,30 @@ void main() {
       expect(StatsNotifier.computeStats(entries).streak, 2);
     });
   });
+
+  group('computeStats — weekly consistency', () {
+    DateTime daysAgo(int n) => DateTime.now().subtract(Duration(days: n));
+
+    test('buckets entries into the last 12 weeks (index 11 = current)', () {
+      final entries = [
+        _entry(id: 'today', date: daysAgo(0)), // current week
+        _entry(id: 'thisweek', date: daysAgo(6)), // still current week
+        _entry(id: 'lastweek', date: daysAgo(7)), // 1 week ago
+        _entry(id: 'wk11', date: daysAgo(77)), // 11 weeks ago (oldest charted)
+        _entry(id: 'tooold', date: daysAgo(84)), // 12 weeks ago -> excluded
+      ];
+
+      final weeks = StatsNotifier.computeStats(entries).entriesPerWeek;
+
+      expect(weeks.length, 12);
+      expect(weeks[11], 2); // today + 6 days ago
+      expect(weeks[10], 1); // 7 days ago
+      expect(weeks[0], 1); // 77 days ago
+      expect(weeks.fold<int>(0, (s, v) => s + v), 4); // 84-day-old excluded
+    });
+
+    test('empty stats carry an empty week series', () {
+      expect(JournalStats.empty.entriesPerWeek, isEmpty);
+    });
+  });
 }

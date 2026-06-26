@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:local_auth/local_auth.dart';
 import '../services/storage_service.dart';
 import '../services/security_service.dart';
@@ -428,6 +429,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               // SnackBar above surfaces the failure non-blockingly.
               error: (_, __) => _statsGrid(JournalStats.empty),
             ),
+            // Journaling-consistency chart — only once there are entries to plot.
+            ...statsAsync.maybeWhen(
+              data: (stats) => stats.totalEntries == 0
+                  ? const <Widget>[]
+                  : [
+                      const SizedBox(height: 16),
+                      _ConsistencyChart(
+                          weeks: stats.entriesPerWeek,
+                          color: AppColors.indigo500),
+                    ],
+              orElse: () => const <Widget>[],
+            ),
             const SizedBox(height: 40),
 
             // Settings
@@ -637,6 +650,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   ),
                   Divider(color: context.tokens.divider),
                   _manageBackupsTile(context, ref),
+                  Divider(color: context.tokens.divider),
+                  _importBackupTile(context, ref),
+                  Divider(color: context.tokens.divider),
+                  _manageTagsTile(context, ref),
                 ],
               ),
             ),
@@ -720,6 +737,327 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       trailing: Icon(Icons.chevron_right, color: context.tokens.textTertiary),
       onTap: () => _showBackupsDialog(context, ref),
     );
+  }
+
+  Widget _importBackupTile(BuildContext context, WidgetRef ref) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: AppColors.emerald500.withValues(alpha: 0.2),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.file_upload,
+            color: AppColors.emerald500, size: 20),
+      ),
+      title: Text('Import Backup File',
+          style: TextStyle(
+              color: context.tokens.textPrimary, fontWeight: FontWeight.w600)),
+      subtitle: Text('Restore from a backup saved on this device',
+          style: TextStyle(color: context.tokens.textTertiary, fontSize: 11)),
+      trailing: Icon(Icons.chevron_right, color: context.tokens.textTertiary),
+      onTap: () => _importBackupFromFile(context, ref),
+    );
+  }
+
+  /// Pick a backup file (.json or .encrypted) from anywhere on the device and
+  /// merge it in — complements "Manage Backups", which only lists files the app
+  /// itself created. Encryption is inferred from the file extension.
+  Future<void> _importBackupFromFile(
+      BuildContext context, WidgetRef ref) async {
+    final FilePickerResult? picked;
+    try {
+      picked = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json', 'encrypted'],
+      );
+    } catch (e) {
+      debugPrint('Backup file pick failed: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open the file picker'),
+            backgroundColor: AppColors.rose500,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    final path = picked?.files.single.path;
+    if (path == null) return; // cancelled
+    if (!context.mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        backgroundColor: AppColors.slate900,
+        title: const Text('Import Backup?',
+            style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Entries and rankings from this file will be merged into your '
+          'journal. Existing items with the same id are overwritten.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('CANCEL',
+                style: TextStyle(color: AppColors.slate400)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('IMPORT',
+                style: TextStyle(color: AppColors.indigo500)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: GlassContainer(
+          child: CircularProgressIndicator(color: AppColors.indigo500),
+        ),
+      ),
+    );
+
+    final backupService = ref.read(backupServiceProvider);
+    final isEncrypted = path.toLowerCase().endsWith('.encrypted');
+    final result =
+        await backupService.importBackupFile(path, isEncrypted: isEncrypted);
+
+    // Make the merged data visible everywhere (journal/calendar/identity/stats).
+    if (result.success) {
+      ref.read(journalRevisionProvider.notifier).bump();
+    }
+
+    if (!context.mounted) return;
+    Navigator.pop(context); // close the loading dialog
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.success
+            ? (result.message ?? 'Import complete')
+            : (result.error ?? 'Import failed')),
+        backgroundColor:
+            result.success ? AppColors.emerald500 : AppColors.rose500,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Widget _manageTagsTile(BuildContext context, WidgetRef ref) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: AppColors.indigo500.withValues(alpha: 0.2),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(Icons.label_outline,
+            color: AppColors.indigo500, size: 20),
+      ),
+      title: Text('Manage Tags',
+          style: TextStyle(
+              color: context.tokens.textPrimary, fontWeight: FontWeight.w600)),
+      subtitle: Text('Rename, merge or delete tags across all entries',
+          style: TextStyle(color: context.tokens.textTertiary, fontSize: 11)),
+      trailing: Icon(Icons.chevron_right, color: context.tokens.textTertiary),
+      onTap: () => _showTagsDialog(context, ref),
+    );
+  }
+
+  /// Bottom sheet listing every tag with its usage count and rename/delete
+  /// actions. Renaming to an existing tag merges them. Each change bumps the
+  /// shared journal revision so the journal/calendar/stats refresh.
+  void _showTagsDialog(BuildContext context, WidgetRef ref) async {
+    final storage = ref.read(storageServiceProvider);
+    var counts = await storage.getTagCounts();
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          Future<void> refresh() async {
+            counts = await storage.getTagCounts();
+            if (ctx.mounted) setSheetState(() {});
+          }
+
+          final tags = counts.keys.toList()
+            ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.7,
+            decoration: BoxDecoration(
+              color: AppColors.slate900.withValues(alpha: 0.95),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(32)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Manage Tags',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold)),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white54),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: tags.isEmpty
+                      ? const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.label_off_outlined,
+                                  size: 48, color: AppColors.slate400),
+                              SizedBox(height: 16),
+                              Text('No tags yet',
+                                  style: TextStyle(color: AppColors.slate400)),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: tags.length,
+                          itemBuilder: (c, i) {
+                            final tag = tags[i];
+                            final count = counts[tag] ?? 0;
+                            return GlassContainer(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.label,
+                                      color: AppColors.indigo500, size: 18),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(tag,
+                                        style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600)),
+                                  ),
+                                  Text('$count',
+                                      style: const TextStyle(
+                                          color: AppColors.slate400,
+                                          fontSize: 12)),
+                                  IconButton(
+                                    icon: const Icon(Icons.edit_outlined,
+                                        color: AppColors.indigo500, size: 20),
+                                    tooltip: 'Rename or merge',
+                                    onPressed: () => _renameTagFlow(
+                                        context, ref, tag, refresh),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline,
+                                        color: AppColors.rose500, size: 20),
+                                    tooltip: 'Delete tag',
+                                    onPressed: () => _deleteTagFlow(
+                                        context, ref, tag, refresh),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _renameTagFlow(BuildContext context, WidgetRef ref, String tag,
+      Future<void> Function() refresh) async {
+    final controller = TextEditingController(text: tag);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        backgroundColor: AppColors.slate900,
+        title:
+            const Text('Rename tag', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            labelText: 'New name',
+            labelStyle: TextStyle(color: AppColors.slate400),
+            helperText: 'Renaming to an existing tag merges them',
+            helperStyle: TextStyle(color: AppColors.slate600, fontSize: 11),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dctx),
+            child: const Text('CANCEL',
+                style: TextStyle(color: AppColors.slate400)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dctx, controller.text.trim()),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: AppColors.indigo500),
+            child: const Text('SAVE', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+
+    if (newName == null || newName.isEmpty || newName.toLowerCase() == tag.toLowerCase()) {
+      return;
+    }
+    await ref.read(storageServiceProvider).renameTag(tag, newName);
+    ref.read(journalRevisionProvider.notifier).bump();
+    await refresh();
+  }
+
+  Future<void> _deleteTagFlow(BuildContext context, WidgetRef ref, String tag,
+      Future<void> Function() refresh) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        backgroundColor: AppColors.slate900,
+        title: const Text('Delete tag?', style: TextStyle(color: Colors.white)),
+        content: Text('"$tag" will be removed from all entries.',
+            style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dctx, false),
+            child: const Text('CANCEL',
+                style: TextStyle(color: AppColors.slate400)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dctx, true),
+            child:
+                const Text('DELETE', style: TextStyle(color: AppColors.rose500)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ref.read(storageServiceProvider).deleteTag(tag);
+    ref.read(journalRevisionProvider.notifier).bump();
+    await refresh();
   }
 
   void _showBackupsDialog(BuildContext context, WidgetRef ref) async {
@@ -1066,6 +1404,80 @@ class _ShimmerCardState extends State<_ShimmerCard>
       child: FadeTransition(
         opacity: Tween<double>(begin: 0.35, end: 0.75).animate(_controller),
         child: card,
+      ),
+    );
+  }
+}
+
+/// A compact bar chart of entries-per-week over the last 12 weeks — a measure of
+/// journaling consistency. Bars are bottom-aligned; the current week is drawn in
+/// the full accent colour, earlier weeks dimmed.
+class _ConsistencyChart extends StatelessWidget {
+  final List<int> weeks;
+  final Color color;
+  const _ConsistencyChart({required this.weeks, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = context.tokens;
+    final maxCount = weeks.fold<int>(0, (m, v) => v > m ? v : m);
+    final total = weeks.fold<int>(0, (s, v) => s + v);
+
+    return Semantics(
+      label: 'Journaling consistency: $total entries over the last 12 weeks',
+      child: GlassContainer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.show_chart, color: color, size: 18),
+                    const SizedBox(width: 8),
+                    Text('Journaling consistency',
+                        style: TextStyle(
+                            color: tokens.textPrimary,
+                            fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                Text('Last 12 weeks',
+                    style:
+                        TextStyle(color: tokens.textTertiary, fontSize: 11)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 64,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (int i = 0; i < weeks.length; i++)
+                    Expanded(
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 2),
+                        // Min stub of 4px so an empty week is still visible.
+                        height: 4 +
+                            (maxCount == 0 ? 0.0 : weeks[i] / maxCount) * 52,
+                        decoration: BoxDecoration(
+                          color: i == weeks.length - 1
+                              ? color
+                              : color.withValues(alpha: 0.45),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '$total ${total == 1 ? 'entry' : 'entries'} in the last 12 weeks',
+              style: TextStyle(color: tokens.textTertiary, fontSize: 11),
+            ),
+          ],
+        ),
       ),
     );
   }
