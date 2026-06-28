@@ -39,8 +39,8 @@ class _FakePagedResult_0<T> extends _i1.SmartFake
         );
 }
 
-class _FakeUserSettings_1 extends _i1.SmartFake implements _i3.UserSettings {
-  _FakeUserSettings_1(
+class _FakeVisionBoard_1 extends _i1.SmartFake implements _i3.VisionBoard {
+  _FakeVisionBoard_1(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -49,8 +49,8 @@ class _FakeUserSettings_1 extends _i1.SmartFake implements _i3.UserSettings {
         );
 }
 
-class _FakeIOSOptions_2 extends _i1.SmartFake implements _i4.IOSOptions {
-  _FakeIOSOptions_2(
+class _FakeUserSettings_2 extends _i1.SmartFake implements _i3.UserSettings {
+  _FakeUserSettings_2(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -59,9 +59,19 @@ class _FakeIOSOptions_2 extends _i1.SmartFake implements _i4.IOSOptions {
         );
 }
 
-class _FakeAndroidOptions_3 extends _i1.SmartFake
+class _FakeIOSOptions_3 extends _i1.SmartFake implements _i4.IOSOptions {
+  _FakeIOSOptions_3(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
+}
+
+class _FakeAndroidOptions_4 extends _i1.SmartFake
     implements _i4.AndroidOptions {
-  _FakeAndroidOptions_3(
+  _FakeAndroidOptions_4(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -70,8 +80,8 @@ class _FakeAndroidOptions_3 extends _i1.SmartFake
         );
 }
 
-class _FakeLinuxOptions_4 extends _i1.SmartFake implements _i4.LinuxOptions {
-  _FakeLinuxOptions_4(
+class _FakeLinuxOptions_5 extends _i1.SmartFake implements _i4.LinuxOptions {
+  _FakeLinuxOptions_5(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -80,9 +90,9 @@ class _FakeLinuxOptions_4 extends _i1.SmartFake implements _i4.LinuxOptions {
         );
 }
 
-class _FakeWindowsOptions_5 extends _i1.SmartFake
+class _FakeWindowsOptions_6 extends _i1.SmartFake
     implements _i4.WindowsOptions {
-  _FakeWindowsOptions_5(
+  _FakeWindowsOptions_6(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -91,8 +101,8 @@ class _FakeWindowsOptions_5 extends _i1.SmartFake
         );
 }
 
-class _FakeWebOptions_6 extends _i1.SmartFake implements _i4.WebOptions {
-  _FakeWebOptions_6(
+class _FakeWebOptions_7 extends _i1.SmartFake implements _i4.WebOptions {
+  _FakeWebOptions_7(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -101,8 +111,8 @@ class _FakeWebOptions_6 extends _i1.SmartFake implements _i4.WebOptions {
         );
 }
 
-class _FakeAppleOptions_7 extends _i1.SmartFake implements _i4.AppleOptions {
-  _FakeAppleOptions_7(
+class _FakeAppleOptions_8 extends _i1.SmartFake implements _i4.AppleOptions {
+  _FakeAppleOptions_8(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -244,6 +254,44 @@ class MockStorageService extends _i1.Mock implements _i5.StorageService {
       ) as _i6.Future<void>);
 
   @override
+  _i6.Future<Map<String, int>> getTagCounts() => (super.noSuchMethod(
+        Invocation.method(
+          #getTagCounts,
+          [],
+        ),
+        returnValue: _i6.Future<Map<String, int>>.value(<String, int>{}),
+        returnValueForMissingStub:
+            _i6.Future<Map<String, int>>.value(<String, int>{}),
+      ) as _i6.Future<Map<String, int>>);
+
+  @override
+  _i6.Future<int> renameTag(
+    String? from,
+    String? to,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #renameTag,
+          [
+            from,
+            to,
+          ],
+        ),
+        returnValue: _i6.Future<int>.value(0),
+        returnValueForMissingStub: _i6.Future<int>.value(0),
+      ) as _i6.Future<int>);
+
+  @override
+  _i6.Future<int> deleteTag(String? tag) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteTag,
+          [tag],
+        ),
+        returnValue: _i6.Future<int>.value(0),
+        returnValueForMissingStub: _i6.Future<int>.value(0),
+      ) as _i6.Future<int>);
+
+  @override
   _i6.Future<List<_i3.RankingCategory>> getFavoriteRankings() =>
       (super.noSuchMethod(
         Invocation.method(
@@ -353,19 +401,117 @@ class MockStorageService extends _i1.Mock implements _i5.StorageService {
       ) as _i6.Future<void>);
 
   @override
+  List<_i3.VisionBoard> getVisionBoards() => (super.noSuchMethod(
+        Invocation.method(
+          #getVisionBoards,
+          [],
+        ),
+        returnValue: <_i3.VisionBoard>[],
+        returnValueForMissingStub: <_i3.VisionBoard>[],
+      ) as List<_i3.VisionBoard>);
+
+  @override
+  _i3.VisionBoard? getVisionBoardForYear(int? year) => (super.noSuchMethod(
+        Invocation.method(
+          #getVisionBoardForYear,
+          [year],
+        ),
+        returnValueForMissingStub: null,
+      ) as _i3.VisionBoard?);
+
+  @override
+  _i3.VisionBoard getOrCreateVisionBoard(int? year) => (super.noSuchMethod(
+        Invocation.method(
+          #getOrCreateVisionBoard,
+          [year],
+        ),
+        returnValue: _FakeVisionBoard_1(
+          this,
+          Invocation.method(
+            #getOrCreateVisionBoard,
+            [year],
+          ),
+        ),
+        returnValueForMissingStub: _FakeVisionBoard_1(
+          this,
+          Invocation.method(
+            #getOrCreateVisionBoard,
+            [year],
+          ),
+        ),
+      ) as _i3.VisionBoard);
+
+  @override
+  void saveVisionBoard(_i3.VisionBoard? board) => super.noSuchMethod(
+        Invocation.method(
+          #saveVisionBoard,
+          [board],
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  void addVisionBoardItem(
+    int? year,
+    _i3.VisionBoardItem? item,
+  ) =>
+      super.noSuchMethod(
+        Invocation.method(
+          #addVisionBoardItem,
+          [
+            year,
+            item,
+          ],
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  void updateVisionBoardItem(
+    int? year,
+    _i3.VisionBoardItem? item,
+  ) =>
+      super.noSuchMethod(
+        Invocation.method(
+          #updateVisionBoardItem,
+          [
+            year,
+            item,
+          ],
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  void deleteVisionBoardItem(
+    int? year,
+    String? itemId,
+  ) =>
+      super.noSuchMethod(
+        Invocation.method(
+          #deleteVisionBoardItem,
+          [
+            year,
+            itemId,
+          ],
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
   _i3.UserSettings getSettings() => (super.noSuchMethod(
         Invocation.method(
           #getSettings,
           [],
         ),
-        returnValue: _FakeUserSettings_1(
+        returnValue: _FakeUserSettings_2(
           this,
           Invocation.method(
             #getSettings,
             [],
           ),
         ),
-        returnValueForMissingStub: _FakeUserSettings_1(
+        returnValueForMissingStub: _FakeUserSettings_2(
           this,
           Invocation.method(
             #getSettings,
@@ -381,7 +527,7 @@ class MockStorageService extends _i1.Mock implements _i5.StorageService {
           #saveSettings,
           [settings],
         ),
-        returnValue: _i6.Future<_i3.UserSettings>.value(_FakeUserSettings_1(
+        returnValue: _i6.Future<_i3.UserSettings>.value(_FakeUserSettings_2(
           this,
           Invocation.method(
             #saveSettings,
@@ -389,7 +535,7 @@ class MockStorageService extends _i1.Mock implements _i5.StorageService {
           ),
         )),
         returnValueForMissingStub:
-            _i6.Future<_i3.UserSettings>.value(_FakeUserSettings_1(
+            _i6.Future<_i3.UserSettings>.value(_FakeUserSettings_2(
           this,
           Invocation.method(
             #saveSettings,
@@ -484,11 +630,11 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   _i4.IOSOptions get iOptions => (super.noSuchMethod(
         Invocation.getter(#iOptions),
-        returnValue: _FakeIOSOptions_2(
+        returnValue: _FakeIOSOptions_3(
           this,
           Invocation.getter(#iOptions),
         ),
-        returnValueForMissingStub: _FakeIOSOptions_2(
+        returnValueForMissingStub: _FakeIOSOptions_3(
           this,
           Invocation.getter(#iOptions),
         ),
@@ -497,11 +643,11 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   _i4.AndroidOptions get aOptions => (super.noSuchMethod(
         Invocation.getter(#aOptions),
-        returnValue: _FakeAndroidOptions_3(
+        returnValue: _FakeAndroidOptions_4(
           this,
           Invocation.getter(#aOptions),
         ),
-        returnValueForMissingStub: _FakeAndroidOptions_3(
+        returnValueForMissingStub: _FakeAndroidOptions_4(
           this,
           Invocation.getter(#aOptions),
         ),
@@ -510,11 +656,11 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   _i4.LinuxOptions get lOptions => (super.noSuchMethod(
         Invocation.getter(#lOptions),
-        returnValue: _FakeLinuxOptions_4(
+        returnValue: _FakeLinuxOptions_5(
           this,
           Invocation.getter(#lOptions),
         ),
-        returnValueForMissingStub: _FakeLinuxOptions_4(
+        returnValueForMissingStub: _FakeLinuxOptions_5(
           this,
           Invocation.getter(#lOptions),
         ),
@@ -523,11 +669,11 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   _i4.WindowsOptions get wOptions => (super.noSuchMethod(
         Invocation.getter(#wOptions),
-        returnValue: _FakeWindowsOptions_5(
+        returnValue: _FakeWindowsOptions_6(
           this,
           Invocation.getter(#wOptions),
         ),
-        returnValueForMissingStub: _FakeWindowsOptions_5(
+        returnValueForMissingStub: _FakeWindowsOptions_6(
           this,
           Invocation.getter(#wOptions),
         ),
@@ -536,11 +682,11 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   _i4.WebOptions get webOptions => (super.noSuchMethod(
         Invocation.getter(#webOptions),
-        returnValue: _FakeWebOptions_6(
+        returnValue: _FakeWebOptions_7(
           this,
           Invocation.getter(#webOptions),
         ),
-        returnValueForMissingStub: _FakeWebOptions_6(
+        returnValueForMissingStub: _FakeWebOptions_7(
           this,
           Invocation.getter(#webOptions),
         ),
@@ -549,11 +695,11 @@ class MockFlutterSecureStorage extends _i1.Mock
   @override
   _i4.AppleOptions get mOptions => (super.noSuchMethod(
         Invocation.getter(#mOptions),
-        returnValue: _FakeAppleOptions_7(
+        returnValue: _FakeAppleOptions_8(
           this,
           Invocation.getter(#mOptions),
         ),
-        returnValueForMissingStub: _FakeAppleOptions_7(
+        returnValueForMissingStub: _FakeAppleOptions_8(
           this,
           Invocation.getter(#mOptions),
         ),

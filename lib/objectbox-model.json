@@ -158,10 +158,46 @@
         }
       ],
       "relations": []
+    },
+    {
+      "id": "8:1691446443854157567",
+      "lastPropertyId": "5:9154265478071069564",
+      "name": "ObjectBoxVisionBoard",
+      "properties": [
+        {
+          "id": "1:5073285251411330539",
+          "name": "id",
+          "type": 6,
+          "flags": 1
+        },
+        {
+          "id": "2:1509032835301445606",
+          "name": "boardId",
+          "indexId": "8:5633630892598471515",
+          "type": 9,
+          "flags": 2080
+        },
+        {
+          "id": "3:3792203444117890888",
+          "name": "year",
+          "type": 6
+        },
+        {
+          "id": "4:1110501039990303473",
+          "name": "itemsJson",
+          "type": 9
+        },
+        {
+          "id": "5:9154265478071069564",
+          "name": "createdAt",
+          "type": 10
+        }
+      ],
+      "relations": []
     }
   ],
-  "lastEntityId": "7:145200524995731987",
-  "lastIndexId": "7:5688953762199169554",
+  "lastEntityId": "8:1691446443854157567",
+  "lastIndexId": "8:5633630892598471515",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,

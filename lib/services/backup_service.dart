@@ -43,6 +43,7 @@ class BackupService {
   Future<Map<String, dynamic>> exportData() async {
     final journal = await _storageService.getJournal();
     final rankings = await _storageService.getRankings();
+    final visionBoards = _storageService.getVisionBoards();
     final settings = _storageService.getSettings();
 
     return {
@@ -50,11 +51,13 @@ class BackupService {
       'exportDate': DateTime.now().toIso8601String(),
       'journal': journal.map((e) => _serializeEntry(e)).toList(),
       'rankings': rankings.map((c) => c.toJson()).toList(),
+      'visionBoards': visionBoards.map((b) => b.toJson()).toList(),
       'settings': settings.toJson(),
       'metadata': {
         'totalEntries': journal.length,
         'totalRankings': rankings.length,
         'totalCategories': rankings.length,
+        'totalVisionBoards': visionBoards.length,
       },
     };
   }
@@ -225,11 +228,30 @@ class BackupService {
         }
       }
 
+      // Import vision boards (optional — older backups predate this key, so a
+      // missing 'visionBoards' field is not an error). Merged by year.
+      final visionBoardsList = data['visionBoards'] as List?;
+      int importedVisionBoards = 0;
+
+      if (visionBoardsList != null) {
+        for (final boardData in visionBoardsList) {
+          try {
+            final board =
+                VisionBoard.fromJson(boardData as Map<String, dynamic>);
+            _storageService.mergeVisionBoard(board);
+            importedVisionBoards++;
+          } catch (e) {
+            debugPrint('Failed to import vision board: $e');
+          }
+        }
+      }
+
       onProgress?.call(BackupStage.idle);
       return BackupResult(
         success: true,
         message:
-            'Imported $importedEntries entries and $importedRankings rankings'
+            'Imported $importedEntries entries, $importedRankings rankings'
+            '${importedVisionBoards > 0 ? ', $importedVisionBoards vision boards' : ''}'
             '${skippedEntries > 0 ? ' ($skippedEntries skipped)' : ''}',
       );
     } catch (e) {

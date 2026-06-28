@@ -12,6 +12,7 @@ import 'screens/journal_screen.dart';
 import 'screens/calendar_screen.dart';
 import 'screens/identity_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/vision_board_screen.dart';
 import 'config/constants.dart';
 import 'widgets/glass_widgets.dart';
 import 'providers/auth_provider.dart';
@@ -260,6 +261,7 @@ class _MainShellState extends State<MainShell>
       JournalScreen(),
       CalendarScreen(),
       IdentityScreen(),
+      VisionBoardScreen(),
       ProfileScreen(),
     ];
     _bgCtrl = AnimationController(
@@ -414,7 +416,8 @@ class GlassNavBar extends StatelessWidget {
                   _navItem(context, 0, Icons.menu_book, "Journal"),
                   _navItem(context, 1, Icons.calendar_month, "Recall"),
                   _navItem(context, 2, Icons.person_outline, "Identity"),
-                  _navItem(context, 3, Icons.account_circle_outlined, "System"),
+                  _navItem(context, 3, Icons.auto_awesome, "Vision"),
+                  _navItem(context, 4, Icons.account_circle_outlined, "System"),
                 ],
               ),
             ),

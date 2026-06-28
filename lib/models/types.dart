@@ -127,6 +127,53 @@ abstract class RankingCategory with _$RankingCategory {
       _$RankingCategoryFromJson(json);
 }
 
+// ─── Vision Board ────────────────────────────────────────────────────────────
+
+const List<String> visionBoardCategories = [
+  'Career',
+  'Health',
+  'Travel',
+  'Relationships',
+  'Finance',
+  'Growth',
+  'Creative',
+  'Other',
+];
+
+@freezed
+abstract class VisionBoardItem with _$VisionBoardItem {
+  const factory VisionBoardItem({
+    required String id,
+    required String title,
+    @Default('') String description,
+    @Default('') String category,
+    @Default([]) List<ImageReference> images,
+    @Default(false) bool isAchieved,
+    DateTime? targetDate,
+    required DateTime createdAt,
+    @Default(0) int colorAccent, // ARGB accent; 0 = use category default
+    @Default('') String affirmation,
+  }) = _VisionBoardItem;
+
+  factory VisionBoardItem.fromJson(Map<String, dynamic> json) =>
+      _$VisionBoardItemFromJson(json);
+}
+
+@freezed
+abstract class VisionBoard with _$VisionBoard {
+  const factory VisionBoard({
+    required String id,
+    required int year,
+    @Default([]) List<VisionBoardItem> items,
+    required DateTime createdAt,
+  }) = _VisionBoard;
+
+  factory VisionBoard.fromJson(Map<String, dynamic> json) =>
+      _$VisionBoardFromJson(json);
+}
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+
 @freezed
 abstract class UserSettings with _$UserSettings {
   const factory UserSettings({

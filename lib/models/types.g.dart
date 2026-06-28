@@ -170,6 +170,57 @@ Map<String, dynamic> _$RankingCategoryToJson(_RankingCategory instance) =>
       'colorValue': instance.colorValue,
     };
 
+_VisionBoardItem _$VisionBoardItemFromJson(Map<String, dynamic> json) =>
+    _VisionBoardItem(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      description: json['description'] as String? ?? '',
+      category: json['category'] as String? ?? '',
+      images: (json['images'] as List<dynamic>?)
+              ?.map((e) => ImageReference.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      isAchieved: json['isAchieved'] as bool? ?? false,
+      targetDate: json['targetDate'] == null
+          ? null
+          : DateTime.parse(json['targetDate'] as String),
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      colorAccent: (json['colorAccent'] as num?)?.toInt() ?? 0,
+      affirmation: json['affirmation'] as String? ?? '',
+    );
+
+Map<String, dynamic> _$VisionBoardItemToJson(_VisionBoardItem instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'title': instance.title,
+      'description': instance.description,
+      'category': instance.category,
+      'images': instance.images,
+      'isAchieved': instance.isAchieved,
+      'targetDate': instance.targetDate?.toIso8601String(),
+      'createdAt': instance.createdAt.toIso8601String(),
+      'colorAccent': instance.colorAccent,
+      'affirmation': instance.affirmation,
+    };
+
+_VisionBoard _$VisionBoardFromJson(Map<String, dynamic> json) => _VisionBoard(
+      id: json['id'] as String,
+      year: (json['year'] as num).toInt(),
+      items: (json['items'] as List<dynamic>?)
+              ?.map((e) => VisionBoardItem.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      createdAt: DateTime.parse(json['createdAt'] as String),
+    );
+
+Map<String, dynamic> _$VisionBoardToJson(_VisionBoard instance) =>
+    <String, dynamic>{
+      'id': instance.id,
+      'year': instance.year,
+      'items': instance.items,
+      'createdAt': instance.createdAt.toIso8601String(),
+    };
+
 _UserSettings _$UserSettingsFromJson(Map<String, dynamic> json) =>
     _UserSettings(
       securityEnabled: json['securityEnabled'] as bool? ?? false,

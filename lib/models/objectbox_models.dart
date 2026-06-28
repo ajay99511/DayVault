@@ -201,6 +201,42 @@ class ObjectBoxRankingCategory {
 }
 
 @Entity()
+class ObjectBoxVisionBoard {
+  @Id()
+  int id = 0;
+
+  @Unique()
+  String boardId = '';
+
+  int year = 0;
+  String itemsJson = '[]';
+
+  @Property(type: PropertyType.date)
+  DateTime createdAt = DateTime.now();
+
+  VisionBoard toFreezed() {
+    final List<dynamic> decoded = jsonDecode(itemsJson);
+    final items = decoded
+        .map((m) => VisionBoardItem.fromJson(m as Map<String, dynamic>))
+        .toList();
+    return VisionBoard(
+      id: boardId,
+      year: year,
+      items: items,
+      createdAt: createdAt,
+    );
+  }
+
+  static ObjectBoxVisionBoard fromFreezed(VisionBoard board) {
+    return ObjectBoxVisionBoard()
+      ..boardId = board.id
+      ..year = board.year
+      ..itemsJson = jsonEncode(board.items.map((i) => i.toJson()).toList())
+      ..createdAt = board.createdAt;
+  }
+}
+
+@Entity()
 class ObjectBoxUserSettings {
   /// Single-row pattern: we always use id = 1.
   @Id()

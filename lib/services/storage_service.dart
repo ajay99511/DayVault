@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../models/types.dart';
 import '../models/objectbox_models.dart';
 import '../models/paged_result.dart';
@@ -46,6 +47,7 @@ class StorageService {
   late final Box<ObjectBoxJournalEntry> _journalBox;
   late final Box<ObjectBoxRankingCategory> _rankingBox;
   late final Box<ObjectBoxUserSettings> _settingsBox;
+  late final Box<ObjectBoxVisionBoard> _visionBoardBox;
 
   // Draft storage - uses default FlutterSecureStorage
   // Key caching is handled in SecurityService
@@ -54,7 +56,8 @@ class StorageService {
   StorageService(Store store)
       : _journalBox = store.box<ObjectBoxJournalEntry>(),
         _rankingBox = store.box<ObjectBoxRankingCategory>(),
-        _settingsBox = store.box<ObjectBoxUserSettings>();
+        _settingsBox = store.box<ObjectBoxUserSettings>(),
+        _visionBoardBox = store.box<ObjectBoxVisionBoard>();
 
   // ─── Journal ────────────────────────────────────────────────────────────
 
@@ -487,6 +490,91 @@ class StorageService {
     } finally {
       query.close();
     }
+  }
+
+  // ─── Vision Board ────────────────────────────────────────────────────────
+
+  List<VisionBoard> getVisionBoards() {
+    final results = _visionBoardBox.getAll();
+    return results.map((b) => b.toFreezed()).toList()
+      ..sort((a, b) => b.year.compareTo(a.year));
+  }
+
+  VisionBoard? getVisionBoardForYear(int year) {
+    final query = _visionBoardBox
+        .query(ObjectBoxVisionBoard_.year.equals(year))
+        .build();
+    try {
+      return query.findFirst()?.toFreezed();
+    } finally {
+      query.close();
+    }
+  }
+
+  VisionBoard getOrCreateVisionBoard(int year) {
+    final existing = getVisionBoardForYear(year);
+    if (existing != null) return existing;
+    final board = VisionBoard(
+      id: const Uuid().v4(),
+      year: year,
+      createdAt: DateTime.now(),
+    );
+    saveVisionBoard(board);
+    return board;
+  }
+
+  void saveVisionBoard(VisionBoard board) {
+    final ob = ObjectBoxVisionBoard.fromFreezed(board);
+    final query = _visionBoardBox
+        .query(ObjectBoxVisionBoard_.boardId.equals(board.id))
+        .build();
+    try {
+      final existing = query.findFirst();
+      if (existing != null) ob.id = existing.id;
+      _visionBoardBox.put(ob);
+    } finally {
+      query.close();
+    }
+  }
+
+  void addVisionBoardItem(int year, VisionBoardItem item) {
+    final board = getOrCreateVisionBoard(year);
+    saveVisionBoard(board.copyWith(items: [...board.items, item]));
+  }
+
+  void updateVisionBoardItem(int year, VisionBoardItem item) {
+    final board = getVisionBoardForYear(year);
+    if (board == null) return;
+    final updatedItems = board.items
+        .map((i) => i.id == item.id ? item : i)
+        .toList();
+    saveVisionBoard(board.copyWith(items: updatedItems));
+  }
+
+  void deleteVisionBoardItem(int year, String itemId) {
+    final board = getVisionBoardForYear(year);
+    if (board == null) return;
+    saveVisionBoard(board.copyWith(
+      items: board.items.where((i) => i.id != itemId).toList(),
+    ));
+  }
+
+  /// Merge an imported board (e.g. from a restore) into local data, keyed by
+  /// [VisionBoard.year] rather than board id. If a board already exists for that
+  /// year, the imported items are upserted into it (matched by item id) and the
+  /// existing row's id is preserved, so a restore can never create two rows for
+  /// the same year. Otherwise the imported board is saved as-is.
+  void mergeVisionBoard(VisionBoard imported) {
+    final existing = getVisionBoardForYear(imported.year);
+    if (existing == null) {
+      saveVisionBoard(imported);
+      return;
+    }
+    final byId = {for (final i in existing.items) i.id: i};
+    for (final item in imported.items) {
+      byId[item.id] = item; // upsert
+    }
+    saveVisionBoard(existing.copyWith(items: byId.values.toList()));
   }
 
   // ─── Settings ───────────────────────────────────────────────────────────

@@ -37,8 +37,18 @@ class _FakePagedResult_0<T> extends _i1.SmartFake
         );
 }
 
-class _FakeUserSettings_1 extends _i1.SmartFake implements _i3.UserSettings {
-  _FakeUserSettings_1(
+class _FakeVisionBoard_1 extends _i1.SmartFake implements _i3.VisionBoard {
+  _FakeVisionBoard_1(
+    Object parent,
+    Invocation parentInvocation,
+  ) : super(
+          parent,
+          parentInvocation,
+        );
+}
+
+class _FakeUserSettings_2 extends _i1.SmartFake implements _i3.UserSettings {
+  _FakeUserSettings_2(
     Object parent,
     Invocation parentInvocation,
   ) : super(
@@ -180,6 +190,44 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
       ) as _i5.Future<void>);
 
   @override
+  _i5.Future<Map<String, int>> getTagCounts() => (super.noSuchMethod(
+        Invocation.method(
+          #getTagCounts,
+          [],
+        ),
+        returnValue: _i5.Future<Map<String, int>>.value(<String, int>{}),
+        returnValueForMissingStub:
+            _i5.Future<Map<String, int>>.value(<String, int>{}),
+      ) as _i5.Future<Map<String, int>>);
+
+  @override
+  _i5.Future<int> renameTag(
+    String? from,
+    String? to,
+  ) =>
+      (super.noSuchMethod(
+        Invocation.method(
+          #renameTag,
+          [
+            from,
+            to,
+          ],
+        ),
+        returnValue: _i5.Future<int>.value(0),
+        returnValueForMissingStub: _i5.Future<int>.value(0),
+      ) as _i5.Future<int>);
+
+  @override
+  _i5.Future<int> deleteTag(String? tag) => (super.noSuchMethod(
+        Invocation.method(
+          #deleteTag,
+          [tag],
+        ),
+        returnValue: _i5.Future<int>.value(0),
+        returnValueForMissingStub: _i5.Future<int>.value(0),
+      ) as _i5.Future<int>);
+
+  @override
   _i5.Future<List<_i3.RankingCategory>> getFavoriteRankings() =>
       (super.noSuchMethod(
         Invocation.method(
@@ -289,19 +337,117 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
       ) as _i5.Future<void>);
 
   @override
+  List<_i3.VisionBoard> getVisionBoards() => (super.noSuchMethod(
+        Invocation.method(
+          #getVisionBoards,
+          [],
+        ),
+        returnValue: <_i3.VisionBoard>[],
+        returnValueForMissingStub: <_i3.VisionBoard>[],
+      ) as List<_i3.VisionBoard>);
+
+  @override
+  _i3.VisionBoard? getVisionBoardForYear(int? year) => (super.noSuchMethod(
+        Invocation.method(
+          #getVisionBoardForYear,
+          [year],
+        ),
+        returnValueForMissingStub: null,
+      ) as _i3.VisionBoard?);
+
+  @override
+  _i3.VisionBoard getOrCreateVisionBoard(int? year) => (super.noSuchMethod(
+        Invocation.method(
+          #getOrCreateVisionBoard,
+          [year],
+        ),
+        returnValue: _FakeVisionBoard_1(
+          this,
+          Invocation.method(
+            #getOrCreateVisionBoard,
+            [year],
+          ),
+        ),
+        returnValueForMissingStub: _FakeVisionBoard_1(
+          this,
+          Invocation.method(
+            #getOrCreateVisionBoard,
+            [year],
+          ),
+        ),
+      ) as _i3.VisionBoard);
+
+  @override
+  void saveVisionBoard(_i3.VisionBoard? board) => super.noSuchMethod(
+        Invocation.method(
+          #saveVisionBoard,
+          [board],
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  void addVisionBoardItem(
+    int? year,
+    _i3.VisionBoardItem? item,
+  ) =>
+      super.noSuchMethod(
+        Invocation.method(
+          #addVisionBoardItem,
+          [
+            year,
+            item,
+          ],
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  void updateVisionBoardItem(
+    int? year,
+    _i3.VisionBoardItem? item,
+  ) =>
+      super.noSuchMethod(
+        Invocation.method(
+          #updateVisionBoardItem,
+          [
+            year,
+            item,
+          ],
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  void deleteVisionBoardItem(
+    int? year,
+    String? itemId,
+  ) =>
+      super.noSuchMethod(
+        Invocation.method(
+          #deleteVisionBoardItem,
+          [
+            year,
+            itemId,
+          ],
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
   _i3.UserSettings getSettings() => (super.noSuchMethod(
         Invocation.method(
           #getSettings,
           [],
         ),
-        returnValue: _FakeUserSettings_1(
+        returnValue: _FakeUserSettings_2(
           this,
           Invocation.method(
             #getSettings,
             [],
           ),
         ),
-        returnValueForMissingStub: _FakeUserSettings_1(
+        returnValueForMissingStub: _FakeUserSettings_2(
           this,
           Invocation.method(
             #getSettings,
@@ -317,7 +463,7 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
           #saveSettings,
           [settings],
         ),
-        returnValue: _i5.Future<_i3.UserSettings>.value(_FakeUserSettings_1(
+        returnValue: _i5.Future<_i3.UserSettings>.value(_FakeUserSettings_2(
           this,
           Invocation.method(
             #saveSettings,
@@ -325,7 +471,7 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
           ),
         )),
         returnValueForMissingStub:
-            _i5.Future<_i3.UserSettings>.value(_FakeUserSettings_1(
+            _i5.Future<_i3.UserSettings>.value(_FakeUserSettings_2(
           this,
           Invocation.method(
             #saveSettings,

@@ -201,6 +201,47 @@ final _entities = <obx_int.ModelEntity>[
     relations: <obx_int.ModelRelation>[],
     backlinks: <obx_int.ModelBacklink>[],
   ),
+  obx_int.ModelEntity(
+    id: const obx_int.IdUid(8, 1691446443854157567),
+    name: 'ObjectBoxVisionBoard',
+    lastPropertyId: const obx_int.IdUid(5, 9154265478071069564),
+    flags: 0,
+    properties: <obx_int.ModelProperty>[
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(1, 5073285251411330539),
+        name: 'id',
+        type: 6,
+        flags: 1,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(2, 1509032835301445606),
+        name: 'boardId',
+        type: 9,
+        flags: 2080,
+        indexId: const obx_int.IdUid(8, 5633630892598471515),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(3, 3792203444117890888),
+        name: 'year',
+        type: 6,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(4, 1110501039990303473),
+        name: 'itemsJson',
+        type: 9,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(5, 9154265478071069564),
+        name: 'createdAt',
+        type: 10,
+        flags: 0,
+      ),
+    ],
+    relations: <obx_int.ModelRelation>[],
+    backlinks: <obx_int.ModelBacklink>[],
+  ),
 ];
 
 /// Shortcut for [obx.Store.new] that passes [getObjectBoxModel] and for Flutter
@@ -246,8 +287,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
     // Typically, this is done with `dart run build_runner build`.
     generatorVersion: obx_int.GeneratorVersion.v2025_12_16,
     entities: _entities,
-    lastEntityId: const obx_int.IdUid(7, 145200524995731987),
-    lastIndexId: const obx_int.IdUid(7, 5688953762199169554),
+    lastEntityId: const obx_int.IdUid(8, 1691446443854157567),
+    lastIndexId: const obx_int.IdUid(8, 5633630892598471515),
     lastRelationId: const obx_int.IdUid(0, 0),
     lastSequenceId: const obx_int.IdUid(0, 0),
     retiredEntityUids: const [
@@ -508,6 +549,46 @@ obx_int.ModelDefinition getObjectBoxModel() {
         return object;
       },
     ),
+    ObjectBoxVisionBoard: obx_int.EntityDefinition<ObjectBoxVisionBoard>(
+      model: _entities[3],
+      toOneRelations: (ObjectBoxVisionBoard object) => [],
+      toManyRelations: (ObjectBoxVisionBoard object) => {},
+      getId: (ObjectBoxVisionBoard object) => object.id,
+      setId: (ObjectBoxVisionBoard object, int id) {
+        object.id = id;
+      },
+      objectToFB: (ObjectBoxVisionBoard object, fb.Builder fbb) {
+        final boardIdOffset = fbb.writeString(object.boardId);
+        final itemsJsonOffset = fbb.writeString(object.itemsJson);
+        fbb.startTable(6);
+        fbb.addInt64(0, object.id);
+        fbb.addOffset(1, boardIdOffset);
+        fbb.addInt64(2, object.year);
+        fbb.addOffset(3, itemsJsonOffset);
+        fbb.addInt64(4, object.createdAt.millisecondsSinceEpoch);
+        fbb.finish(fbb.endTable());
+        return object.id;
+      },
+      objectFromFB: (obx.Store store, ByteData fbData) {
+        final buffer = fb.BufferContext(fbData);
+        final rootOffset = buffer.derefObject(0);
+
+        final object = ObjectBoxVisionBoard()
+          ..id = const fb.Int64Reader().vTableGet(buffer, rootOffset, 4, 0)
+          ..boardId = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 6, '')
+          ..year = const fb.Int64Reader().vTableGet(buffer, rootOffset, 8, 0)
+          ..itemsJson = const fb.StringReader(
+            asciiOptimization: true,
+          ).vTableGet(buffer, rootOffset, 10, '')
+          ..createdAt = DateTime.fromMillisecondsSinceEpoch(
+            const fb.Int64Reader().vTableGet(buffer, rootOffset, 12, 0),
+          );
+
+        return object;
+      },
+    ),
   };
 
   return obx_int.ModelDefinition(model, bindings);
@@ -648,4 +729,32 @@ class ObjectBoxUserSettings_ {
       obx.QueryBooleanProperty<ObjectBoxUserSettings>(
         _entities[2].properties[4],
       );
+}
+
+/// [ObjectBoxVisionBoard] entity fields to define ObjectBox queries.
+class ObjectBoxVisionBoard_ {
+  /// See [ObjectBoxVisionBoard.id].
+  static final id = obx.QueryIntegerProperty<ObjectBoxVisionBoard>(
+    _entities[3].properties[0],
+  );
+
+  /// See [ObjectBoxVisionBoard.boardId].
+  static final boardId = obx.QueryStringProperty<ObjectBoxVisionBoard>(
+    _entities[3].properties[1],
+  );
+
+  /// See [ObjectBoxVisionBoard.year].
+  static final year = obx.QueryIntegerProperty<ObjectBoxVisionBoard>(
+    _entities[3].properties[2],
+  );
+
+  /// See [ObjectBoxVisionBoard.itemsJson].
+  static final itemsJson = obx.QueryStringProperty<ObjectBoxVisionBoard>(
+    _entities[3].properties[3],
+  );
+
+  /// See [ObjectBoxVisionBoard.createdAt].
+  static final createdAt = obx.QueryDateProperty<ObjectBoxVisionBoard>(
+    _entities[3].properties[4],
+  );
 }

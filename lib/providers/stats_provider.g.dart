@@ -33,7 +33,7 @@ final class StatsNotifierProvider
   StatsNotifier create() => StatsNotifier();
 }
 
-String _$statsNotifierHash() => r'c19b9bc489ebab0f044b8d91e459fb63de63de6f';
+String _$statsNotifierHash() => r'fa79931e01dc475e0b197a446e9e6cb27433870d';
 
 abstract class _$StatsNotifier extends $AsyncNotifier<JournalStats> {
   FutureOr<JournalStats> build();
