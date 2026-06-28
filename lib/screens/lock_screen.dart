@@ -31,6 +31,10 @@ class _LockScreenState extends ConsumerState<LockScreen>
   bool isLoading = true;
   bool isPinSet = false;
   bool biometricAvailable = false;
+  /// True while the PIN is being verified (the PBKDF2 derivation). The keypad
+  /// is disabled and a progress indicator is shown so the unavoidable KDF wait
+  /// reads as deliberate work rather than a frozen screen.
+  bool isVerifying = false;
   late AnimationController _shakeController;
   late Animation<double> _shakeAnimation;
 
@@ -146,7 +150,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
   }
 
   Future<void> handleTap(String val) async {
-    if (isLoading) return;
+    if (isLoading || isVerifying) return;
     _idleTimer.poke();
 
     if (pin.length < SecurityConstants.pinLength) {
@@ -169,14 +173,18 @@ class _LockScreenState extends ConsumerState<LockScreen>
 
     // Capture before the async gap so we don't read context afterwards.
     final reduceMotion = Motion.reduceMotion(context);
+    setState(() => isVerifying = true);
     final result = await _securityService.verifyPin(pin);
 
     if (result.success) {
       HapticFeedback.heavyImpact();
+      // Leave isVerifying true: this screen is about to be torn down as the
+      // root swaps in the main shell, so we must not setState after unlock.
       widget.onUnlock();
     } else if (result.requiresPinReset) {
       // Handle security upgrade
       setState(() {
+        isVerifying = false;
         isPinSet = false;
         isError = true;
         errorMessage = result.error;
@@ -184,6 +192,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
       HapticFeedback.mediumImpact();
     } else {
       setState(() {
+        isVerifying = false;
         isError = true;
         errorMessage = result.error;
         remainingAttempts = result.remainingAttempts;
@@ -384,8 +393,33 @@ class _LockScreenState extends ConsumerState<LockScreen>
                 ),
                 const SizedBox(height: 16),
 
+                // Unlocking indicator — shown while the PBKDF2 derivation runs.
+                if (isVerifying)
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.indigo500,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        'UNLOCKING…',
+                        style: TextStyle(
+                          color: AppColors.slate400,
+                          fontSize: 10,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ],
+                  ),
+
                 // Remaining attempts
-                if (remainingAttempts != null && !isError)
+                if (remainingAttempts != null && !isError && !isVerifying)
                   Text(
                     '$remainingAttempts attempts remaining',
                     style: const TextStyle(
@@ -485,8 +519,21 @@ class _LockScreenState extends ConsumerState<LockScreen>
 
   Widget _buildKey(String val, {IconData? icon}) {
     final isAction = icon != null;
-    
-    return GestureDetector(
+
+    // Screen-reader label: digits announce themselves; action keys get a
+    // descriptive name since their glyph alone isn't read aloud.
+    final String semanticLabel = icon == Icons.fingerprint
+        ? 'Authenticate with biometrics'
+        : icon == Icons.backspace_outlined
+            ? 'Delete last digit'
+            : val;
+
+    return Semantics(
+      button: true,
+      enabled: !isVerifying,
+      label: semanticLabel,
+      excludeSemantics: true,
+      child: GestureDetector(
       onTap: () {
         if (isAction) {
           if (icon == Icons.fingerprint) {
@@ -533,6 +580,7 @@ class _LockScreenState extends ConsumerState<LockScreen>
                 ),
               ),
       ),
+    ),
     );
   }
 }

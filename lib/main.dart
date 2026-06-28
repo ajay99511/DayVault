@@ -132,48 +132,36 @@ class RootOrchestrator extends ConsumerStatefulWidget {
   ConsumerState<RootOrchestrator> createState() => _RootOrchestratorState();
 }
 
-class _RootOrchestratorState extends ConsumerState<RootOrchestrator>
-    with WidgetsBindingObserver {
+class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
   bool isLoading = true;
   bool _securityEnabled = false;
-  DateTime? _backgroundedAt;
-  static const _gracePeriod = Duration(seconds: 30);
 
+  // Auto-lock policy (deliberate):
+  //
+  // The vault unlocks ONCE per process and stays unlocked for the entire
+  // lifetime of that process — there is intentionally NO inactivity/background
+  // timeout. The session lives in [authStateProvider], which is in-memory
+  // (keepAlive) and therefore survives backgrounding, minimizing, tab-switching
+  // and window focus changes identically on mobile, desktop and web.
+  //
+  // The PIN is required again only on a cold start: a real process restart —
+  // the user fully closing the app (or the OS killing a backgrounded app to
+  // reclaim memory) and relaunching it. Flutter does not restore in-memory
+  // state across a process kill unless RestorationMixin/restorationScopeId is
+  // used (this app uses neither), so the process boundary is the single,
+  // reliable relock trigger. We do not key off AppLifecycleState here because
+  // its semantics differ per platform (e.g. desktop emits paused/hidden on a
+  // routine minimize), which previously caused spurious re-prompts.
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    
+
     // Check for migration requirement
     if (widget.initOutcome?.result == InitResult.migrationRequired) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _showMigrationDialog());
     }
-    
+
     _checkSecurity();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
-      _backgroundedAt = DateTime.now();
-    } else if (state == AppLifecycleState.resumed) {
-      final bg = _backgroundedAt;
-      if (bg != null && DateTime.now().difference(bg) > _gracePeriod) {
-        // Re-lock after the grace period — but only when security is actually
-        // enabled, otherwise there is nothing to unlock and we'd wrongly force
-        // the PIN-setup flow on a user who disabled security.
-        if (_securityEnabled) {
-          SecurityService().lockVault(); // clear the in-memory encryption key
-          ref.read(authStateProvider.notifier).unauthenticate();
-        }
-      }
-    }
   }
 
   Future<void> _showMigrationDialog() async {

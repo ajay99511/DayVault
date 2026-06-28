@@ -116,23 +116,15 @@ class SecurityService {
     }
   }
 
-  /// Derive encryption key from PIN and cache it in memory.
-  /// Used to decrypt journal data after successful PIN verification.
-  Future<void> _deriveAndCacheEncryptionKey(String pin) async {
-    String? encSalt = await _storage.read(key: _encryptionSaltKey);
-    if (encSalt == null) {
-      encSalt = _generateSalt();
-      await _storage.write(key: _encryptionSaltKey, value: encSalt);
-    }
-
-    final keyBytes = await compute(_pbkdf2Derive, {
-      'pin': pin,
-      'salt': encSalt,
-      'iterations': 100000,
-      'keyLength': 32,
-    });
-
-    _cachedEncryptionKey = keyBytes;
+  /// Read the encryption-key salt, generating and persisting it on first use.
+  /// The salt is random and independent of the PIN, so creating it eagerly is
+  /// harmless.
+  Future<String> _readOrCreateEncryptionSalt() async {
+    final existing = await _storage.read(key: _encryptionSaltKey);
+    if (existing != null) return existing;
+    final encSalt = _generateSalt();
+    await _storage.write(key: _encryptionSaltKey, value: encSalt);
+    return encSalt;
   }
 
   /// Get the cached encryption key.
@@ -224,12 +216,26 @@ class SecurityService {
     }
 
     final salt = reads[1] ?? '';
-    final inputHash = await _hashPin(pin, salt);
+    final encSalt = await _readOrCreateEncryptionSalt();
+
+    // Verify the PIN and derive the (independent) data-encryption key in
+    // parallel. They use different salts and don't depend on each other, so on
+    // the common correct-PIN path this collapses two sequential ~100k-iteration
+    // PBKDF2 passes — the dominant cost of unlocking — into roughly one,
+    // noticeably tightening the unlock latency. On a wrong PIN the
+    // speculatively derived key is simply discarded.
+    final derived = await Future.wait([
+      compute(_pbkdf2Derive,
+          {'pin': pin, 'salt': salt, 'iterations': 100000, 'keyLength': 32}),
+      compute(_pbkdf2Derive,
+          {'pin': pin, 'salt': encSalt, 'iterations': 100000, 'keyLength': 32}),
+    ]);
+    final inputHash = base64Encode(derived[0]);
 
     if (inputHash == storedHash) {
-      // Success - reset attempts (and escalation) and derive encryption key
+      // Success - reset attempts (and escalation) and adopt the derived key.
       await _resetAttempts(clearBackoff: true);
-      await _deriveAndCacheEncryptionKey(pin);
+      _cachedEncryptionKey = derived[1];
       return PinVerificationResult(success: true);
     } else {
       // Failed - increment attempts
