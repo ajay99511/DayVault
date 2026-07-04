@@ -17,7 +17,9 @@ import 'config/constants.dart';
 import 'widgets/glass_widgets.dart';
 import 'providers/auth_provider.dart';
 import 'services/storage_service.dart';
-import 'services/objectbox_service.dart';
+import 'services/platform/platform_init_stub.dart'
+    if (dart.library.ffi) 'services/platform/platform_init_native.dart'
+    if (dart.library.js_interop) 'services/platform/platform_init_web.dart';
 import 'services/security_service.dart';
 
 void main() async {
@@ -38,10 +40,10 @@ void main() async {
 
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
 
-  ObjectBoxInitOutcome? initOutcome;
+  PlatformInitOutcome? initOutcome;
   String? initError;
   try {
-    initOutcome = await ObjectBoxService.init();
+    initOutcome = await platformInit();
     await SecurityService().initialize();
   } catch (e, st) {
     debugPrint('Critical init failed: $e\n$st');
@@ -57,7 +59,7 @@ void main() async {
 }
 
 class MemoryPalaceApp extends ConsumerWidget {
-  final ObjectBoxInitOutcome? initOutcome;
+  final PlatformInitOutcome? initOutcome;
   final String? initError;
 
   const MemoryPalaceApp({super.key, this.initOutcome, this.initError});
@@ -125,7 +127,7 @@ class _ErrorScreen extends StatelessWidget {
 }
 
 class RootOrchestrator extends ConsumerStatefulWidget {
-  final ObjectBoxInitOutcome? initOutcome;
+  final PlatformInitOutcome? initOutcome;
   const RootOrchestrator({super.key, this.initOutcome});
 
   @override
@@ -190,7 +192,7 @@ class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
     );
 
     if (confirmed == true) {
-      await ObjectBoxService.reinitializeAfterConsent(widget.initOutcome!.backupPath!);
+      await platformReinitializeAfterConsent(widget.initOutcome!.backupPath!);
       _checkSecurity();
     } else {
       // If user cancels, they can't use the app
