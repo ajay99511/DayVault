@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:memory_palace/models/types.dart';
 import 'package:memory_palace/services/backup_service.dart';
 import 'package:memory_palace/services/storage_service.dart';
 import 'package:mockito/annotations.dart';
@@ -148,6 +149,72 @@ void main() {
         final decoded = decodeBackupJson(encoded);
         expect(decoded, equals(data));
       }
+    });
+  });
+
+  // ─── Privacy Vault flag in backups ───────────────────────────────────────
+  group('Backup isPrivate handling', () {
+    Map<String, dynamic> entryJson(String id, {bool? isPrivate}) => {
+          'id': id,
+          'type': 0,
+          'date': DateTime(2025, 6, 1).toIso8601String(),
+          'headline': 'H',
+          'content': 'C',
+          'mood': 0,
+          if (isPrivate != null) 'isPrivate': isPrivate,
+        };
+
+    test('import preserves isPrivate=true', () async {
+      final backup = {
+        'version': '1.0',
+        'journal': [
+          entryJson('pub', isPrivate: false),
+          entryJson('priv', isPrivate: true),
+        ],
+      };
+
+      await backupService.importFromJson(jsonEncode(backup));
+
+      final captured =
+          verify(mockStorage.putManyJournalEntries(captureAny)).captured.first;
+      expect(captured.singleWhere((e) => e.id == 'priv').isPrivate, isTrue);
+      expect(captured.singleWhere((e) => e.id == 'pub').isPrivate, isFalse);
+    });
+
+    test('legacy backups without the key import as isPrivate=false', () async {
+      final backup = {
+        'version': '1.0',
+        'journal': [entryJson('legacy')],
+      };
+
+      await backupService.importFromJson(jsonEncode(backup));
+
+      final captured =
+          verify(mockStorage.putManyJournalEntries(captureAny)).captured.first;
+      expect(captured.single.isPrivate, isFalse);
+    });
+
+    test('export requests ALL entries (including vaulted) and carries the flag',
+        () async {
+      when(mockStorage.getSettings()).thenReturn(const UserSettings());
+      when(mockStorage.getJournal(privacy: PrivacyFilter.all))
+          .thenAnswer((_) async => [
+                JournalEntry(
+                  id: 'priv',
+                  type: EntryType.story,
+                  date: DateTime(2025, 6, 1),
+                  headline: 'H',
+                  content: 'C',
+                  mood: Mood.happy,
+                  isPrivate: true,
+                ),
+              ]);
+
+      final data = await backupService.exportData();
+
+      verify(mockStorage.getJournal(privacy: PrivacyFilter.all)).called(1);
+      final journal = data['journal'] as List;
+      expect((journal.single as Map<String, dynamic>)['isPrivate'], isTrue);
     });
   });
 }

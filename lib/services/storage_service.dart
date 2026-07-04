@@ -43,6 +43,14 @@ const List<RankingCategory> _defaultCategories = [
   RankingCategory(id: 'books', title: 'Books', iconName: 'book', items: []),
 ];
 
+/// Controls whether journal queries see vaulted (private) entries.
+///
+/// The default everywhere is [excludePrivate] so private entries stay hidden
+/// from every surface (home, calendar, stats, tags, On This Day) unless a
+/// caller explicitly opts in — the vault screen uses [onlyPrivate], and
+/// integrity-critical operations (backup export, tag rename/delete) use [all].
+enum PrivacyFilter { excludePrivate, onlyPrivate, all }
+
 class StorageService {
   late final Box<ObjectBoxJournalEntry> _journalBox;
   late final Box<ObjectBoxRankingCategory> _rankingBox;
@@ -61,13 +69,27 @@ class StorageService {
 
   // ─── Journal ────────────────────────────────────────────────────────────
 
+  /// Privacy condition for [privacy], or null when no filtering applies.
+  static Condition<ObjectBoxJournalEntry>? _privacyCondition(
+      PrivacyFilter privacy) {
+    switch (privacy) {
+      case PrivacyFilter.excludePrivate:
+        return ObjectBoxJournalEntry_.isPrivate.equals(false);
+      case PrivacyFilter.onlyPrivate:
+        return ObjectBoxJournalEntry_.isPrivate.equals(true);
+      case PrivacyFilter.all:
+        return null;
+    }
+  }
+
   /// Get all journal entries.
-  /// 
+  ///
   /// Existing encrypted entries are auto-detected and decrypted during
   /// conversion. New entries are stored as plain text.
-  Future<List<JournalEntry>> getJournal() async {
+  Future<List<JournalEntry>> getJournal(
+      {PrivacyFilter privacy = PrivacyFilter.excludePrivate}) async {
     final query = _journalBox
-        .query()
+        .query(_privacyCondition(privacy))
         .order(ObjectBoxJournalEntry_.date, flags: Order.descending)
         .build();
     try {
@@ -105,9 +127,18 @@ class StorageService {
     }
   }
 
-  /// Total number of stored journal entries. O(1) — used for the header count
-  /// when the list is only partially loaded via pagination.
-  int journalCount() => _journalBox.count();
+  /// Number of stored journal entries visible under [privacy] — used for the
+  /// header count when the list is only partially loaded via pagination.
+  int journalCount({PrivacyFilter privacy = PrivacyFilter.excludePrivate}) {
+    final cond = _privacyCondition(privacy);
+    if (cond == null) return _journalBox.count();
+    final query = _journalBox.query(cond).build();
+    try {
+      return query.count();
+    } finally {
+      query.close();
+    }
+  }
 
   Future<void> saveJournalEntry(JournalEntry entry) async {
     final obEntry = await ObjectBoxJournalEntry.fromFreezed(entry);
@@ -133,14 +164,20 @@ class StorageService {
   Future<PagedResult<JournalEntry>> getJournalPage(
     int pageSize, [
     PaginationCursor? cursor,
+    PrivacyFilter privacy = PrivacyFilter.excludePrivate,
   ]) async {
     if (pageSize < 1 || pageSize > 100) {
       throw ArgumentError('pageSize must be in [1, 100], got $pageSize');
     }
 
-    final queryBuilder = cursor == null
-        ? _journalBox.query()
-        : _journalBox.query(ObjectBoxJournalEntry_.id.lessThan(cursor.lastId));
+    final privacyCond = _privacyCondition(privacy);
+    final cursorCond = cursor == null
+        ? null
+        : ObjectBoxJournalEntry_.id.lessThan(cursor.lastId);
+    final cond = privacyCond == null
+        ? cursorCond
+        : (cursorCond == null ? privacyCond : cursorCond & privacyCond);
+    final queryBuilder = _journalBox.query(cond);
 
     final query = queryBuilder
         .order(ObjectBoxJournalEntry_.date, flags: Order.descending)
@@ -306,7 +343,10 @@ class StorageService {
   /// entry already carries [to], the two are merged (no duplicate). Returns the
   /// number of entries changed.
   Future<int> renameTag(String from, String to) async {
-    final changed = applyTagRename(await getJournal(), from, to);
+    // Tag integrity must reach vaulted entries too, or renames silently
+    // diverge between the vault and the rest of the journal.
+    final changed =
+        applyTagRename(await getJournal(privacy: PrivacyFilter.all), from, to);
     if (changed.isNotEmpty) await putManyJournalEntries(changed);
     return changed.length;
   }
@@ -314,7 +354,9 @@ class StorageService {
   /// Remove [tag] from every entry (case-insensitive). Returns the number of
   /// entries changed.
   Future<int> deleteTag(String tag) async {
-    final changed = applyTagDelete(await getJournal(), tag);
+    // Same as renameTag: deletion must reach vaulted entries.
+    final changed =
+        applyTagDelete(await getJournal(privacy: PrivacyFilter.all), tag);
     if (changed.isNotEmpty) await putManyJournalEntries(changed);
     return changed.length;
   }

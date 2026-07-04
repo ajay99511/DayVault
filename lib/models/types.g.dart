@@ -57,6 +57,7 @@ _JournalEntry _$JournalEntryFromJson(Map<String, dynamic> json) =>
               .toList() ??
           const [],
       isSpotlight: json['isSpotlight'] as bool? ?? false,
+      isPrivate: json['isPrivate'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$JournalEntryToJson(_JournalEntry instance) =>
@@ -73,6 +74,7 @@ Map<String, dynamic> _$JournalEntryToJson(_JournalEntry instance) =>
       'timeBucket': _$TimeBucketEnumMap[instance.timeBucket],
       'images': instance.images,
       'isSpotlight': instance.isSpotlight,
+      'isPrivate': instance.isPrivate,
     };
 
 const _$EntryTypeEnumMap = {

@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 5355389132980470044),
     name: 'ObjectBoxJournalEntry',
-    lastPropertyId: const obx_int.IdUid(13, 4052695605142418),
+    lastPropertyId: const obx_int.IdUid(14, 7615312918950707749),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -101,6 +101,12 @@ final _entities = <obx_int.ModelEntity>[
       obx_int.ModelProperty(
         id: const obx_int.IdUid(13, 4052695605142418),
         name: 'isSpotlight',
+        type: 1,
+        flags: 0,
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(14, 7615312918950707749),
+        name: 'isPrivate',
         type: 1,
         flags: 0,
       ),
@@ -367,7 +373,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
             ? null
             : fbb.writeString(object.locationJson!);
         final imagesJsonOffset = fbb.writeString(object.imagesJson);
-        fbb.startTable(14);
+        fbb.startTable(15);
         fbb.addInt64(0, object.id);
         fbb.addOffset(1, entryIdOffset);
         fbb.addInt64(2, object.typeIndex);
@@ -381,6 +387,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addInt64(10, object.timeBucketIndex);
         fbb.addOffset(11, imagesJsonOffset);
         fbb.addBool(12, object.isSpotlight);
+        fbb.addBool(13, object.isPrivate);
         fbb.finish(fbb.endTable());
         return object.id;
       },
@@ -436,6 +443,12 @@ obx_int.ModelDefinition getObjectBoxModel() {
             buffer,
             rootOffset,
             28,
+            false,
+          )
+          ..isPrivate = const fb.BoolReader().vTableGet(
+            buffer,
+            rootOffset,
+            30,
             false,
           );
 
@@ -660,6 +673,11 @@ class ObjectBoxJournalEntry_ {
   /// See [ObjectBoxJournalEntry.isSpotlight].
   static final isSpotlight = obx.QueryBooleanProperty<ObjectBoxJournalEntry>(
     _entities[0].properties[12],
+  );
+
+  /// See [ObjectBoxJournalEntry.isPrivate].
+  static final isPrivate = obx.QueryBooleanProperty<ObjectBoxJournalEntry>(
+    _entities[0].properties[13],
   );
 }
 

@@ -11,6 +11,8 @@ import '../widgets/image_widgets.dart';
 import '../services/storage_service.dart';
 import '../services/encryption_service.dart';
 import '../services/image_service.dart';
+import '../services/vault_security_service.dart';
+import 'vault_passcode_setup_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -50,6 +52,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
   late List<ImageReference> images;
   late List<String> tags;
   late bool isSpotlight;
+  late bool isPrivate;
   bool showTimePicker = false;
 
   // Auto-save functionality
@@ -87,6 +90,9 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
     images = List.from(widget.initialEntry?.images ?? []);
     tags = List.from(widget.initialEntry?.tags ?? const <String>[]);
     isSpotlight = widget.initialEntry?.isSpotlight ?? false;
+    // Carried explicitly: the save path below reconstructs the entry from
+    // scratch, so dropping this would silently un-vault an edited entry.
+    isPrivate = widget.initialEntry?.isPrivate ?? false;
     
     // Draft slot: the entry's id when editing, else the stable new-entry slot.
     _draftId = widget.initialEntry?.id ?? _newEntryDraftKey;
@@ -126,6 +132,34 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
     _autoSaveTimer = Timer(_autoSaveDelay, _saveDraft);
   }
   
+  /// Toggle "Move to Privacy Vault". Turning it ON requires the vault to be
+  /// set up first — otherwise the entry would become invisible with no way to
+  /// view it, which reads as data loss.
+  Future<void> _handlePrivacyToggle(bool v) async {
+    if (!v) {
+      setState(() => isPrivate = false);
+      _scheduleAutoSave();
+      return;
+    }
+
+    final vault = ref.read(vaultSecurityServiceProvider);
+    if (await vault.isPasscodeSet()) {
+      setState(() => isPrivate = true);
+      _scheduleAutoSave();
+      return;
+    }
+
+    if (!mounted) return;
+    final setupDone = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const VaultPasscodeSetupScreen()),
+    );
+    if (setupDone == true && mounted) {
+      setState(() => isPrivate = true);
+      _scheduleAutoSave();
+    }
+  }
+
   Future<void> _saveDraft() async {
     if (!_hasChanges || _isSaving) return;
 
@@ -145,6 +179,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
         'images': images.map((img) => img.toJson()).toList(),
         'tags': tags,
         'isSpotlight': isSpotlight,
+        'isPrivate': isPrivate,
         'timestamp': DateTime.now().toIso8601String(),
       };
 
@@ -206,6 +241,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
                     .toList() ??
                 <String>[];
             isSpotlight = draftData['isSpotlight'] as bool? ?? false;
+            isPrivate = draftData['isPrivate'] as bool? ?? false;
           });
 
           // Show recovery message
@@ -262,6 +298,7 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
         images: images,
         tags: tags,
         isSpotlight: isSpotlight,
+        isPrivate: isPrivate,
       );
       
       await widget.onSave(entry);
@@ -438,6 +475,11 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
                             setState(() => isSpotlight = v);
                             _scheduleAutoSave();
                           },
+                        ),
+                        const SizedBox(height: 12),
+                        PrivacyVaultToggle(
+                          value: isPrivate,
+                          onChanged: _handlePrivacyToggle,
                         ),
                         const SizedBox(height: 30),
                         ImageSection(
@@ -1112,6 +1154,59 @@ class SpotlightToggle extends StatelessWidget {
               value: value,
               onChanged: onChanged,
               activeThumbColor: AppColors.amber500,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Same pattern as [SpotlightToggle]: controlled switch tile for moving the
+/// entry into the Privacy Vault (hidden everywhere outside the vault).
+class PrivacyVaultToggle extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const PrivacyVaultToggle(
+      {super.key, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: value
+                ? AppColors.fuchsia500.withValues(alpha: 0.5)
+                : Colors.white12,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              value ? Icons.shield_moon : Icons.shield_moon_outlined,
+              color: value ? AppColors.fuchsia500 : Colors.white54,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Move to Privacy Vault',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: onChanged,
+              activeThumbColor: AppColors.fuchsia500,
             ),
           ],
         ),

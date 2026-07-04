@@ -46,6 +46,9 @@ class ObjectBoxJournalEntry {
 
   bool isSpotlight = false;
 
+  /// Vaulted entries are hidden from all queries outside the Privacy Vault.
+  bool isPrivate = false;
+
   // ── Converters ──────────────────────────────────────────────────────────
 
   /// Convert ObjectBox entry to JournalEntry.
@@ -88,6 +91,7 @@ class ObjectBoxJournalEntry {
           timeBucketIndex >= 0 ? TimeBucket.values[timeBucketIndex] : null,
       images: images,
       isSpotlight: isSpotlight,
+      isPrivate: isPrivate,
     );
   }
 
@@ -149,7 +153,8 @@ class ObjectBoxJournalEntry {
           entry.location != null ? jsonEncode(entry.location!.toJson()) : null
       ..timeBucketIndex = entry.timeBucket?.index ?? -1
       ..imagesJson = jsonEncode(entry.images)
-      ..isSpotlight = entry.isSpotlight;
+      ..isSpotlight = entry.isSpotlight
+      ..isPrivate = entry.isPrivate;
   }
 }
 

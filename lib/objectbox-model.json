@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:5355389132980470044",
-      "lastPropertyId": "13:4052695605142418",
+      "lastPropertyId": "14:7615312918950707749",
       "name": "ObjectBoxJournalEntry",
       "properties": [
         {
@@ -74,6 +74,11 @@
         {
           "id": "13:4052695605142418",
           "name": "isSpotlight",
+          "type": 1
+        },
+        {
+          "id": "14:7615312918950707749",
+          "name": "isPrivate",
           "type": 1
         }
       ],

@@ -1,17 +1,13 @@
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
-import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter/foundation.dart' show compute, debugPrint, visibleForTesting;
+import 'package:flutter/foundation.dart' show compute, visibleForTesting;
 import 'package:meta/meta.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:pointycastle/key_derivators/pbkdf2.dart';
-import 'package:pointycastle/macs/hmac.dart';
-import 'package:pointycastle/digests/sha256.dart';
-import 'package:pointycastle/key_derivators/api.dart';
 import '../config/security_questions.dart';
 import '../config/constants.dart';
+import 'pbkdf2.dart';
 
 /// Security service handling PIN hashing, rate limiting, and data encryption.
 ///
@@ -50,8 +46,8 @@ class SecurityService {
   /// [SecurityConstants.maxLockoutDurationSeconds].
   ///
   /// Cycle 1 returns the base duration, preserving the previous fixed-lockout
-  /// behavior for a first offense. Pure + exposed for property testing.
-  @visibleForTesting
+  /// behavior for a first offense. Pure; shared with [VaultSecurityService]
+  /// so both credential gates escalate identically.
   static int computeLockoutDurationSeconds(int cycleCount) {
     if (cycleCount <= 1) return SecurityConstants.lockoutDurationSeconds;
     final exponent = cycleCount - 1;
@@ -99,7 +95,7 @@ class SecurityService {
   /// 
   /// Uses 100,000 iterations for security
   Future<String> _hashPin(String pin, String salt) async {
-    final keyBytes = await compute(_pbkdf2Derive, {
+    final keyBytes = await compute(pbkdf2Derive, {
       'pin': pin,
       'salt': salt,
       'iterations': 100000,
@@ -225,9 +221,9 @@ class SecurityService {
     // noticeably tightening the unlock latency. On a wrong PIN the
     // speculatively derived key is simply discarded.
     final derived = await Future.wait([
-      compute(_pbkdf2Derive,
+      compute(pbkdf2Derive,
           {'pin': pin, 'salt': salt, 'iterations': 100000, 'keyLength': 32}),
-      compute(_pbkdf2Derive,
+      compute(pbkdf2Derive,
           {'pin': pin, 'salt': encSalt, 'iterations': 100000, 'keyLength': 32}),
     ]);
     final inputHash = base64Encode(derived[0]);
@@ -666,18 +662,3 @@ class ChangePinResult {
       ChangePinResult(success: false, error: r.error);
 }
 
-/// Must be outside the class for compute().
-Uint8List _pbkdf2Derive(Map<String, dynamic> params) {
-  final pin = params['pin'] as String;
-  final salt = params['salt'] as String;
-  final iterations = params['iterations'] as int;
-  final keyLength = params['keyLength'] as int;
-
-  final derivator = PBKDF2KeyDerivator(HMac(SHA256Digest(), 64));
-  derivator.init(Pbkdf2Parameters(
-    Uint8List.fromList(utf8.encode(salt)),
-    iterations,
-    keyLength,
-  ));
-  return derivator.process(Uint8List.fromList(utf8.encode(pin)));
-}

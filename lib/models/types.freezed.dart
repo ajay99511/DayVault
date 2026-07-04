@@ -673,6 +673,7 @@ mixin _$JournalEntry {
   TimeBucket? get timeBucket;
   List<ImageReference> get images;
   bool get isSpotlight;
+  bool get isPrivate;
 
   /// Create a copy of JournalEntry
   /// with the given fields replaced by the non-null parameter values.
@@ -705,7 +706,9 @@ mixin _$JournalEntry {
                 other.timeBucket == timeBucket) &&
             const DeepCollectionEquality().equals(other.images, images) &&
             (identical(other.isSpotlight, isSpotlight) ||
-                other.isSpotlight == isSpotlight));
+                other.isSpotlight == isSpotlight) &&
+            (identical(other.isPrivate, isPrivate) ||
+                other.isPrivate == isPrivate));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -723,11 +726,12 @@ mixin _$JournalEntry {
       location,
       timeBucket,
       const DeepCollectionEquality().hash(images),
-      isSpotlight);
+      isSpotlight,
+      isPrivate);
 
   @override
   String toString() {
-    return 'JournalEntry(id: $id, type: $type, date: $date, headline: $headline, content: $content, mood: $mood, feeling: $feeling, tags: $tags, location: $location, timeBucket: $timeBucket, images: $images, isSpotlight: $isSpotlight)';
+    return 'JournalEntry(id: $id, type: $type, date: $date, headline: $headline, content: $content, mood: $mood, feeling: $feeling, tags: $tags, location: $location, timeBucket: $timeBucket, images: $images, isSpotlight: $isSpotlight, isPrivate: $isPrivate)';
   }
 }
 
@@ -749,7 +753,8 @@ abstract mixin class $JournalEntryCopyWith<$Res> {
       LocationData? location,
       TimeBucket? timeBucket,
       List<ImageReference> images,
-      bool isSpotlight});
+      bool isSpotlight,
+      bool isPrivate});
 
   $LocationDataCopyWith<$Res>? get location;
 }
@@ -778,6 +783,7 @@ class _$JournalEntryCopyWithImpl<$Res> implements $JournalEntryCopyWith<$Res> {
     Object? timeBucket = freezed,
     Object? images = null,
     Object? isSpotlight = null,
+    Object? isPrivate = null,
   }) {
     return _then(_self.copyWith(
       id: null == id
@@ -827,6 +833,10 @@ class _$JournalEntryCopyWithImpl<$Res> implements $JournalEntryCopyWith<$Res> {
       isSpotlight: null == isSpotlight
           ? _self.isSpotlight
           : isSpotlight // ignore: cast_nullable_to_non_nullable
+              as bool,
+      isPrivate: null == isPrivate
+          ? _self.isPrivate
+          : isPrivate // ignore: cast_nullable_to_non_nullable
               as bool,
     ));
   }
@@ -951,7 +961,8 @@ extension JournalEntryPatterns on JournalEntry {
             LocationData? location,
             TimeBucket? timeBucket,
             List<ImageReference> images,
-            bool isSpotlight)?
+            bool isSpotlight,
+            bool isPrivate)?
         $default, {
     required TResult orElse(),
   }) {
@@ -970,7 +981,8 @@ extension JournalEntryPatterns on JournalEntry {
             _that.location,
             _that.timeBucket,
             _that.images,
-            _that.isSpotlight);
+            _that.isSpotlight,
+            _that.isPrivate);
       case _:
         return orElse();
     }
@@ -1003,7 +1015,8 @@ extension JournalEntryPatterns on JournalEntry {
             LocationData? location,
             TimeBucket? timeBucket,
             List<ImageReference> images,
-            bool isSpotlight)
+            bool isSpotlight,
+            bool isPrivate)
         $default,
   ) {
     final _that = this;
@@ -1021,7 +1034,8 @@ extension JournalEntryPatterns on JournalEntry {
             _that.location,
             _that.timeBucket,
             _that.images,
-            _that.isSpotlight);
+            _that.isSpotlight,
+            _that.isPrivate);
       case _:
         throw StateError('Unexpected subclass');
     }
@@ -1053,7 +1067,8 @@ extension JournalEntryPatterns on JournalEntry {
             LocationData? location,
             TimeBucket? timeBucket,
             List<ImageReference> images,
-            bool isSpotlight)?
+            bool isSpotlight,
+            bool isPrivate)?
         $default,
   ) {
     final _that = this;
@@ -1071,7 +1086,8 @@ extension JournalEntryPatterns on JournalEntry {
             _that.location,
             _that.timeBucket,
             _that.images,
-            _that.isSpotlight);
+            _that.isSpotlight,
+            _that.isPrivate);
       case _:
         return null;
     }
@@ -1093,7 +1109,8 @@ class _JournalEntry implements JournalEntry {
       this.location,
       this.timeBucket,
       final List<ImageReference> images = const [],
-      this.isSpotlight = false})
+      this.isSpotlight = false,
+      this.isPrivate = false})
       : _tags = tags,
         _images = images;
   factory _JournalEntry.fromJson(Map<String, dynamic> json) =>
@@ -1138,6 +1155,9 @@ class _JournalEntry implements JournalEntry {
   @override
   @JsonKey()
   final bool isSpotlight;
+  @override
+  @JsonKey()
+  final bool isPrivate;
 
   /// Create a copy of JournalEntry
   /// with the given fields replaced by the non-null parameter values.
@@ -1174,7 +1194,9 @@ class _JournalEntry implements JournalEntry {
                 other.timeBucket == timeBucket) &&
             const DeepCollectionEquality().equals(other._images, _images) &&
             (identical(other.isSpotlight, isSpotlight) ||
-                other.isSpotlight == isSpotlight));
+                other.isSpotlight == isSpotlight) &&
+            (identical(other.isPrivate, isPrivate) ||
+                other.isPrivate == isPrivate));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1192,11 +1214,12 @@ class _JournalEntry implements JournalEntry {
       location,
       timeBucket,
       const DeepCollectionEquality().hash(_images),
-      isSpotlight);
+      isSpotlight,
+      isPrivate);
 
   @override
   String toString() {
-    return 'JournalEntry(id: $id, type: $type, date: $date, headline: $headline, content: $content, mood: $mood, feeling: $feeling, tags: $tags, location: $location, timeBucket: $timeBucket, images: $images, isSpotlight: $isSpotlight)';
+    return 'JournalEntry(id: $id, type: $type, date: $date, headline: $headline, content: $content, mood: $mood, feeling: $feeling, tags: $tags, location: $location, timeBucket: $timeBucket, images: $images, isSpotlight: $isSpotlight, isPrivate: $isPrivate)';
   }
 }
 
@@ -1220,7 +1243,8 @@ abstract mixin class _$JournalEntryCopyWith<$Res>
       LocationData? location,
       TimeBucket? timeBucket,
       List<ImageReference> images,
-      bool isSpotlight});
+      bool isSpotlight,
+      bool isPrivate});
 
   @override
   $LocationDataCopyWith<$Res>? get location;
@@ -1251,6 +1275,7 @@ class __$JournalEntryCopyWithImpl<$Res>
     Object? timeBucket = freezed,
     Object? images = null,
     Object? isSpotlight = null,
+    Object? isPrivate = null,
   }) {
     return _then(_JournalEntry(
       id: null == id
@@ -1300,6 +1325,10 @@ class __$JournalEntryCopyWithImpl<$Res>
       isSpotlight: null == isSpotlight
           ? _self.isSpotlight
           : isSpotlight // ignore: cast_nullable_to_non_nullable
+              as bool,
+      isPrivate: null == isPrivate
+          ? _self.isPrivate
+          : isPrivate // ignore: cast_nullable_to_non_nullable
               as bool,
     ));
   }

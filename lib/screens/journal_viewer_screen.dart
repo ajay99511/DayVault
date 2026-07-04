@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../services/storage_service.dart';
+import '../services/vault_security_service.dart';
+import 'vault_passcode_setup_screen.dart';
 import '../widgets/glass_widgets.dart';
 import '../widgets/image_widgets.dart';
 import '../config/constants.dart';
@@ -97,6 +99,55 @@ class _JournalViewerScreenState extends ConsumerState<JournalViewerScreen> {
     );
   }
 
+  /// Move the entry into / out of the Privacy Vault. Vaulting requires the
+  /// vault to be set up first (otherwise the entry would become invisible
+  /// with no way to view it). When vaulting, the screen pops because the
+  /// entry disappears from whichever list is behind it.
+  Future<void> _togglePrivacy(BuildContext context, WidgetRef ref) async {
+    final makePrivate = !entry.isPrivate;
+
+    if (makePrivate) {
+      final vault = ref.read(vaultSecurityServiceProvider);
+      if (!await vault.isPasscodeSet()) {
+        if (!context.mounted) return;
+        final setupDone = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(builder: (_) => const VaultPasscodeSetupScreen()),
+        );
+        if (setupDone != true) return;
+      }
+    }
+
+    if (!context.mounted) return;
+    final storage = ref.read(storageServiceProvider);
+    final messenger = ScaffoldMessenger.of(context);
+    final updated = entry.copyWith(isPrivate: makePrivate);
+    await storage.saveJournalEntry(updated);
+    ref.read(journalRevisionProvider.notifier).bump();
+
+    if (!context.mounted) return;
+    if (makePrivate) {
+      Navigator.pop(context, true);
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(const SnackBar(
+          content: Text('Entry moved to the Privacy Vault'),
+          behavior: SnackBarBehavior.floating,
+        ));
+    } else {
+      setState(() {
+        _entry = updated;
+        _changed = true;
+      });
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(const SnackBar(
+          content: Text('Entry moved back to your journal'),
+          behavior: SnackBarBehavior.floating,
+        ));
+    }
+  }
+
   void _openEditor(BuildContext context, WidgetRef ref) {
     showModalBottomSheet(
       context: context,
@@ -169,6 +220,20 @@ class _JournalViewerScreenState extends ConsumerState<JournalViewerScreen> {
                       ),
                       Row(
                         children: [
+                          IconButton(
+                            icon: Icon(
+                              entry.isPrivate
+                                  ? Icons.shield_moon
+                                  : Icons.shield_moon_outlined,
+                              color: entry.isPrivate
+                                  ? AppColors.fuchsia500
+                                  : Colors.white54,
+                            ),
+                            tooltip: entry.isPrivate
+                                ? 'Remove from Privacy Vault'
+                                : 'Move to Privacy Vault',
+                            onPressed: () => _togglePrivacy(context, ref),
+                          ),
                           IconButton(
                             icon: const Icon(Icons.edit, color: Colors.white54),
                             tooltip: 'Edit entry',

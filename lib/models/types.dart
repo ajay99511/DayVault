@@ -75,6 +75,7 @@ abstract class JournalEntry with _$JournalEntry {
     TimeBucket? timeBucket,
     @Default([]) List<ImageReference> images,
     @Default(false) bool isSpotlight,
+    @Default(false) bool isPrivate,
   }) = _JournalEntry;
 
   factory JournalEntry.fromJson(Map<String, dynamic> json) =>

@@ -16,7 +16,8 @@ class _FakeStorageService implements StorageService {
   int getJournalCalls = 0;
 
   @override
-  Future<List<JournalEntry>> getJournal() async {
+  Future<List<JournalEntry>> getJournal(
+      {PrivacyFilter privacy = PrivacyFilter.excludePrivate}) async {
     getJournalCalls++;
     if (throwOnGetJournal) {
       throw StateError('boom');

@@ -62,10 +62,13 @@ class _FakeUserSettings_2 extends _i1.SmartFake implements _i3.UserSettings {
 /// See the documentation for Mockito's code generation for more information.
 class MockStorageService extends _i1.Mock implements _i4.StorageService {
   @override
-  _i5.Future<List<_i3.JournalEntry>> getJournal() => (super.noSuchMethod(
+  _i5.Future<List<_i3.JournalEntry>> getJournal(
+          {_i4.PrivacyFilter? privacy = _i4.PrivacyFilter.excludePrivate}) =>
+      (super.noSuchMethod(
         Invocation.method(
           #getJournal,
           [],
+          {#privacy: privacy},
         ),
         returnValue:
             _i5.Future<List<_i3.JournalEntry>>.value(<_i3.JournalEntry>[]),
@@ -74,10 +77,13 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
       ) as _i5.Future<List<_i3.JournalEntry>>);
 
   @override
-  int journalCount() => (super.noSuchMethod(
+  int journalCount(
+          {_i4.PrivacyFilter? privacy = _i4.PrivacyFilter.excludePrivate}) =>
+      (super.noSuchMethod(
         Invocation.method(
           #journalCount,
           [],
+          {#privacy: privacy},
         ),
         returnValue: 0,
         returnValueForMissingStub: 0,
@@ -98,6 +104,7 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
   _i5.Future<_i2.PagedResult<_i3.JournalEntry>> getJournalPage(
     int? pageSize, [
     _i2.PaginationCursor? cursor,
+    _i4.PrivacyFilter? privacy = _i4.PrivacyFilter.excludePrivate,
   ]) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -105,6 +112,7 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
           [
             pageSize,
             cursor,
+            privacy,
           ],
         ),
         returnValue: _i5.Future<_i2.PagedResult<_i3.JournalEntry>>.value(
@@ -115,6 +123,7 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
             [
               pageSize,
               cursor,
+              privacy,
             ],
           ),
         )),
@@ -127,6 +136,7 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
             [
               pageSize,
               cursor,
+              privacy,
             ],
           ),
         )),
@@ -430,6 +440,15 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
             year,
             itemId,
           ],
+        ),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  void mergeVisionBoard(_i3.VisionBoard? imported) => super.noSuchMethod(
+        Invocation.method(
+          #mergeVisionBoard,
+          [imported],
         ),
         returnValueForMissingStub: null,
       );

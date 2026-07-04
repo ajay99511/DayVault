@@ -41,7 +41,10 @@ class BackupService {
   /// 
   /// Returns a JSON string containing all exportable data.
   Future<Map<String, dynamic>> exportData() async {
-    final journal = await _storageService.getJournal();
+    // Backups must include vaulted (private) entries or they'd be silently
+    // lost on restore; the isPrivate flag is preserved per entry.
+    final journal =
+        await _storageService.getJournal(privacy: PrivacyFilter.all);
     final rankings = await _storageService.getRankings();
     final visionBoards = _storageService.getVisionBoards();
     final settings = _storageService.getSettings();
@@ -77,6 +80,7 @@ class BackupService {
       'timeBucket': entry.timeBucket?.index,
       'images': entry.images.map((i) => i.toJson()).toList(),
       'isSpotlight': entry.isSpotlight,
+      'isPrivate': entry.isPrivate,
     };
   }
 
@@ -330,6 +334,8 @@ class BackupService {
           : null,
       images: _parseBackupImages(data['images'] as List?),
       isSpotlight: data['isSpotlight'] as bool? ?? false,
+      // Old backups predate the Privacy Vault; default to visible.
+      isPrivate: data['isPrivate'] as bool? ?? false,
     );
   }
 

@@ -16,6 +16,7 @@ import '../providers/theme_provider.dart';
 import '../widgets/glass_widgets.dart';
 import '../widgets/app_components.dart';
 import 'pin_management_screen.dart';
+import 'privacy_vault_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -624,6 +625,39 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (_) => const PinManagementScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  Divider(color: context.tokens.divider),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.indigo500.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.shield_moon_outlined,
+                          color: AppColors.indigo500, size: 24),
+                    ),
+                    title: Text(
+                      'Privacy Vault',
+                      style: TextStyle(
+                          color: context.tokens.textPrimary,
+                          fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      'Hidden stories & events behind a separate passcode',
+                      style: TextStyle(
+                          color: context.tokens.textTertiary, fontSize: 11),
+                    ),
+                    trailing: Icon(Icons.chevron_right,
+                        color: context.tokens.textTertiary),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PrivacyVaultScreen(),
                         ),
                       );
                     },
