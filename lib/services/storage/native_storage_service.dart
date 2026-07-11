@@ -20,7 +20,7 @@ class NativeStorageService extends StorageService {
   // Key caching is handled in SecurityService
   final FlutterSecureStorage _draftStorage = const FlutterSecureStorage();
 
-  StorageService(Store store)
+  NativeStorageService(Store store)
       : _journalBox = store.box<ObjectBoxJournalEntry>(),
         _rankingBox = store.box<ObjectBoxRankingCategory>(),
         _settingsBox = store.box<ObjectBoxUserSettings>(),
