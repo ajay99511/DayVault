@@ -1,0 +1,20 @@
+# DayVault Code Owners
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Owner: Ajay Elika <ajayelika99511@gmail.com>
+
+# Global owner
+*       @ajay99511
+
+# Security-sensitive files
+SECURITY.md             @ajay99511
+LICENSE                 @ajay99511
+.github/CODEOWNERS      @ajay99511
+
+# Flutter config
+pubspec.yaml            @ajay99511
+pubspec.lock            @ajay99511
+analysis_options.yaml   @ajay99511
+
+# App source
+lib/                    @ajay99511
