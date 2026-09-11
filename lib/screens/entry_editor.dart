@@ -204,6 +204,13 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
     }
   }
 
+  /// Read an enum ordinal out of a persisted draft, falling back when the value
+  /// is missing, not an int, or outside the current enum's range.
+  static T _enumFromDraft<T>(List<T> values, Object? raw, T fallback) {
+    if (raw is! int || raw < 0 || raw >= values.length) return fallback;
+    return values[raw];
+  }
+
   Future<void> _loadDraft() async {
     try {
       final draftJson = await ref
@@ -223,18 +230,25 @@ class _EntryEditorState extends ConsumerState<EntryEditor> {
 
         if (mounted) {
           setState(() {
-            type = EntryType.values[draftData['type'] as int];
+            // Every field is read defensively. A draft is written by a previous
+            // run of the app, so it can predate an enum change or simply be
+            // truncated — and this decode happens inside setState, where a
+            // throw would leave the editor half-populated with no way back.
+            type = _enumFromDraft(
+                EntryType.values, draftData['type'], EntryType.story);
             final draftDate = draftData['date'] as String?;
             if (draftDate != null) {
               selectedDate = DateTime.tryParse(draftDate) ?? selectedDate;
             }
-            _headlineCtrl.text = draftData['headline'] as String;
-            _contentCtrl.text = draftData['content'] as String;
-            selectedMood = Mood.values[draftData['mood'] as int];
+            _headlineCtrl.text = draftData['headline'] as String? ?? '';
+            _contentCtrl.text = draftData['content'] as String? ?? '';
+            selectedMood =
+                _enumFromDraft(Mood.values, draftData['mood'], Mood.neutral);
             selectedFeeling = draftData['feeling'] as String?;
             final loc = draftData['location'] as Map<String, dynamic>?;
             _locationCtrl.text = loc != null ? (loc['name'] as String? ?? '') : '';
-            selectedBucket = TimeBucket.values[draftData['timeBucket'] as int];
+            selectedBucket = _enumFromDraft(
+                TimeBucket.values, draftData['timeBucket'], selectedBucket);
             images = _parseDraftImages(draftData['images'] as List?);
             tags = (draftData['tags'] as List?)
                     ?.map((e) => e as String)
@@ -1316,6 +1330,13 @@ class _ImageSectionState extends State<ImageSection> {
             child: ReorderableListView.builder(
               scrollDirection: Axis.horizontal,
               itemCount: _images.length,
+              // Deliberately still on the deprecated `onReorder`. The successor
+              // `onReorderItem` pre-adjusts newIndex for the removed item, so
+              // migrating means deleting the `if (oldIndex < newIndex) newIndex
+              // -= 1` compensation inside _reorder. That is a behavioural change
+              // to drag-and-drop that needs manual verification, not a rename —
+              // it is tracked separately rather than bundled into a lint sweep.
+              // ignore: deprecated_member_use
               onReorder: _reorder,
               buildDefaultDragHandles: false,
               itemBuilder: (context, index) {

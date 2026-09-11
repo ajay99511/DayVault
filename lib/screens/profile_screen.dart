@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:local_auth/local_auth.dart';
+import '../providers/journal_revision_provider.dart';
 import '../services/storage_service.dart';
 import '../services/security_service.dart';
 import '../services/backup_service.dart';
@@ -10,6 +11,7 @@ import '../models/types.dart';
 import '../models/stats.dart';
 import '../providers/stats_provider.dart';
 import '../config/constants.dart';
+import '../utils/dialog_controllers.dart';
 import '../theme/app_tokens.dart';
 import '../theme/motion.dart';
 import '../providers/theme_provider.dart';
@@ -46,7 +48,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _showUsernameEditDialog() async {
     final controller = TextEditingController(text: settings.username);
-    final newName = await showDialog<String>(
+    final newName = await withDisposedControllers([controller], () =>
+        showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.slate900,
@@ -79,8 +82,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ],
       ),
-    );
-    controller.dispose();
+    ));
 
     // Null means the dialog was dismissed/cancelled — leave settings untouched.
     if (newName == null || newName == settings.username) return;
@@ -93,7 +95,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   void _toggleSecurity() async {
-    final securityService = SecurityService();
+    final securityService = ref.read(securityServiceProvider);
     final status = await securityService.getVaultStatus(settings.securityEnabled);
 
     if (status.needsSetup) {
@@ -117,7 +119,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _showReactivationVerification() async {
-    final securityService = SecurityService();
+    final securityService = ref.read(securityServiceProvider);
 
     if (settings.biometricsEnabled) {
       try {
@@ -137,7 +139,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final pinController = TextEditingController();
     String? error;
 
-    await showDialog(
+    await withDisposedControllers([pinController], () => showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
@@ -195,7 +197,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Future<void> _enableSecurityAction() async {
@@ -214,7 +216,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   void _showDisableSecurityVerification() async {
-    final securityService = SecurityService();
+    final securityService = ref.read(securityServiceProvider);
 
     if (settings.biometricsEnabled) {
       try {
@@ -234,7 +236,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final pinController = TextEditingController();
     String? error;
 
-    await showDialog(
+    await withDisposedControllers([pinController], () => showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
@@ -292,7 +294,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Future<void> _disableSecurityAction() async {
@@ -1023,7 +1025,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _renameTagFlow(BuildContext context, WidgetRef ref, String tag,
       Future<void> Function() refresh) async {
     final controller = TextEditingController(text: tag);
-    final newName = await showDialog<String>(
+    final newName = await withDisposedControllers([controller], () =>
+        showDialog<String>(
       context: context,
       builder: (dctx) => AlertDialog(
         backgroundColor: AppColors.slate900,
@@ -1054,8 +1057,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
         ],
       ),
-    );
-    controller.dispose();
+    ));
 
     if (newName == null || newName.isEmpty || newName.toLowerCase() == tag.toLowerCase()) {
       return;

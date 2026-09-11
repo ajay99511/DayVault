@@ -15,6 +15,90 @@
 
 ---
 
+## 0. Remediation Status (updated after the fix pass)
+
+Everything below in sections 1–5 describes the codebase **as audited**. A
+remediation pass has since landed on branch `fix/audit-remediation`. This
+section records what changed so the rest of the document is not read as a
+description of the current tree.
+
+| Metric | As audited | After remediation |
+|---|---|---|
+| `flutter analyze` | **74 issues** | **0 issues** |
+| `flutter test` | **104 passed / 3 failed** † | **186 passed / 0 failed** |
+| CI pipeline | none | `.github/workflows/ci.yml` (analyze `--fatal-infos --fatal-warnings`, generated-source drift check, tests) |
+
+† The suite was already red on `main` at the time of the fix pass — a Flutter
+framework assertion fired for every `ListTile` inside a `GlassContainer`. That
+was pre-existing, not introduced by this work (verified by running the suite in
+a pristine worktree at the base commit), and is now fixed.
+
+### Fixed
+
+| Finding | Resolution |
+|---|---|
+| **C-2** destructive DB init | `init()` now retries transient failures with backoff and **never** moves data; the move happens only in `reinitializeAfterConsent`, after an explicit prompt whose "Keep and close" option leaves the database untouched. `instance` throws instead of asserting. |
+| **C-3** `changePin` orphans the key | Envelope encryption: a random DEK wrapped by a PIN-derived KEK, so a PIN change re-wraps 32 bytes instead of changing the key. Pre-envelope installs **adopt their existing derived key as the DEK**, so the migration rewrites nothing and every existing draft and encrypted backup stays readable. The `rekey_pending` journal that was declared and never implemented is now written, replayed on the next `initialize()`, and cleared. |
+| **H-1** pagination cursor | `PaginationCursor` now carries the ordering key (`date`, stable entry id) instead of an ObjectBox row id; both backends share one meaning and one total order. Measured on the old algorithm: 26 entries in, **10 distinct returned, 9 duplicated, back-dated entry unreachable**. |
+| **H-2** recovery bypassed rate limiting | `verifySecurityQuestions` now shares the PIN lockout budget in **both** services, uses constant-time comparison, and hashes each answer under a per-index salt (legacy hashes still verify). |
+| **H-3** undeclared crypto dependency | `pointycastle` declared in `dependencies`. |
+| **H-4** leaked controllers | All dialog-scoped `TextEditingController`s disposed via `withDisposedControllers`, which clears the buffer first so PIN digits and recovery answers do not linger in the heap. |
+| **H-6** dead `merge` flag | Removed; the doc comment now states the actual upsert semantics. |
+| **M-1 / M-2 / M-8** performance | Filter and tag derivation memoized out of `build()`; the gallery `FutureBuilder` future created once per (asset, size) instead of per frame; the ambient orb layer wrapped in a `RepaintBoundary` with the orbs built once. |
+| **M-3** unguarded enum decode | Every ordinal decode bounds-checked and degraded per-field rather than failing the whole journal load; `tagsJson`/`locationJson` parsed defensively; `enum_ordinals_test.dart` pins the declaration order so a reorder fails CI. |
+| **M-5** provider in the contract | `journalRevisionProvider` moved to `lib/providers/`; the storage contract no longer imports Riverpod. |
+| **M-6** draft index race | `AsyncMutex` serialises index mutations in both backends; the web backend no longer swallows save failures. |
+| **M-7** image URL validation | HTTPS-only, private/loopback/link-local/metadata ranges blocked (including IPv4-mapped IPv6), redirects disabled, generic user-facing errors, and the two never-passed parameters removed. |
+| **L-1 / L-2 / L-3** hygiene | Analyzer to zero; vacuous test file and two stray tracked `.txt` artifacts deleted; `main()` no longer calls itself from the Retry button. |
+| **H-5** | Fully resolved. The triplicated `computeStreak` and duplicated tag/dedupe helpers collapsed into `lib/domain/journal_rules.dart`, and the lockout state machine — previously copied line-for-line into both credential services — extracted to `lib/services/credential_gate.dart`, namespaced per credential. |
+| **C-4** XOR retired | `migrateLegacyEncryptedEntries` rewrites any surviving version-1 row as plain text once per launch, rewriting a row **only** when decryption actually produced different text so unreadable data is never overwritten with its own ciphertext. The duplicate cipher in `_batchDecryptEntries` is deleted along with the `compute()` isolate it lived in — that isolate handled only version-1 rows, so a version-2 AES row was silently returned as raw base64 whenever a key was cached. Both empty `catch (_) {}` blocks are gone, and `EncryptionService.looksEncrypted` replaces the exception-per-field that plain text used to trigger on every read. |
+| **M-4** partially | `EncryptionService` no longer reaches for the app-lock singleton — it takes its key source by construction, so it is exercisable standalone. `securityServiceProvider` gives every screen one DI dialect (`ref.read`), and `ForgotPinScreen` became a `ConsumerStatefulWidget` so it stops being the odd one out. |
+| Test flake | The two recovery-lockout tests each drove a full lockout through the services, costing fifteen 100k-iteration PBKDF2 derivations, which tripped the 30s per-test timeout under full-suite concurrency and surfaced as an intermittent assertion failure. The state machine is now tested directly in `credential_gate_test.dart` (no cryptography, milliseconds); the service tests assert only that recovery is *wired into* the shared budget. Verified with three consecutive clean full runs. |
+
+### Closed as a product non-goal
+
+**C-1 — the Privacy Vault is not an at-rest confidentiality boundary, by design.**
+
+The audit treated the vault's lack of encryption as a Critical defect because the
+name implies confidentiality. The product owner has since settled the question:
+the vault's purpose is to keep certain stories and events **separated behind a
+PIN**, not to make them unreadable to someone with the device's files. Journal
+content is therefore stored as plain text deliberately, and that is a legitimate
+design for an offline personal journal — it keeps reads cheap, keeps the
+cold-start-only unlock policy intact, and avoids a class of "forgot the PIN, lost
+the journal" failures entirely.
+
+What this decision means, stated once so it is on the record rather than
+rediscovered later:
+
+- Anyone with filesystem access, a device backup, or a shared export can read
+  vaulted entries. The vault is a UI boundary.
+- `PrivacyFilter.all` remains available to any caller without proof of unlock.
+  Under a separation model this is correct, not a privilege-escalation bug —
+  backup export and tag rename genuinely need to reach every entry.
+- The app's wording must not overpromise. Current copy is accurate ("Export
+  Unencrypted", "PIN LOCK ACTIVE"); it should stay that way, and nothing in the
+  UI should describe the vault as encrypted.
+
+The audit's original C-1 text is left unedited below for provenance. Treat this
+section as its resolution.
+
+Note that encryption has **not** been removed everywhere: autosaved drafts and
+the optional encrypted backup export still use AES-256-GCM, and those are what
+the envelope-encryption fix (C-3) protects. That fix stands on its own merits and
+is unaffected by this decision.
+
+### Not fixed — deliberately deferred
+
+| Finding | Why, and what it needs |
+|---|---|
+| **M-4** (remainder) | `EncryptionService` and `SecurityService` are still reached as process singletons by the storage and model layers, which have no Riverpod `ref`. That is now a deliberate, documented seam rather than an accident: the cached data key must be shared process-wide, and the remaining coupling is one `Provider` default. Full constructor injection through the model layer would be a ~12-file change whose only remaining benefit is removing a test-only global mutation — it does not pay for itself today. |
+| `dart format` | Unchanged from the previous pass: would rewrite most files, so it stays `continue-on-error` in CI pending a dedicated reformat commit. |
+| Real-store integration tests | Unchanged: ObjectBox needs its native library in the test environment. `migrateLegacyEncryptedEntries` is covered at the `EncryptionService` level (the decrypt-or-leave-alone invariant) but its ObjectBox read/write loop is not yet exercised against a real store. |
+| Real-store coverage (paging) | `getJournalPage` is exercised through `paginateByCursor`, the reference implementation the web backend actually runs and the ObjectBox query mirrors — but not against a real store, for the same native-library reason. |
+
+---
+
 ## 1. Executive Summary & Quality Scorecard
 
 DayVault is a **mature, thoughtfully-commented offline-first Flutter journal** that is a long way past prototype. There is real engineering judgment on display: PBKDF2 is pushed into isolates (`security_service.dart:223–228`), backup JSON encode/decode runs off the main isolate (`backup_service.dart:100`, `:175`), image decode is bounded to on-screen pixels (`image_widgets.dart:36–50`), the expensive `BackdropFilter` is isolated behind a `RepaintBoundary` (`glass_widgets.dart:83–90`), and several pure functions were deliberately extracted as `static` specifically so they could be unit-tested (`journal_screen.dart:24`, `stats_provider.dart:22`, `glass_widgets.dart:14`). The comments explaining *why* — the `heightFactor: 1.0` note at `main.dart:388–393`, the auto-lock policy rationale at `main.dart:141–156` — are exactly what `testing-quality.md` asks for ("Comment **why**, never what").

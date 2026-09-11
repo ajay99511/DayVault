@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -40,32 +41,65 @@ void main() async {
 
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
 
-  PlatformInitOutcome? initOutcome;
-  String? initError;
-  try {
-    initOutcome = await platformInit();
-    await SecurityService().initialize();
-  } catch (e, st) {
-    debugPrint('Critical init failed: $e\n$st');
-    initError = e.toString();
-  }
+  final bootstrap = await runBootstrap();
 
-  runApp(ProviderScope(
-    child: MemoryPalaceApp(
-      initOutcome: initOutcome,
-      initError: initError,
-    ),
-  ));
+  runApp(ProviderScope(child: MemoryPalaceApp(initial: bootstrap)));
 }
 
-class MemoryPalaceApp extends ConsumerWidget {
-  final PlatformInitOutcome? initOutcome;
-  final String? initError;
+/// Outcome of the one-time platform bootstrap: storage and security init.
+class BootstrapResult {
+  final PlatformInitOutcome? outcome;
+  final String? error;
+  const BootstrapResult({this.outcome, this.error});
 
-  const MemoryPalaceApp({super.key, this.initOutcome, this.initError});
+  bool get isFatal =>
+      error != null || outcome?.result == InitResult.fatalError;
+
+  String get message => error ?? outcome?.errorMessage ?? 'Unknown error';
+}
+
+/// Bring up platform storage and the security service.
+///
+/// Extracted from [main] so the error screen's Retry can re-run *just this*
+/// rather than calling `main()` again — which re-registered the global error
+/// handlers and started a second app root on top of the first.
+Future<BootstrapResult> runBootstrap() async {
+  try {
+    final outcome = await platformInit();
+    await SecurityService().initialize();
+    return BootstrapResult(outcome: outcome);
+  } catch (e, st) {
+    debugPrint('Critical init failed: $e\n$st');
+    return BootstrapResult(error: e.toString());
+  }
+}
+
+class MemoryPalaceApp extends ConsumerStatefulWidget {
+  final BootstrapResult initial;
+
+  const MemoryPalaceApp({super.key, required this.initial});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MemoryPalaceApp> createState() => _MemoryPalaceAppState();
+}
+
+class _MemoryPalaceAppState extends ConsumerState<MemoryPalaceApp> {
+  late BootstrapResult _bootstrap = widget.initial;
+  bool _retrying = false;
+
+  Future<void> _retry() async {
+    if (_retrying) return;
+    setState(() => _retrying = true);
+    final result = await runBootstrap();
+    if (!mounted) return;
+    setState(() {
+      _bootstrap = result;
+      _retrying = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
     return MaterialApp(
       title: 'Memory Palace',
@@ -73,16 +107,32 @@ class MemoryPalaceApp extends ConsumerWidget {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: themeMode,
-      home: initError != null || (initOutcome != null && initOutcome!.result == InitResult.fatalError)
-          ? _ErrorScreen(error: initError ?? initOutcome!.errorMessage!)
-          : RootOrchestrator(initOutcome: initOutcome),
+      home: _bootstrap.isFatal
+          ? _ErrorScreen(
+              error: _bootstrap.message,
+              onRetry: _retry,
+              isRetrying: _retrying,
+            )
+          : RootOrchestrator(
+              // Keying on the attempt lets a successful retry rebuild the
+              // orchestrator from scratch instead of reusing stale state.
+              key: ValueKey(_bootstrap),
+              initOutcome: _bootstrap.outcome,
+            ),
     );
   }
 }
 
 class _ErrorScreen extends StatelessWidget {
   final String error;
-  const _ErrorScreen({required this.error});
+  final Future<void> Function() onRetry;
+  final bool isRetrying;
+
+  const _ErrorScreen({
+    required this.error,
+    required this.onRetry,
+    this.isRetrying = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -112,11 +162,11 @@ class _ErrorScreen extends StatelessWidget {
               ),
               const SizedBox(height: 32),
               ElevatedButton(
-                onPressed: () {
-                  // Restart the app
-                  main();
-                },
-                child: const Text('Retry'),
+                // Re-runs the bootstrap only. Calling main() here (as this
+                // previously did) re-registered the global error handlers and
+                // mounted a second app root over the first.
+                onPressed: isRetrying ? null : onRetry,
+                child: Text(isRetrying ? 'Retrying…' : 'Retry'),
               ),
             ],
           ),
@@ -137,6 +187,13 @@ class RootOrchestrator extends ConsumerStatefulWidget {
 class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
   bool isLoading = true;
   bool _securityEnabled = false;
+
+  /// Set when the post-consent database rescue failed. The original database
+  /// is still in place in that case, so this is reported rather than swallowed.
+  String? _initFailure;
+
+  /// Guards the one-shot legacy-entry migration; see [_migrateLegacyEntries].
+  bool _legacyMigrationStarted = false;
 
   // Auto-lock policy (deliberate):
   //
@@ -167,36 +224,71 @@ class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
   }
 
   Future<void> _showMigrationDialog() async {
+    // Nothing has been moved at this point — the database is still exactly
+    // where it was, and declining here leaves it that way. The wording must
+    // reflect that: the previous version claimed the data "has been safely
+    // backed up" while the move had in fact already happened before the user
+    // was asked, with no code anywhere that could undo it.
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Database Security Upgrade'),
+        title: const Text("Can't open your journal"),
         content: Text(
-          'A security upgrade is required for your database. '
-          'Your existing data has been safely backed up to:\n\n'
+          'Your journal database could not be opened after several attempts.\n\n'
+          'You can move it aside and start with an empty journal. Your existing '
+          'data will not be deleted — it will be kept at:\n\n'
           '${widget.initOutcome!.backupPath}\n\n'
-          'The app will now start with a fresh database. Tap "OK" to proceed.'
+          'If you would rather not touch it yet, choose "Keep and close" and '
+          'the app will exit without changing anything.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('CANCEL'),
+            child: const Text('KEEP AND CLOSE'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('OK'),
+            child: const Text('MOVE ASIDE AND CONTINUE'),
           ),
         ],
       ),
     );
 
-    if (confirmed == true) {
+    if (confirmed != true) {
+      // Declining is a first-class outcome, not a failure: the journal stays
+      // untouched so it can be recovered by a later build or by support.
+      SystemNavigator.pop();
+      return;
+    }
+
+    try {
       await platformReinitializeAfterConsent(widget.initOutcome!.backupPath!);
       _checkSecurity();
-    } else {
-      // If user cancels, they can't use the app
-      SystemNavigator.pop();
+    } catch (e, st) {
+      debugPrint('Rescue failed, database left in place: $e\n$st');
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+        _initFailure = 'Could not move the existing database aside. '
+            'Your data has not been changed.\n\n$e';
+      });
+    }
+  }
+
+  /// Convert any legacy-encrypted journal rows to plain text, once per launch.
+  ///
+  /// Runs after the vault is open, because decrypting a version-1 row needs the
+  /// PIN-derived key. It is safe to run with no key — rows that cannot be read
+  /// are left untouched — and safe to run repeatedly, so a failure here costs
+  /// nothing but a retry next launch and must never block startup.
+  Future<void> _migrateLegacyEntries() async {
+    if (_legacyMigrationStarted) return;
+    _legacyMigrationStarted = true;
+    try {
+      await ref.read(storageServiceProvider).migrateLegacyEncryptedEntries();
+    } catch (e, st) {
+      debugPrint('Legacy entry migration skipped: $e\n$st');
     }
   }
 
@@ -216,6 +308,20 @@ class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
   Widget build(BuildContext context) {
     if (isLoading) return const Scaffold(backgroundColor: AppColors.slate950);
 
+    final failure = _initFailure;
+    if (failure != null) {
+      return _ErrorScreen(
+        error: failure,
+        onRetry: () async {
+          setState(() {
+            _initFailure = null;
+            isLoading = true;
+          });
+          await _checkSecurity();
+        },
+      );
+    }
+
     // The provider tracks whether the user has unlocked via the lock screen.
     // When security is disabled there is nothing to unlock, so we bypass it
     // entirely (no provider mutation needed during init).
@@ -225,6 +331,11 @@ class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
         onUnlock: () => ref.read(authStateProvider.notifier).authenticate(),
       );
     }
+
+    // Past the gate, so the decryption key (if any) is available. Fire and
+    // forget: this must not delay the first frame, and it is idempotent.
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => unawaited(_migrateLegacyEntries()));
 
     return const MainShell();
   }
@@ -242,6 +353,27 @@ class _MainShellState extends State<MainShell>
   int _idx = 0;
   late AnimationController _bgCtrl;
   late final List<Widget> _screens;
+
+  // The orbs are identical on every frame — only their offsets animate — so
+  // they are built once rather than reconstructed 60 times a second. Held as
+  // fields rather than `const` because the tints use Color.withValues, which
+  // is not a const expression; baking the alpha into a hex literal would
+  // quantise it to 8 bits and shift the colour slightly.
+  late final Widget _orbIndigo = AnimatedOrb(
+    width: 400,
+    height: 400,
+    color: AppColors.indigo500.withValues(alpha: 0.15),
+  );
+  late final Widget _orbFuchsia = AnimatedOrb(
+    width: 300,
+    height: 300,
+    color: AppColors.fuchsia500.withValues(alpha: 0.1),
+  );
+  late final Widget _orbEmerald = AnimatedOrb(
+    width: 250,
+    height: 250,
+    color: AppColors.emerald500.withValues(alpha: 0.05),
+  );
 
   @override
   void initState() {
@@ -305,42 +437,43 @@ class _MainShellState extends State<MainShell>
       extendBody: true, // For glass navbar
       body: Stack(
         children: [
-          // Ambient Background Orbs
-          AnimatedBuilder(
-            animation: _bgCtrl,
-            builder: (ctx, child) {
-              return Stack(
-                children: [
-                  Positioned(
-                    top: -50 + (_bgCtrl.value * 20),
-                    left: -50,
-                    child: AnimatedOrb(
-                      width: 400,
-                      height: 400,
-                      color: AppColors.indigo500.withValues(alpha: 0.15),
+          // Ambient background orbs.
+          //
+          // RepaintBoundary keeps this always-running animation in its own
+          // composited layer. Without it the orb layer shares a layer with the
+          // IndexedStack holding every screen, so the whole app repainted on
+          // each of the 60 frames per second this controller drives.
+          //
+          // The orbs themselves never change — only their offsets do — so they
+          // are built once and passed in as `child`, rather than reconstructed
+          // on every tick. GlassContainer already applies this same treatment
+          // to its BackdropFilter.
+          RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _bgCtrl,
+              builder: (ctx, child) {
+                final progress = _bgCtrl.value;
+                return Stack(
+                  children: [
+                    Positioned(
+                      top: -50 + (progress * 20),
+                      left: -50,
+                      child: _orbIndigo,
                     ),
-                  ),
-                  Positioned(
-                    bottom: -100 - (_bgCtrl.value * 30),
-                    right: -50,
-                    child: AnimatedOrb(
-                      width: 300,
-                      height: 300,
-                      color: AppColors.fuchsia500.withValues(alpha: 0.1),
+                    Positioned(
+                      bottom: -100 - (progress * 30),
+                      right: -50,
+                      child: _orbFuchsia,
                     ),
-                  ),
-                  Positioned(
-                    top: 300,
-                    left: 200 + (_bgCtrl.value * 50),
-                    child: AnimatedOrb(
-                      width: 250,
-                      height: 250,
-                      color: AppColors.emerald500.withValues(alpha: 0.05),
+                    Positioned(
+                      top: 300,
+                      left: 200 + (progress * 50),
+                      child: _orbEmerald,
                     ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
 
           // View Switcher - using IndexedStack to preserve state

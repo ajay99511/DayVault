@@ -160,13 +160,18 @@ class BackupService {
     }
   }
 
-  /// Import data from JSON string
-  /// 
-  /// [jsonString] - The JSON data to import
-  /// [merge] - If true, merge with existing data. If false, replace all.
+  /// Import journal, rankings and vision boards from a backup document.
+  ///
+  /// Semantics are always **upsert-by-id**: entries in [jsonString] overwrite
+  /// local entries carrying the same id, and local entries absent from the
+  /// backup are left untouched.
+  ///
+  /// A `merge` flag used to be declared here and documented as switching
+  /// between merge and replace-all, but it was never read — every import
+  /// merged. Rather than implement a destructive branch nothing asked for, the
+  /// flag is gone and the contract now states what the code actually does.
   Future<BackupResult> importFromJson(
     String jsonString, {
-    bool merge = true,
     BackupProgress? onProgress,
   }) async {
     try {
@@ -281,7 +286,10 @@ class BackupService {
     try {
       onProgress?.call(BackupStage.reading);
       final content = await File(filePath).readAsString();
-      return importFromJson(content, onProgress: onProgress);
+      // `await` is load-bearing: without it the future escapes the try block and
+      // an import failure would propagate to the caller instead of being turned
+      // into the BackupResult the contract promises.
+      return await importFromJson(content, onProgress: onProgress);
     } catch (e) {
       onProgress?.call(BackupStage.idle);
       return BackupResult(

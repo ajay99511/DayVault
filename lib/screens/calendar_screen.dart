@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../widgets/image_widgets.dart';
+import '../providers/journal_revision_provider.dart';
 import '../services/storage_service.dart';
 import '../widgets/glass_widgets.dart';
 import '../config/constants.dart';

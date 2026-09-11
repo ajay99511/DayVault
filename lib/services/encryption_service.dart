@@ -13,15 +13,64 @@ import 'security_service.dart';
 /// - Version 1: XOR cipher (legacy, being phased out)
 /// - Version 2: AES-256-GCM (current, secure)
 class EncryptionService {
-  static final EncryptionService _instance = EncryptionService._internal();
+  /// Process-wide instance, wired to the app-lock service's cached key.
+  static final EncryptionService _instance = EncryptionService.withKeySource(
+    () => SecurityService().getCachedEncryptionKey(),
+  );
+
   factory EncryptionService() => _instance;
-  EncryptionService._internal();
+
+  /// Construct with an explicit key source.
+  ///
+  /// This service is stateless — it holds nothing but this function — so the
+  /// only coupling worth breaking was the hard reference to the app-lock
+  /// singleton that used to sit inside the two places a key is needed. Passing
+  /// the key in means this class can be exercised on its own, and means the
+  /// ciphers do not care where the key comes from.
+  EncryptionService.withKeySource(this._keySource);
+
+  /// Returns the current data-encryption key, or null when the vault is locked.
+  final Uint8List? Function() _keySource;
 
   static const int _currentEncryptionVersion = 2;
 
+  /// Minimum base64 length that could hold a `[version][iv][ct]` envelope.
+  /// 17 raw bytes encode to 24 base64 characters.
+  static const int _minEnvelopeChars = 24;
+
+  /// Base64 alphabet, anchored. Ordinary prose fails this immediately (spaces
+  /// and punctuation are not in the alphabet), which is the point.
+  static final RegExp _base64Shaped = RegExp(r'^[A-Za-z0-9+/]+={0,2}$');
+
+  /// Cheap test for "this might be one of our encryption envelopes".
+  ///
+  /// Journal content is stored as plain text by design, so the overwhelmingly
+  /// common case is a value that is *not* encrypted. [decrypt] used to discover
+  /// that by calling `base64Decode` and catching the resulting
+  /// [FormatException] — an exception thrown per field, per entry, on every
+  /// read. That is exception-as-control-flow on the hot path. This answers the
+  /// same question with a length check and a regex, and only decodes when the
+  /// shape is actually plausible.
+  ///
+  /// False positives are harmless: [decrypt] still falls back to the original
+  /// text when the bytes turn out not to be a real envelope.
+  static bool looksEncrypted(String value) {
+    if (value.length < _minEnvelopeChars) return false;
+    if (value.length % 4 != 0) return false; // base64 is always 4-char aligned
+    if (!_base64Shaped.hasMatch(value)) return false;
+    try {
+      final bytes = base64Decode(value);
+      if (bytes.length < 17) return false;
+      final version = bytes[0];
+      return version == 1 || version == _currentEncryptionVersion;
+    } on FormatException {
+      return false;
+    }
+  }
+
   /// Generate a derived key for encryption (32 bytes for AES-256)
   Future<Uint8List> _getDerivedKey() async {
-    final key = SecurityService().getCachedEncryptionKey();
+    final key = _keySource();
     if (key == null) {
       throw StateError('Encryption key not available: PIN not verified');
     }
@@ -72,30 +121,23 @@ class EncryptionService {
   /// during loading. Falls back to original text if decryption fails.
   String decryptSync(String encryptedText) {
     if (encryptedText.isEmpty) return '';
+    if (!looksEncrypted(encryptedText)) return encryptedText;
 
-    try {
-      final combined = base64Decode(encryptedText);
-      if (combined.length < 17) return encryptedText;
+    final combined = base64Decode(encryptedText);
+    final version = combined[0];
 
-      final version = combined[0];
-      if (version == 2) {
-        // AES — would need async key derivation, return original for sync
-        return encryptedText;
-      } else if (version == 1) {
-        // XOR legacy — can decrypt sync if key cached
-        return _decryptXorSync(combined.sublist(1));
-      }
-    } catch (_) {}
+    // AES needs async key derivation; the caller gets the original back and can
+    // retry through [decrypt].
+    if (version == _currentEncryptionVersion) return encryptedText;
 
-    // Fallback: return original text
-    return encryptedText;
+    // XOR legacy — decryptable synchronously when the key is cached.
+    return _decryptXorSync(combined.sublist(1));
   }
 
   /// Synchronous XOR decryption (for legacy data migration only).
   String _decryptXorSync(Uint8List data) {
     try {
-      // Get cached key from SecurityService
-      final key = SecurityService().getCachedEncryptionKey();
+      final key = _keySource();
       if (key == null || key.isEmpty) return '';
 
       final result = Uint8List(data.length);
@@ -119,21 +161,11 @@ class EncryptionService {
       return '';
     }
 
-    // Step 1: Try to base64 decode
-    Uint8List combined;
-    try {
-      combined = base64Decode(encryptedText);
-    } catch (_) {
-      // Not valid base64 → this is plain text, return as-is
-      return encryptedText;
-    }
+    // Fast path: journal content is plain text by design, so most values are
+    // not envelopes at all. Rejecting them without throwing keeps reads cheap.
+    if (!looksEncrypted(encryptedText)) return encryptedText;
 
-    // Step 2: Detect encryption version
-    if (combined.length < 17) {
-      // Too short for any encryption format → plain text
-      return encryptedText;
-    }
-
+    final combined = base64Decode(encryptedText);
     final version = combined[0];
 
     // Step 3: Try AES-GCM (version 2)

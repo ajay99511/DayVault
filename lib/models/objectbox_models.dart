@@ -4,6 +4,25 @@ import 'package:objectbox/objectbox.dart';
 import 'types.dart';
 import '../services/encryption_service.dart';
 
+/// Decode a persisted enum ordinal, falling back to [fallback] when the stored
+/// index is out of range.
+///
+/// Enum ordinals *are* the on-disk format for these fields, which makes the
+/// enum declaration order a data-format decision: inserting a value anywhere
+/// but the end silently reassigns the meaning of every stored row, and removing
+/// one turns valid rows into a `RangeError`. `enum_ordinals_test.dart` pins the
+/// declaration order so that reordering fails CI rather than corrupting data.
+///
+/// This guard covers the other half — resilience. Unguarded indexing threw out
+/// of the conversion, and because conversion happens inside the list load, a
+/// single bad field made the *entire journal* fail to load. Degrading one field
+/// keeps every other entry readable.
+T _enumFromIndex<T>(List<T> values, int index, T fallback, String field) {
+  if (index >= 0 && index < values.length) return values[index];
+  debugPrint('Out-of-range $field index $index; falling back to $fallback');
+  return fallback;
+}
+
 // ─── Entities ────────────────────────────────────────────────────────────────
 
 @Entity()
@@ -74,34 +93,53 @@ class ObjectBoxJournalEntry {
 
     return JournalEntry(
       id: entryId,
-      type: EntryType.values[typeIndex],
+      type: _enumFromIndex(
+          EntryType.values, typeIndex, EntryType.story, 'type'),
       date: date,
       headline: decrypted['headline'] as String? ?? headline,
       content: decrypted['content'] as String? ?? content,
-      mood: Mood.values[moodIndex],
+      mood: _enumFromIndex(Mood.values, moodIndex, Mood.neutral, 'mood'),
       feeling: (decrypted['feeling'] == null || (decrypted['feeling'] as String).isEmpty)
           ? null
           : decrypted['feeling'] as String,
-      tags: List<String>.from(jsonDecode(tagsJson)),
-      location: locationJson != null
-          ? LocationData.fromJson(
-              jsonDecode(locationJson!) as Map<String, dynamic>)
-          : null,
-      timeBucket:
-          timeBucketIndex >= 0 ? TimeBucket.values[timeBucketIndex] : null,
+      tags: _parseTags(tagsJson),
+      location: _parseLocation(locationJson),
+      // -1 is the stored representation of "no time bucket".
+      timeBucket: timeBucketIndex < 0
+          ? null
+          : _enumFromIndex(TimeBucket.values, timeBucketIndex,
+              TimeBucket.afternoon, 'timeBucket'),
       images: images,
       isSpotlight: isSpotlight,
       isPrivate: isPrivate,
     );
   }
 
-  Map<String, dynamic> toRawMap() {
-    return {
-      'entryId': entryId,
-      'headline': headline,
-      'content': content,
-      'feeling': feeling,
-    };
+  /// Tags are stored as a JSON array. A malformed value degrades to "no tags"
+  /// rather than throwing — losing the tags on one entry is recoverable, losing
+  /// the whole journal load is not.
+  static List<String> _parseTags(String json) {
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is! List) return const [];
+      return decoded.whereType<String>().toList();
+    } catch (e) {
+      debugPrint('Failed to parse tagsJson: $e');
+      return const [];
+    }
+  }
+
+  /// Same contract as [_parseTags] for the optional location blob.
+  static LocationData? _parseLocation(String? json) {
+    if (json == null || json.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(json);
+      if (decoded is! Map<String, dynamic>) return null;
+      return LocationData.fromJson(decoded);
+    } catch (e) {
+      debugPrint('Failed to parse locationJson: $e');
+      return null;
+    }
   }
 
   /// Parse images handling backward compatibility:

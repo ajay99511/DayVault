@@ -1,13 +1,26 @@
 import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:encrypt/encrypt.dart' as encrypt_lib;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter/foundation.dart' show compute, visibleForTesting;
-import 'package:meta/meta.dart';
+import 'package:flutter/foundation.dart'
+    show compute, debugPrint, visibleForTesting;
 import 'package:local_auth/local_auth.dart';
 import '../config/security_questions.dart';
 import '../config/constants.dart';
+import 'credential_gate.dart';
 import 'pbkdf2.dart';
+
+/// The app-lock security service.
+///
+/// Resolves to the process-wide instance: the unwrapped data key is cached in
+/// memory and every caller must see the same one, and the storage and model
+/// layers reach this service without a Riverpod `ref`. Screens should read it
+/// from here rather than calling the constructor, so a test can supply its own
+/// with a `ProviderScope` override instead of mutating global state.
+final securityServiceProvider =
+    Provider<SecurityService>((ref) => SecurityService());
 
 /// Security service handling PIN hashing, rate limiting, and data encryption.
 ///
@@ -32,32 +45,50 @@ class SecurityService {
   // Cache encryption key in memory after PIN verification (for decrypting existing data)
   Uint8List? _cachedEncryptionKey;
 
+  /// Attempt counting and escalating lockout, shared with the vault credential.
+  late final CredentialGate _gate =
+      CredentialGate(storage: _storage, credentialLabel: 'PIN');
+
+  /// Backoff schedule, exposed here because callers and tests reference it
+  /// through this service. Implemented once, in [CredentialGate].
+  static int computeLockoutDurationSeconds(int cycleCount) =>
+      CredentialGate.computeLockoutDurationSeconds(cycleCount);
+
   // Security constants
-  static const int _maxAttempts = SecurityConstants.maxAttempts;
   static const String _saltKey = 'security_salt';
+
+  /// Salt for the PIN-derived *key-encryption key* (KEK). Named for the role it
+  /// played before envelope encryption; kept as-is so existing installs keep
+  /// deriving the same value and their data stays readable.
   static const String _encryptionSaltKey = 'encryption_salt';
   static const String _pinHashKey = 'pin_hash';
-  static const String _attemptCountKey = 'attempt_count';
-  static const String _lockoutUntilKey = 'lockout_until';
-  static const String _lockoutCycleCountKey = 'lockout_cycle_count';
+  // attempt_count / lockout_until / lockout_cycle_count are owned by
+  // [CredentialGate] now; the key names are unchanged so existing installs
+  // keep their counters.
 
-  /// Exponential backoff lockout duration for a given (1-based) lockout
-  /// [cycleCount]: base * 2^(cycle-1), clamped to
-  /// [SecurityConstants.maxLockoutDurationSeconds].
+  /// The data-encryption key (DEK), sealed under the PIN-derived KEK.
   ///
-  /// Cycle 1 returns the base duration, preserving the previous fixed-lockout
-  /// behavior for a first offense. Pure; shared with [VaultSecurityService]
-  /// so both credential gates escalate identically.
-  static int computeLockoutDurationSeconds(int cycleCount) {
-    if (cycleCount <= 1) return SecurityConstants.lockoutDurationSeconds;
-    final exponent = cycleCount - 1;
-    // Guard the shift against overflow / runaway growth before computing.
-    if (exponent >= 20) return SecurityConstants.maxLockoutDurationSeconds;
-    final scaled = SecurityConstants.lockoutDurationSeconds * (1 << exponent);
-    return scaled > SecurityConstants.maxLockoutDurationSeconds
-        ? SecurityConstants.maxLockoutDurationSeconds
-        : scaled;
-  }
+  /// Envelope encryption exists so a PIN change is a 32-byte re-wrap instead of
+  /// a re-encryption of every draft and backup. Before this, the key that
+  /// encrypted data *was* PBKDF2(pin, encryptionSalt), so changing the PIN
+  /// silently changed the key and orphaned everything encrypted under the old
+  /// one — with no warning and no way back.
+  static const String _wrappedDekKey = 'wrapped_dek';
+
+  /// Dedicated salt for security-answer hashes.
+  ///
+  /// Answers used to be hashed with [_saltKey] — the PIN salt — which coupled
+  /// recovery to the PIN credential and meant two identical answers produced
+  /// identical stored hashes. Installs predating this key keep verifying under
+  /// the old scheme (see [_hashAnswerAt]) so nobody is locked out of recovery.
+  static const String _securityAnswersSaltKey = 'security_answers_salt';
+
+  /// AES-256 key length in bytes.
+  static const int _keyLengthBytes = 32;
+
+  /// IV length used when sealing the DEK. Matches [EncryptionService]'s layout.
+  static const int _wrapIvLengthBytes = 16;
+
 
   // Security questions storage keys
   static const String _securityQuestionsKey = 'security_questions';
@@ -91,18 +122,87 @@ class SecurityService {
     return base64Encode(saltBytes);
   }
 
-  /// Hash PIN using PBKDF2 with SHA-256
-  /// 
-  /// Uses 100,000 iterations for security
-  Future<String> _hashPin(String pin, String salt) async {
-    final keyBytes = await compute(pbkdf2Derive, {
-      'pin': pin,
-      'salt': salt,
-      'iterations': 100000,
-      'keyLength': 32,
-    });
-    return base64Encode(keyBytes);
+  /// Cryptographically secure random bytes, for key material.
+  static Uint8List _randomBytes(int length) {
+    final random = Random.secure();
+    return Uint8List.fromList(
+      List<int>.generate(length, (_) => random.nextInt(256)),
+    );
   }
+
+  /// PBKDF2-HMAC-SHA256 derivation on a background isolate.
+  Future<Uint8List> _deriveKey(String secret, String salt) => compute(
+        pbkdf2Derive,
+        {
+          'pin': secret,
+          'salt': salt,
+          'iterations': 100000,
+          'keyLength': _keyLengthBytes,
+        },
+      );
+
+  /// Compare two hashes without leaking where they first differ.
+  ///
+  /// Dart's `==` on String short-circuits at the first differing code unit.
+  /// The attack surface is local rather than remote here, but constant-time
+  /// comparison of secrets costs nothing and removes the question entirely.
+  ///
+  /// Shared with [VaultSecurityService] so both credential gates compare the
+  /// same way.
+  static bool constantTimeEquals(String a, String b) {
+    final aBytes = utf8.encode(a);
+    final bBytes = utf8.encode(b);
+    // Fold the length difference into the result instead of returning early.
+    var diff = aBytes.length ^ bBytes.length;
+    final max = aBytes.length > bBytes.length ? aBytes.length : bBytes.length;
+    for (var i = 0; i < max; i++) {
+      final x = i < aBytes.length ? aBytes[i] : 0;
+      final y = i < bBytes.length ? bBytes[i] : 0;
+      diff |= x ^ y;
+    }
+    return diff == 0;
+  }
+
+  /// Seal [dek] under [kek] with AES-256-GCM.
+  /// Layout: base64([16-byte IV][ciphertext + GCM tag]).
+  static String _wrapKey(Uint8List dek, Uint8List kek) {
+    final iv = encrypt_lib.IV.fromSecureRandom(_wrapIvLengthBytes);
+    final encrypter = encrypt_lib.Encrypter(
+      encrypt_lib.AES(encrypt_lib.Key(kek), mode: encrypt_lib.AESMode.gcm),
+    );
+    final sealed = encrypter.encryptBytes(dek, iv: iv);
+    return base64Encode(<int>[...iv.bytes, ...sealed.bytes]);
+  }
+
+  /// Open a [_wrapKey] envelope. Throws [StateError] when the GCM tag does not
+  /// verify — that means the stored key material is corrupt, and silently
+  /// continuing would hand callers a garbage key that encrypts unreadable data.
+  static Uint8List _unwrapKey(String wrapped, Uint8List kek) {
+    try {
+      final raw = base64Decode(wrapped);
+      if (raw.length <= _wrapIvLengthBytes) {
+        throw const FormatException('wrapped key too short');
+      }
+      final iv = encrypt_lib.IV(
+        Uint8List.fromList(raw.sublist(0, _wrapIvLengthBytes)),
+      );
+      final body = Uint8List.fromList(raw.sublist(_wrapIvLengthBytes));
+      final encrypter = encrypt_lib.Encrypter(
+        encrypt_lib.AES(encrypt_lib.Key(kek), mode: encrypt_lib.AESMode.gcm),
+      );
+      return Uint8List.fromList(
+        encrypter.decryptBytes(encrypt_lib.Encrypted(body), iv: iv),
+      );
+    } catch (e) {
+      throw StateError('Stored encryption key could not be opened: $e');
+    }
+  }
+
+  /// Hash PIN using PBKDF2 with SHA-256
+  ///
+  /// Uses 100,000 iterations for security
+  Future<String> _hashPin(String pin, String salt) async =>
+      base64Encode(await _deriveKey(pin, salt));
 
   /// Initialize security service - creates salt if not exists
   Future<void> initialize() async {
@@ -110,6 +210,66 @@ class SecurityService {
     if (salt == null) {
       await _storage.write(key: _saltKey, value: _generateSalt());
     }
+    // A PIN change interrupted by process death must be finished before any
+    // verification runs, or the stored hash and the wrapped key can disagree
+    // and the vault becomes unopenable.
+    await _completeInterruptedRekey();
+  }
+
+  /// Write a new (PIN hash, wrapped DEK) pair.
+  ///
+  /// The envelope is written first: if the process dies between the two, the
+  /// old PIN still verifies and its KEK still opens the *old* envelope, so the
+  /// user is never locked out — and [_completeInterruptedRekey] finishes the
+  /// job on the next launch.
+  Future<void> _applyRekey(String pinHash, String wrappedDek) async {
+    await _storage.write(key: _wrappedDekKey, value: wrappedDek);
+    await _storage.write(key: _pinHashKey, value: pinHash);
+  }
+
+  /// Finish a PIN change that was interrupted by process death.
+  ///
+  /// Rolls *forward*: the journal holds a self-consistent (hash, wrapped DEK)
+  /// pair, so replaying it lands on the new PIN with the same DEK. Rolling back
+  /// is impossible — the old values are deliberately not retained — and also
+  /// unnecessary, because the DEK is identical either way, so no user data is
+  /// at risk in either direction. Replaying a record that already applied
+  /// writes the same bytes, so this is idempotent.
+  Future<void> _completeInterruptedRekey() async {
+    final pending = await _storage.read(key: _rekeyPendingKey);
+    if (pending == null || pending.isEmpty) return;
+
+    try {
+      final record = jsonDecode(pending) as Map<String, dynamic>;
+      final hash = record['hash'] as String?;
+      final wrappedDek = record['wrappedDek'] as String?;
+      if (hash != null && wrappedDek != null) {
+        await _applyRekey(hash, wrappedDek);
+      }
+    } on FormatException catch (e) {
+      // An unparseable journal cannot be replayed. The credentials on disk are
+      // still internally consistent, so leave them alone and drop the record
+      // rather than retrying it on every launch forever.
+      debugPrint('Discarding unreadable re-key journal: $e');
+    }
+    await _storage.delete(key: _rekeyPendingKey);
+  }
+
+  /// Return the data-encryption key, creating the envelope on first use.
+  ///
+  /// Installs predating envelope encryption have no wrapped DEK, and for them
+  /// the key already protecting their drafts and encrypted backups *is* the
+  /// PIN-derived [kek]. Adopting that exact value as the DEK — rather than
+  /// generating a fresh one — is what makes this migration lossless: nothing is
+  /// re-encrypted, every existing artefact stays readable, and from here on a
+  /// PIN change only re-wraps this key instead of replacing it.
+  Future<Uint8List> _openOrAdoptDek(Uint8List kek) async {
+    final wrapped = await _storage.read(key: _wrappedDekKey);
+    if (wrapped != null && wrapped.isNotEmpty) {
+      return _unwrapKey(wrapped, kek);
+    }
+    await _storage.write(key: _wrappedDekKey, value: _wrapKey(kek, kek));
+    return kek;
   }
 
   /// Read the encryption-key salt, generating and persisting it on first use.
@@ -168,6 +328,14 @@ class SecurityService {
 
     final hash = await _hashPin(pin, pinSalt);
     await _storage.write(key: _pinHashKey, value: hash);
+
+    // Fresh install: the DEK is random and never derived, so it is independent
+    // of the PIN from the very first write and a later PIN change is a re-wrap.
+    final kek = await _deriveKey(pin, encSalt);
+    await _storage.write(
+      key: _wrappedDekKey,
+      value: _wrapKey(_randomBytes(_keyLengthBytes), kek),
+    );
     return true;
   }
 
@@ -176,10 +344,8 @@ class SecurityService {
   /// Returns [PinVerificationResult] with status and any error message
   Future<PinVerificationResult> verifyPin(String pin) async {
     // Check if locked out
-    final lockoutResult = await _checkLockout();
-    if (!lockoutResult.success) {
-      return lockoutResult;
-    }
+    final gate = await _gate.check();
+    if (!gate.allowed) return _toPinResult(gate);
 
     // Validate PIN format
     if (!_isValidPin(pin)) {
@@ -190,7 +356,7 @@ class SecurityService {
     }
 
     // The PIN hash and salt are independent reads — fetch them concurrently.
-    // (Ordering vs. _checkLockout above is preserved: the lockout gate, which
+    // (Ordering vs. the lockout gate above is preserved: that gate, which
     // has side effects, still runs first.)
     final reads = await readKeysInParallel([_pinHashKey, _saltKey]);
     final storedHash = reads[0];
@@ -221,105 +387,32 @@ class SecurityService {
     // noticeably tightening the unlock latency. On a wrong PIN the
     // speculatively derived key is simply discarded.
     final derived = await Future.wait([
-      compute(pbkdf2Derive,
-          {'pin': pin, 'salt': salt, 'iterations': 100000, 'keyLength': 32}),
-      compute(pbkdf2Derive,
-          {'pin': pin, 'salt': encSalt, 'iterations': 100000, 'keyLength': 32}),
+      _deriveKey(pin, salt),
+      _deriveKey(pin, encSalt),
     ]);
     final inputHash = base64Encode(derived[0]);
+    final kek = derived[1];
 
-    if (inputHash == storedHash) {
-      // Success - reset attempts (and escalation) and adopt the derived key.
-      await _resetAttempts(clearBackoff: true);
-      _cachedEncryptionKey = derived[1];
-      return PinVerificationResult(success: true);
-    } else {
-      // Failed - increment attempts
-      return await _handleFailedAttempt();
-    }
-  }
-
-  /// Check if device is locked out
-  Future<PinVerificationResult> _checkLockout() async {
-    final lockoutUntilStr = await _storage.read(key: _lockoutUntilKey);
-    if (lockoutUntilStr == null) {
-      return PinVerificationResult(success: true);
+    if (!constantTimeEquals(inputHash, storedHash)) {
+      return _toPinResult(await _gate.recordFailure());
     }
 
-    final lockoutUntil = DateTime.fromMillisecondsSinceEpoch(
-      int.parse(lockoutUntilStr),
-    );
-
-    if (DateTime.now().isBefore(lockoutUntil)) {
-      final remaining = lockoutUntil.difference(DateTime.now()).inSeconds;
-      return PinVerificationResult(
-        success: false,
-        error: 'Too many attempts. Try again in $remaining seconds.',
-        remainingLockoutSeconds: remaining,
-      );
-    }
-
-    // Lockout expired - clear it
-    await _storage.delete(key: _lockoutUntilKey);
-    await _resetAttempts();
-    
+    // Correct PIN. Open the envelope (or adopt one, for installs predating it)
+    // before clearing the failure state, so a corrupt key store surfaces as an
+    // error instead of a silent half-unlock with no usable key.
+    _cachedEncryptionKey = await _openOrAdoptDek(kek);
+    await _gate.recordSuccess();
     return PinVerificationResult(success: true);
   }
 
-  /// Handle failed PIN attempt
-  Future<PinVerificationResult> _handleFailedAttempt() async {
-    final attemptsStr = await _storage.read(key: _attemptCountKey) ?? '0';
-    final attempts = int.parse(attemptsStr) + 1;
-    
-    await _storage.write(key: _attemptCountKey, value: attempts.toString());
-
-    final remainingAttempts = _maxAttempts - attempts;
-
-    if (remainingAttempts <= 0) {
-      // Escalating lockout — bump the persisted cycle count so each successive
-      // lockout (within the same failure streak) lasts longer. The cycle count
-      // survives lockout expiry and is only cleared on a successful unlock.
-      final cycleStr = await _storage.read(key: _lockoutCycleCountKey) ?? '0';
-      final cycle = (int.tryParse(cycleStr) ?? 0) + 1;
-      await _storage.write(key: _lockoutCycleCountKey, value: cycle.toString());
-
-      final lockoutSeconds = computeLockoutDurationSeconds(cycle);
-      final lockoutUntil = DateTime.now().add(
-        Duration(seconds: lockoutSeconds),
+  /// Adapt a [GateDecision] to this service's public result type.
+  static PinVerificationResult _toPinResult(GateDecision decision) =>
+      PinVerificationResult(
+        success: decision.allowed,
+        error: decision.error,
+        remainingAttempts: decision.remainingAttempts,
+        remainingLockoutSeconds: decision.remainingLockoutSeconds,
       );
-      await _storage.write(
-        key: _lockoutUntilKey,
-        value: lockoutUntil.millisecondsSinceEpoch.toString(),
-      );
-      await _storage.delete(key: _attemptCountKey);
-
-      return PinVerificationResult(
-        success: false,
-        error: 'Too many failed attempts. Locked for $lockoutSeconds seconds.',
-        remainingLockoutSeconds: lockoutSeconds,
-      );
-    }
-
-    return PinVerificationResult(
-      success: false,
-      error: 'Incorrect PIN. $remainingAttempts attempts remaining.',
-      remainingAttempts: remainingAttempts,
-    );
-  }
-
-  /// Reset failed attempt counter (and the active lockout).
-  ///
-  /// [clearBackoff] additionally resets the escalating lockout cycle count;
-  /// pass `true` only when the user has successfully proven identity (correct
-  /// PIN, biometric/security-question reset, or PIN removal). It must stay
-  /// `false` on mere lockout expiry so repeated lock cycles keep escalating.
-  Future<void> _resetAttempts({bool clearBackoff = false}) async {
-    await _storage.delete(key: _attemptCountKey);
-    await _storage.delete(key: _lockoutUntilKey);
-    if (clearBackoff) {
-      await _storage.delete(key: _lockoutCycleCountKey);
-    }
-  }
 
   /// Change PIN (requires old PIN verification)
   Future<PinVerificationResult> changePin(String oldPin, String newPin) async {
@@ -330,21 +423,78 @@ class SecurityService {
       );
     }
 
-    // Verify old PIN first
+    // Verify old PIN first. This also unwraps the DEK into the cache.
     final verifyResult = await verifyPin(oldPin);
     if (!verifyResult.success) {
       return verifyResult;
     }
 
-    // Delete old PIN hash
-    await _storage.delete(key: _pinHashKey);
+    final dek = _cachedEncryptionKey;
+    if (dek == null) {
+      return PinVerificationResult(
+        success: false,
+        error: 'Could not access the encryption key. Please try again.',
+      );
+    }
 
-    // Set new PIN
-    final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
-    final hash = await _hashPin(newPin, salt);
-    await _storage.write(key: _pinHashKey, value: hash);
+    // Both salts stay put. A salt exists to stop cross-account precomputation,
+    // not to change per PIN, and rotating the PIN salt here would invalidate
+    // the security-answer hashes of installs that still share it.
+    final pinSalt = await _storage.read(key: _saltKey) ?? _generateSalt();
+    await _storage.write(key: _saltKey, value: pinSalt);
+    final encSalt = await _readOrCreateEncryptionSalt();
+
+    final newHash = await _hashPin(newPin, pinSalt);
+    final newKek = await _deriveKey(newPin, encSalt);
+
+    // The DEK itself is unchanged — only its wrapping. This is the whole point
+    // of the envelope: every draft and every encrypted backup stays readable
+    // across a PIN change, where previously the derived key changed underneath
+    // them and orphaned the lot without a word.
+    final rewrapped = _wrapKey(dek, newKek);
+
+    // Journal before writing. Losing power between the hash write and the
+    // envelope write would leave a PIN that cannot open its own key; on the
+    // next launch initialize() replays this record instead.
+    await _storage.write(
+      key: _rekeyPendingKey,
+      value: jsonEncode({'hash': newHash, 'wrappedDek': rewrapped}),
+    );
+    await _applyRekey(newHash, rewrapped);
+    await _storage.delete(key: _rekeyPendingKey);
 
     return PinVerificationResult(success: true);
+  }
+
+  /// Set [newPin] after an identity check that did **not** involve the old PIN
+  /// (security questions or biometrics).
+  ///
+  /// Such a reset cannot open the existing envelope: the old KEK died with the
+  /// forgotten PIN. The DEK is therefore replaced with a fresh random one so
+  /// future encryption works. That loss is inherent to forgetting a PIN rather
+  /// than a defect — but it must be *stated*, so the returned flag reports
+  /// whether anything was encrypted under the old PIN, letting the caller warn
+  /// the user instead of leaving them to discover it later.
+  Future<bool> _writeNewPinAfterRecovery(String newPin) async {
+    final pinSalt = await _storage.read(key: _saltKey) ?? _generateSalt();
+    await _storage.write(key: _saltKey, value: pinSalt);
+    final hash = await _hashPin(newPin, pinSalt);
+
+    final hadEncryptedData =
+        (await _storage.read(key: _wrappedDekKey))?.isNotEmpty ?? false;
+
+    final encSalt = await _readOrCreateEncryptionSalt();
+    final kek = await _deriveKey(newPin, encSalt);
+    final freshDek = _randomBytes(_keyLengthBytes);
+
+    await _storage.write(key: _wrappedDekKey, value: _wrapKey(freshDek, kek));
+    await _storage.write(key: _pinHashKey, value: hash);
+    // Any half-finished change from before the reset is now moot.
+    await _storage.delete(key: _rekeyPendingKey);
+
+    _cachedEncryptionKey = freshDek;
+    await _gate.recordSuccess();
+    return hadEncryptedData;
   }
 
   /// Reset PIN without biometric re-authentication.
@@ -353,12 +503,11 @@ class SecurityService {
     if (!_isValidPin(newPin)) {
       return PinVerificationResult(success: false, error: 'Invalid PIN format');
     }
-    await _storage.delete(key: _pinHashKey);
-    final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
-    final hash = await _hashPin(newPin, salt);
-    await _storage.write(key: _pinHashKey, value: hash);
-    await _resetAttempts(clearBackoff: true);
-    return PinVerificationResult(success: true);
+    final lostData = await _writeNewPinAfterRecovery(newPin);
+    return PinVerificationResult(
+      success: true,
+      priorEncryptedDataLost: lostData,
+    );
   }
 
   /// Remove PIN (requires verification)
@@ -371,7 +520,12 @@ class SecurityService {
     await _storage.delete(key: _pinHashKey);
     await _storage.delete(key: _saltKey);
     await _storage.delete(key: _encryptionSaltKey);
-    await _resetAttempts(clearBackoff: true);
+    // The envelope is meaningless without the salts that derive its KEK, and
+    // leaving it behind would strand key material the user asked us to remove.
+    await _storage.delete(key: _wrappedDekKey);
+    await _storage.delete(key: _rekeyPendingKey);
+    _cachedEncryptionKey = null;
+    await _gate.recordSuccess();
 
     return PinVerificationResult(success: true);
   }
@@ -381,18 +535,7 @@ class SecurityService {
     return RegExp('^\\d{${SecurityConstants.pinLength}}\$').hasMatch(pin);
   }
 
-  /// Get remaining attempts before lockout
-  Future<int> getRemainingAttempts() async {
-    final attemptsStr = await _storage.read(key: _attemptCountKey) ?? '0';
-    final attempts = int.parse(attemptsStr);
-    return (_maxAttempts - attempts).clamp(0, _maxAttempts);
-  }
 
-  /// Check if currently locked out
-  Future<bool> isLockedOut() async {
-    final result = await _checkLockout();
-    return !result.success && result.remainingLockoutSeconds != null;
-  }
 
   // ==================== SECURITY QUESTIONS ====================
 
@@ -411,29 +554,44 @@ class SecurityService {
       return false;
     }
 
-    // Hash each answer
+    // A dedicated salt keeps recovery independent of the PIN credential, so
+    // rotating one can never invalidate the other.
+    final answersSalt = _generateSalt();
     final hashedAnswers = <String>[];
-    for (final answer in answers) {
-      final normalizedAnswer = SecurityQuestions.normalizeAnswer(answer);
-      final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
-      final hashedAnswer = await _hashPin(normalizedAnswer, salt);
-      hashedAnswers.add(hashedAnswer);
+    for (var i = 0; i < answers.length; i++) {
+      hashedAnswers.add(await _hashAnswerAt(answers[i], answersSalt, i));
     }
 
-    // Store questions and hashed answers
-    final questionsJson = jsonEncode(questions);
-    final answersJson = jsonEncode(hashedAnswers);
-
-    await _storage.write(key: _securityQuestionsKey, value: questionsJson);
-    await _storage.write(key: _securityAnswersKey, value: answersJson);
+    await _storage.write(key: _securityAnswersSaltKey, value: answersSalt);
+    await _storage.write(
+        key: _securityQuestionsKey, value: jsonEncode(questions));
+    await _storage.write(
+        key: _securityAnswersKey, value: jsonEncode(hashedAnswers));
 
     return true;
   }
+
+  /// Hash the answer at [index], deriving a per-index salt from [answersSalt].
+  ///
+  /// Per-index salting stops two identical answers from producing identical
+  /// stored hashes, which previously leaked "these two answers are the same" to
+  /// anyone reading the store.
+  Future<String> _hashAnswerAt(String answer, String answersSalt, int index) =>
+      _hashPin(SecurityQuestions.normalizeAnswer(answer), '$answersSalt:$index');
 
   /// Verify security questions answers
   /// 
   /// Returns [SecurityQuestionsResult] with verification status
   Future<SecurityQuestionsResult> verifySecurityQuestions(List<String> answers) async {
+    // Recovery is a credential path and shares the PIN's lockout budget.
+    // Without this gate it was an unlimited-attempt bypass *around* the PIN
+    // lockout: two of three low-entropy answers, no counter, and a success then
+    // cleared whatever backoff had been accrued on the PIN itself.
+    final gate = await _gate.check();
+    if (!gate.allowed) {
+      return SecurityQuestionsResult(success: false, error: gate.error);
+    }
+
     if (answers.length != 3) {
       return SecurityQuestionsResult(
         success: false,
@@ -452,28 +610,38 @@ class SecurityService {
     }
 
     final List<dynamic> storedHashes = jsonDecode(answersJson);
-    final salt = await _storage.read(key: _saltKey) ?? '';
+    final answersSalt = await _storage.read(key: _securityAnswersSaltKey);
+    final legacySalt = await _storage.read(key: _saltKey) ?? '';
 
     int correctCount = 0;
-    for (int i = 0; i < answers.length; i++) {
-      final normalizedAnswer = SecurityQuestions.normalizeAnswer(answers[i]);
-      final hashedAnswer = await _hashPin(normalizedAnswer, salt);
-      
-      if (hashedAnswer == storedHashes[i]) {
+    for (int i = 0; i < answers.length && i < storedHashes.length; i++) {
+      final hashedAnswer = answersSalt == null
+          // Install predating the dedicated answers salt: answers were hashed
+          // with the shared PIN salt. Verify under the old scheme so existing
+          // users are not locked out of their own recovery.
+          ? await _hashPin(
+              SecurityQuestions.normalizeAnswer(answers[i]), legacySalt)
+          : await _hashAnswerAt(answers[i], answersSalt, i);
+
+      if (constantTimeEquals(hashedAnswer, storedHashes[i] as String)) {
         correctCount++;
       }
     }
 
     // Require at least 2 out of 3 correct
     if (correctCount >= 2) {
+      await _gate.recordSuccess();
       return SecurityQuestionsResult(success: true);
-    } else {
-      return SecurityQuestionsResult(
-        success: false,
-        error: '$correctCount/3 answers correct. At least 2 required.',
-        correctCount: correctCount,
-      );
     }
+
+    // A wrong answer set costs an attempt from the same budget as a wrong PIN,
+    // so grinding recovery escalates into the same lockout.
+    await _gate.recordFailure();
+    return SecurityQuestionsResult(
+      success: false,
+      error: '$correctCount/3 answers correct. At least 2 required.',
+      correctCount: correctCount,
+    );
   }
 
   /// Get stored security questions (for display in forgot PIN flow)
@@ -514,16 +682,11 @@ class SecurityService {
       );
     }
 
-    // Reset PIN
-    await _storage.delete(key: _pinHashKey);
-    final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
-    final hash = await _hashPin(newPin, salt);
-    await _storage.write(key: _pinHashKey, value: hash);
-
-    // Reset lockout and attempts
-    await _resetAttempts(clearBackoff: true);
-
-    return PinVerificationResult(success: true);
+    final lostData = await _writeNewPinAfterRecovery(newPin);
+    return PinVerificationResult(
+      success: true,
+      priorEncryptedDataLost: lostData,
+    );
   }
 
   // ==================== BIOMETRIC AUTH FOR PIN RESET ====================
@@ -564,16 +727,11 @@ class SecurityService {
       );
 
       if (didAuthenticate) {
-        // Reset PIN
-        await _storage.delete(key: _pinHashKey);
-        final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
-        final hash = await _hashPin(newPin, salt);
-        await _storage.write(key: _pinHashKey, value: hash);
-
-        // Reset lockout and attempts
-        await _resetAttempts(clearBackoff: true);
-
-        return PinVerificationResult(success: true);
+        final lostData = await _writeNewPinAfterRecovery(newPin);
+        return PinVerificationResult(
+          success: true,
+          priorEncryptedDataLost: lostData,
+        );
       } else {
         return PinVerificationResult(
           success: false,
@@ -588,18 +746,6 @@ class SecurityService {
     }
   }
 
-  /// Get biometric enrollment status
-  Future<String> getBiometricStatus() async {
-    try {
-      final isAvailable = await isBiometricAvailable();
-      if (!isAvailable) {
-        return 'Not available - Set up biometrics in device settings';
-      }
-      return 'Available - Use fingerprint to reset PIN';
-    } catch (e) {
-      return 'Error checking biometric status';
-    }
-  }
 }
 
 /// High-level representation of the security vault state (OOD)
@@ -629,12 +775,23 @@ class PinVerificationResult {
   final int? remainingLockoutSeconds;
   final bool requiresPinReset;
 
+  /// True when this operation replaced the data-encryption key, making anything
+  /// encrypted under the previous PIN — saved drafts, encrypted backup files —
+  /// permanently unreadable.
+  ///
+  /// Only a recovery reset (security questions or biometrics) can set this: it
+  /// proves identity without proving knowledge of the old PIN, so the old key
+  /// cannot be recovered. A normal PIN change never sets it, because the key is
+  /// re-wrapped rather than replaced. Callers should tell the user.
+  final bool priorEncryptedDataLost;
+
   PinVerificationResult({
     required this.success,
     this.error,
     this.remainingAttempts,
     this.remainingLockoutSeconds,
     this.requiresPinReset = false,
+    this.priorEncryptedDataLost = false,
   });
 }
 

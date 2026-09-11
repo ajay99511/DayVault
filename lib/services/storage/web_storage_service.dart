@@ -1,16 +1,24 @@
 import 'dart:convert';
-// ignore: avoid_web_libraries_in_flutter
+// dart:html is deprecated in favour of package:web + dart:js_interop. That
+// migration is a separate, independently-verifiable change and is tracked
+// alongside the web backend's at-rest encryption gap; until both land, this
+// import is what keeps the web target building.
+// ignore: avoid_web_libraries_in_flutter, deprecated_member_use
 import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../models/types.dart';
 import '../../models/paged_result.dart';
+import '../../utils/async_mutex.dart';
+import '../../domain/journal_rules.dart' as journal_rules;
 import 'storage_service_interface.dart';
 import '../encryption_service.dart';
-import '../security_service.dart';
 
 class WebStorageService extends StorageService {
   final FlutterSecureStorage _draftStorage = const FlutterSecureStorage();
+
+  /// Serialises mutations of the draft id index. See [saveDraft].
+  final AsyncMutex _draftIndexLock = AsyncMutex();
   
   static const _journalKey = 'dv_journal';
   static const _rankingsKey = 'dv_rankings';
@@ -37,9 +45,12 @@ class WebStorageService extends StorageService {
       final decryptedContent = await EncryptionService().decrypt(entry.content);
       final decryptedFeeling = entry.feeling != null ? await EncryptionService().decrypt(entry.feeling!) : null;
       
+      // decrypt() returns a non-nullable String (it falls back to the original
+      // text), so headline/content need no null-coalescing. feeling stays
+      // guarded because the ternary above yields null for a null input.
       return entry.copyWith(
-        headline: decryptedHeadline ?? entry.headline,
-        content: decryptedContent ?? entry.content,
+        headline: decryptedHeadline,
+        content: decryptedContent,
         feeling: decryptedFeeling ?? entry.feeling,
       );
     } catch (e) {
@@ -64,13 +75,20 @@ class WebStorageService extends StorageService {
     html.window.localStorage[_journalKey] = jsonEncode(entries.map((e) => e.toJson()).toList());
   }
 
+  /// All entries visible under [privacy], in the journal ordering contract's
+  /// total order (newest first, ties broken deterministically by entry id).
+  List<JournalEntry> _orderedJournal(PrivacyFilter privacy) {
+    final filtered =
+        _loadJournal().where((e) => _matchesPrivacy(e, privacy)).toList();
+    filtered.sort((a, b) =>
+        compareJournalEntriesDescending(a.date, a.id, b.date, b.id));
+    return filtered;
+  }
+
   @override
   Future<List<JournalEntry>> getJournal({PrivacyFilter privacy = PrivacyFilter.excludePrivate}) async {
-    final entries = _loadJournal();
-    final filtered = entries.where((e) => _matchesPrivacy(e, privacy)).toList();
-    filtered.sort((a, b) => b.date.compareTo(a.date));
-    
-    final decrypted = await Future.wait(filtered.map((e) => _decryptEntry(e)));
+    final decrypted =
+        await Future.wait(_orderedJournal(privacy).map(_decryptEntry));
     return decrypted.toList();
   }
 
@@ -98,20 +116,23 @@ class WebStorageService extends StorageService {
     PaginationCursor? cursor,
     PrivacyFilter privacy = PrivacyFilter.excludePrivate,
   ]) async {
-    final entries = _loadJournal();
-    final filtered = entries.where((e) => _matchesPrivacy(e, privacy)).toList();
-    filtered.sort((a, b) => b.date.compareTo(a.date));
-    
-    final startIndex = cursor?.lastId ?? 0;
-    if (startIndex >= filtered.length) {
-      return PagedResult(items: [], nextCursor: null);
-    }
-    
-    final endIndex = (startIndex + pageSize).clamp(0, filtered.length);
-    final page = await Future.wait(filtered.sublist(startIndex, endIndex).map((e) => _decryptEntry(e)));
-    
-    final nextCursor = endIndex < filtered.length ? PaginationCursor.fromLastId(endIndex) : null;
-    return PagedResult(items: page.toList(), nextCursor: nextCursor);
+    // Keyset, not offset. This previously advanced by array index, so an entry
+    // added or removed between two page fetches shifted the whole window and
+    // the next page silently skipped or repeated rows. Resuming from the entry
+    // the cursor names is immune to that.
+    //
+    // Paginate before decrypting: date and id are stored in the clear, so only
+    // the entries actually being returned pay the decryption cost.
+    final page = paginateByCursor<JournalEntry>(
+      _loadJournal().where((e) => _matchesPrivacy(e, privacy)),
+      pageSize: pageSize,
+      cursor: cursor,
+      dateOf: (e) => e.date,
+      idOf: (e) => e.id,
+    );
+
+    final items = await Future.wait(page.items.map(_decryptEntry));
+    return PagedResult(items: items, nextCursor: page.nextCursor);
   }
 
   @override
@@ -148,6 +169,52 @@ class WebStorageService extends StorageService {
     _saveJournal(entries);
   }
 
+  /// See [StorageService.migrateLegacyEncryptedEntries].
+  ///
+  /// The web backend persists entries as plain JSON, so only rows written by an
+  /// older build that encrypted private entries can carry an envelope.
+  @override
+  Future<int> migrateLegacyEncryptedEntries() async {
+    final stored = _loadJournal();
+    var changed = 0;
+
+    final migrated = <JournalEntry>[];
+    for (final entry in stored) {
+      final needsWork = EncryptionService.looksEncrypted(entry.headline) ||
+          EncryptionService.looksEncrypted(entry.content) ||
+          EncryptionService.looksEncrypted(entry.feeling ?? '');
+      if (!needsWork) {
+        migrated.add(entry);
+        continue;
+      }
+
+      final headline = await EncryptionService().decrypt(entry.headline);
+      final content = await EncryptionService().decrypt(entry.content);
+      final feeling = entry.feeling == null
+          ? null
+          : await EncryptionService().decrypt(entry.feeling!);
+
+      // Only rewrite when decryption actually yielded different text; an
+      // unreadable value is left exactly as stored.
+      if (headline == entry.headline &&
+          content == entry.content &&
+          (feeling ?? '') == (entry.feeling ?? '')) {
+        migrated.add(entry);
+        continue;
+      }
+
+      migrated.add(entry.copyWith(
+        headline: headline,
+        content: content,
+        feeling: feeling,
+      ));
+      changed++;
+    }
+
+    if (changed > 0) _saveJournal(migrated);
+    return changed;
+  }
+
   @override
   Future<Map<String, int>> getTagCounts() async {
     final entries = await getJournal(privacy: PrivacyFilter.excludePrivate);
@@ -163,7 +230,7 @@ class WebStorageService extends StorageService {
   @override
   Future<int> renameTag(String from, String to) async {
     final entries = await getJournal(privacy: PrivacyFilter.all);
-    final updated = StorageService.applyTagRename(entries, from, to);
+    final updated = journal_rules.applyTagRename(entries, from, to);
     if (updated.isNotEmpty) {
       await putManyJournalEntries(updated);
     }
@@ -173,7 +240,7 @@ class WebStorageService extends StorageService {
   @override
   Future<int> deleteTag(String tag) async {
     final entries = await getJournal(privacy: PrivacyFilter.all);
-    final updated = StorageService.applyTagDelete(entries, tag);
+    final updated = journal_rules.applyTagDelete(entries, tag);
     if (updated.isNotEmpty) {
       await putManyJournalEntries(updated);
     }
@@ -416,21 +483,23 @@ class WebStorageService extends StorageService {
 
   @override
   Future<void> saveDraft(String draftId, String draftData) async {
-    try {
-      final encryptedData = await EncryptionService().encrypt(draftData);
-      await _draftStorage.write(
-        key: '$_draftsPrefix$draftId',
-        value: encryptedData,
-      );
-      
+    // Failures propagate. This used to swallow every error and return
+    // normally, so a draft that was never written looked to the editor exactly
+    // like one that was — the caller already handles the failure and tells the
+    // user, and it cannot do that for an error it never sees.
+    final encryptedData = await EncryptionService().encrypt(draftData);
+    await _draftStorage.write(
+      key: '$_draftsPrefix$draftId',
+      value: encryptedData,
+    );
+
+    // Serialised: the id index is a single JSON blob, so a concurrent autosave
+    // would otherwise read the same list and clobber the other's id.
+    await _draftIndexLock.run(() async {
       final keys = await _getDraftKeys();
-      if (!keys.contains(draftId)) {
-        keys.add(draftId);
-        await _saveDraftKeys(keys);
-      }
-    } catch (e) {
-      debugPrint('Error saving draft on web: $e');
-    }
+      if (keys.contains(draftId)) return;
+      await _saveDraftKeys([...keys, draftId]);
+    });
   }
 
   @override
@@ -448,10 +517,12 @@ class WebStorageService extends StorageService {
   @override
   Future<void> deleteDraft(String draftId) async {
     await _draftStorage.delete(key: '$_draftsPrefix$draftId');
-    final keys = await _getDraftKeys();
-    if (keys.remove(draftId)) {
-      await _saveDraftKeys(keys);
-    }
+    await _draftIndexLock.run(() async {
+      final keys = await _getDraftKeys();
+      if (keys.remove(draftId)) {
+        await _saveDraftKeys(keys);
+      }
+    });
   }
 
   @override
@@ -461,11 +532,13 @@ class WebStorageService extends StorageService {
 
   @override
   Future<void> clearAllDrafts() async {
-    final keys = await _getDraftKeys();
-    for (final key in keys) {
-      await _draftStorage.delete(key: '$_draftsPrefix$key');
-    }
-    await _draftStorage.delete(key: _draftKeysListKey);
+    await _draftIndexLock.run(() async {
+      final keys = await _getDraftKeys();
+      for (final key in keys) {
+        await _draftStorage.delete(key: '$_draftsPrefix$key');
+      }
+      await _draftStorage.delete(key: _draftKeysListKey);
+    });
   }
 
   // ─── On This Day ──────────────────────────────────────────────────────────

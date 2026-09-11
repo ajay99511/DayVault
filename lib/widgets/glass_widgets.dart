@@ -65,7 +65,21 @@ class GlassContainer extends StatelessWidget {
               ],
             ),
       ),
-      child: child,
+      // The glass fill above is painted by this Container, which sits between
+      // the child and the Scaffold's Material. Material-ink widgets (ListTile,
+      // SwitchListTile, InkWell) paint their background and splashes onto the
+      // *nearest* Material ancestor, so without this they would render behind
+      // the glass and be invisible — Flutter asserts on exactly that in debug,
+      // which is why any screen putting a ListTile in a GlassContainer failed
+      // its widget test.
+      //
+      // MaterialType.transparency paints nothing and adds no elevation, so the
+      // frosted-glass look is unchanged; it only supplies the ink surface and
+      // clips splashes to the card's bounds.
+      child: Material(
+        type: MaterialType.transparency,
+        child: child,
+      ),
     );
 
     if (!useBackdropFilter) {

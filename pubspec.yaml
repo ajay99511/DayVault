@@ -25,6 +25,12 @@ dependencies:
   flutter_image_compress: ^2.4.0
   image: ^4.2.0
   crypto: ^3.0.3
+  # Direct dependency: PBKDF2-HMAC-SHA256 backs every PIN hash, vault-passcode
+  # hash and key derivation in lib/services/pbkdf2.dart. It was previously
+  # reaching us only transitively (via encrypt / objectbox_generator) held in
+  # place by the dependency_overrides entry below, which meant the crypto
+  # primitive under every credential was unversioned by this project.
+  pointycastle: ^4.0.0
   image_picker: ^1.0.7
   share_plus: ^12.0.2
   uuid: ^4.3.3

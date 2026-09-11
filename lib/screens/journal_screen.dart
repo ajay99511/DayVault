@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../models/paged_result.dart';
+import '../providers/journal_revision_provider.dart';
 import '../services/storage_service.dart';
 import '../utils/debouncer.dart';
 import '../widgets/glass_widgets.dart';
@@ -116,6 +117,58 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
   final Set<Mood> _selectedMoods = {};
   final Debouncer _searchDebouncer =
       Debouncer(delay: const Duration(milliseconds: 300));
+
+  // ─── Derived view state ────────────────────────────────────────────────
+  //
+  // filterEntries lowercases every headline, body and tag it inspects, and
+  // availableTags builds a map over every tag, so both are O(total journal
+  // text). They used to run unconditionally inside build(), which fires on
+  // every scroll-threshold crossing, every debounced keystroke, every theme
+  // change and every filter toggle — proportional-to-corpus work on the
+  // scroll path. Cache them against the inputs they actually depend on.
+  //
+  // CalendarScreen already does this correctly (_entriesByDay is built once in
+  // _load); this brings the journal list in line.
+  List<JournalEntry> _derivedFiltered = const [];
+  List<String> _derivedTags = const [];
+  List<JournalEntry>? _derivedSource;
+  Object? _derivedFilterKey;
+
+  /// Identity of the current filter selection. Cheap to compute (proportional
+  /// to the number of *selected* facets, not to the journal).
+  Object _currentFilterKey() => Object.hash(
+        _searchQuery,
+        _spotlightOnly,
+        Object.hashAllUnordered(_selectedTags),
+        Object.hashAllUnordered(_selectedTypes),
+        Object.hashAllUnordered(_selectedMoods),
+      );
+
+  /// Recompute the filtered list and tag set only when their inputs changed.
+  ///
+  /// `entries` is always replaced wholesale by the loaders rather than mutated
+  /// in place, so reference identity is an exact and O(1) change check.
+  void _recomputeDerivedIfNeeded() {
+    final sourceChanged = !identical(_derivedSource, entries);
+    final filterKey = _currentFilterKey();
+    if (!sourceChanged && filterKey == _derivedFilterKey) return;
+
+    if (sourceChanged) {
+      // Tags depend only on the entry set, not on the active filters.
+      _derivedTags = JournalScreen.availableTags(entries);
+      _derivedSource = entries;
+    }
+
+    _derivedFilterKey = filterKey;
+    _derivedFiltered = JournalScreen.filterEntries(
+      entries,
+      query: _searchQuery,
+      spotlightOnly: _spotlightOnly,
+      selectedTags: _selectedTags,
+      selectedTypes: _selectedTypes,
+      selectedMoods: _selectedMoods,
+    );
+  }
 
   /// True when any search/filter is active — in this mode we need the complete
   /// entry set for correct results and disable lazy pagination.
@@ -342,16 +395,10 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
       _loadOnThisDay();
     });
 
-    // Filtered entries
-    final filteredEntries = JournalScreen.filterEntries(
-      entries,
-      query: _searchQuery,
-      spotlightOnly: _spotlightOnly,
-      selectedTags: _selectedTags,
-      selectedTypes: _selectedTypes,
-      selectedMoods: _selectedMoods,
-    );
-    final availableTags = JournalScreen.availableTags(entries);
+    // Filtered entries — memoized; see _recomputeDerivedIfNeeded.
+    _recomputeDerivedIfNeeded();
+    final filteredEntries = _derivedFiltered;
+    final availableTags = _derivedTags;
 
     return Scaffold(
       backgroundColor: Colors.transparent,

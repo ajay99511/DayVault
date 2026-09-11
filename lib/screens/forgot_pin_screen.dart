@@ -1,21 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import '../config/constants.dart';
 import '../services/security_service.dart';
 import '../widgets/glass_widgets.dart';
 
-class ForgotPinScreen extends StatefulWidget {
+class ForgotPinScreen extends ConsumerStatefulWidget {
   final VoidCallback onPinReset;
   
   const ForgotPinScreen({super.key, required this.onPinReset});
 
   @override
-  State<ForgotPinScreen> createState() => _ForgotPinScreenState();
+  ConsumerState<ForgotPinScreen> createState() => _ForgotPinScreenState();
 }
 
-class _ForgotPinScreenState extends State<ForgotPinScreen> {
-  final _securityService = SecurityService();
+class _ForgotPinScreenState extends ConsumerState<ForgotPinScreen> {
+  late final _securityService = ref.read(securityServiceProvider);
   final LocalAuthentication _localAuth = LocalAuthentication();
   
   // Reset method: 0 = security questions, 1 = biometric

@@ -5,10 +5,10 @@
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i5;
 
-import 'package:memory_palace/models/objectbox_models.dart' as _i6;
 import 'package:memory_palace/models/paged_result.dart' as _i2;
 import 'package:memory_palace/models/types.dart' as _i3;
-import 'package:memory_palace/services/storage_service.dart' as _i4;
+import 'package:memory_palace/services/storage/storage_service_interface.dart'
+    as _i4;
 import 'package:mockito/mockito.dart' as _i1;
 
 // ignore_for_file: type=lint
@@ -166,29 +166,6 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
       ) as _i5.Future<void>);
 
   @override
-  _i5.Future<_i6.ObjectBoxJournalEntry?> getJournalEntryById(String? entryId) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #getJournalEntryById,
-          [entryId],
-        ),
-        returnValue: _i5.Future<_i6.ObjectBoxJournalEntry?>.value(),
-        returnValueForMissingStub:
-            _i5.Future<_i6.ObjectBoxJournalEntry?>.value(),
-      ) as _i5.Future<_i6.ObjectBoxJournalEntry?>);
-
-  @override
-  _i5.Future<int?> getObjectBoxIdForEntry(String? entryId) =>
-      (super.noSuchMethod(
-        Invocation.method(
-          #getObjectBoxIdForEntry,
-          [entryId],
-        ),
-        returnValue: _i5.Future<int?>.value(),
-        returnValueForMissingStub: _i5.Future<int?>.value(),
-      ) as _i5.Future<int?>);
-
-  @override
   _i5.Future<void> putManyJournalEntries(List<_i3.JournalEntry>? entries) =>
       (super.noSuchMethod(
         Invocation.method(
@@ -238,10 +215,9 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
       ) as _i5.Future<int>);
 
   @override
-  _i5.Future<List<_i3.RankingCategory>> getFavoriteRankings() =>
-      (super.noSuchMethod(
+  _i5.Future<List<_i3.RankingCategory>> getRankings() => (super.noSuchMethod(
         Invocation.method(
-          #getFavoriteRankings,
+          #getRankings,
           [],
         ),
         returnValue: _i5.Future<List<_i3.RankingCategory>>.value(
@@ -251,9 +227,10 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
       ) as _i5.Future<List<_i3.RankingCategory>>);
 
   @override
-  _i5.Future<List<_i3.RankingCategory>> getRankings() => (super.noSuchMethod(
+  _i5.Future<List<_i3.RankingCategory>> getFavoriteRankings() =>
+      (super.noSuchMethod(
         Invocation.method(
-          #getRankings,
+          #getFavoriteRankings,
           [],
         ),
         returnValue: _i5.Future<List<_i3.RankingCategory>>.value(
@@ -500,26 +477,6 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
       ) as _i5.Future<_i3.UserSettings>);
 
   @override
-  _i5.Future<void> setOnThisDayDismissed(DateTime? day) => (super.noSuchMethod(
-        Invocation.method(
-          #setOnThisDayDismissed,
-          [day],
-        ),
-        returnValue: _i5.Future<void>.value(),
-        returnValueForMissingStub: _i5.Future<void>.value(),
-      ) as _i5.Future<void>);
-
-  @override
-  _i5.Future<bool> isOnThisDayDismissed(DateTime? day) => (super.noSuchMethod(
-        Invocation.method(
-          #isOnThisDayDismissed,
-          [day],
-        ),
-        returnValue: _i5.Future<bool>.value(false),
-        returnValueForMissingStub: _i5.Future<bool>.value(false),
-      ) as _i5.Future<bool>);
-
-  @override
   _i5.Future<void> saveDraft(
     String? draftId,
     String? draftData,
@@ -575,4 +532,24 @@ class MockStorageService extends _i1.Mock implements _i4.StorageService {
         returnValue: _i5.Future<void>.value(),
         returnValueForMissingStub: _i5.Future<void>.value(),
       ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> setOnThisDayDismissed(DateTime? day) => (super.noSuchMethod(
+        Invocation.method(
+          #setOnThisDayDismissed,
+          [day],
+        ),
+        returnValue: _i5.Future<void>.value(),
+        returnValueForMissingStub: _i5.Future<void>.value(),
+      ) as _i5.Future<void>);
+
+  @override
+  _i5.Future<bool> isOnThisDayDismissed(DateTime? day) => (super.noSuchMethod(
+        Invocation.method(
+          #isOnThisDayDismissed,
+          [day],
+        ),
+        returnValue: _i5.Future<bool>.value(false),
+        returnValueForMissingStub: _i5.Future<bool>.value(false),
+      ) as _i5.Future<bool>);
 }

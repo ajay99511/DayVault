@@ -1,0 +1,60 @@
+name: CI
+
+# Runs on every push and pull request. Without this gate the analyzer count and
+# the test suite drift silently — which is how the repo accumulated 74 analyzer
+# issues and a test file with an empty main().
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Analyze, test, format
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Verify generated sources are current
+        # freezed / json_serializable / objectbox / riverpod outputs are checked
+        # in. If regenerating produces a diff, the committed sources are stale
+        # and the build would differ from what reviewers looked at.
+        run: |
+          dart run build_runner build --delete-conflicting-outputs
+          git diff --exit-code -- '*.g.dart' '*.freezed.dart' 'lib/objectbox-model.json'
+
+      - name: Analyze
+        # --fatal-infos: an info that nobody fixes is an info that nobody reads.
+        run: flutter analyze --fatal-infos --fatal-warnings
+
+      - name: Check formatting (informational)
+        # NOT yet a gate. `dart format` currently rewrites 46 of 94 files,
+        # nearly all of them untouched by any recent change. Turning that into a
+        # blocking check would either fail every build or force a repo-wide
+        # reformat to ride along inside an unrelated change — and a diff that
+        # mixes formatting with behaviour is a diff nobody can review.
+        #
+        # To enable the gate: land one commit that is *only* `dart format lib
+        # test`, then delete `continue-on-error` below.
+        continue-on-error: true
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Test
+        run: flutter test --reporter expanded

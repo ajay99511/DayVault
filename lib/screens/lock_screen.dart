@@ -20,7 +20,7 @@ class LockScreen extends ConsumerStatefulWidget {
 
 class _LockScreenState extends ConsumerState<LockScreen>
     with SingleTickerProviderStateMixin {
-  final _securityService = SecurityService();
+  late final _securityService = ref.read(securityServiceProvider);
   final _auth = LocalAuthentication();
   
   String pin = '';

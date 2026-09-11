@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../domain/journal_rules.dart';
 import '../models/stats.dart';
 import '../models/types.dart';
 import '../services/storage_service.dart';
@@ -78,7 +79,7 @@ class StatsNotifier extends _$StatsNotifier {
         .toList();
 
     return JournalStats(
-      streak: _computeStreak(entries, todayDate),
+      streak: computeJournalStreak(entries, today: todayDate),
       totalEntries: entries.length,
       mostFrequentMood: mostFrequentMood,
       totalWordCount: totalWordCount,
@@ -88,32 +89,4 @@ class StatsNotifier extends _$StatsNotifier {
     );
   }
 
-  static int _computeStreak(List<JournalEntry> entries, DateTime todayDate) {
-    final dates = entries
-        .map((e) => DateTime(e.date.year, e.date.month, e.date.day))
-        .toSet()
-        .toList()
-      ..sort((a, b) => b.compareTo(a));
-
-    if (dates.isEmpty) return 0;
-    if (dates.first.isBefore(todayDate.subtract(const Duration(days: 1)))) {
-      return 0;
-    }
-
-    DateTime expected = todayDate;
-    if (dates.first == todayDate.subtract(const Duration(days: 1))) {
-      expected = dates.first;
-    }
-
-    int streak = 0;
-    for (final date in dates) {
-      if (date == expected) {
-        streak++;
-        expected = expected.subtract(const Duration(days: 1));
-      } else if (date.isBefore(expected)) {
-        break;
-      }
-    }
-    return streak;
-  }
 }
