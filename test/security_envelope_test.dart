@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:memory_palace/config/constants.dart';
 import 'package:memory_palace/services/pbkdf2.dart';
 import 'package:memory_palace/services/security_service.dart';
 import 'package:mockito/annotations.dart';
@@ -212,24 +211,34 @@ void main() {
     const questions = ['Q1', 'Q2', 'Q3'];
     const answers = ['alpha', 'beta', 'gamma'];
 
-    test('wrong answers consume the shared attempt budget and lock out',
+    // These two prove recovery is *wired into* the PIN's lockout budget. The
+    // escalation behaviour itself is covered by credential_gate_test.dart with
+    // no PBKDF2 — driving a full lockout through here cost fifteen
+    // 100k-iteration derivations and tripped the 30s per-test timeout under
+    // full-suite concurrency.
+    test('a wrong answer set consumes an attempt from the shared budget',
         () async {
       await service.setSecurityQuestions(questions, answers);
+      expect(disk.containsKey('attempt_count'), isFalse);
 
-      SecurityQuestionsResult? last;
-      for (var i = 0; i < SecurityConstants.maxAttempts; i++) {
-        last = await service.verifySecurityQuestions(
-          const ['no', 'nope', 'wrong'],
-        );
-        expect(last.success, isFalse);
-      }
+      final attempt =
+          await service.verifySecurityQuestions(const ['no', 'nope', 'wrong']);
 
+      expect(attempt.success, isFalse);
       // Before this fix there was no counter here at all: recovery was an
       // unlimited-attempt path around the PIN lockout.
-      expect(disk.containsKey('lockout_until'), isTrue,
-          reason: 'repeated wrong answers must escalate to a lockout');
+      expect(disk['attempt_count'], '1');
+    });
+
+    test('an active lockout refuses even correct answers', () async {
+      await service.setSecurityQuestions(questions, answers);
+      disk['lockout_until'] = DateTime.now()
+          .add(const Duration(minutes: 5))
+          .millisecondsSinceEpoch
+          .toString();
 
       final locked = await service.verifySecurityQuestions(answers);
+
       expect(locked.success, isFalse,
           reason: 'even correct answers are refused while locked out');
       expect(locked.error, contains('Too many attempts'));

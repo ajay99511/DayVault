@@ -9,7 +9,6 @@ import '../../objectbox.g.dart';
 import '../../domain/journal_rules.dart' as journal_rules;
 import '../../utils/async_mutex.dart';
 import '../encryption_service.dart';
-import '../security_service.dart';
 import 'storage_service_interface.dart';
 class NativeStorageService extends StorageService {
   late final Box<ObjectBoxJournalEntry> _journalBox;
@@ -50,8 +49,9 @@ class NativeStorageService extends StorageService {
 
   /// Get all journal entries.
   ///
-  /// Existing encrypted entries are auto-detected and decrypted during
-  /// conversion. New entries are stored as plain text.
+  /// Entries are stored as plain text. Any surviving legacy-encrypted row is
+  /// decrypted during conversion; [migrateLegacyEncryptedEntries] rewrites such
+  /// rows as plain text so this stays a no-op in the steady state.
   @override
   Future<List<JournalEntry>> getJournal(
       {PrivacyFilter privacy = PrivacyFilter.excludePrivate}) async {
@@ -61,40 +61,69 @@ class NativeStorageService extends StorageService {
         .build();
     try {
       final results = query.find();
-      
-      // We only need to batch decrypt if we have a key (meaning the user has
-      // verified their PIN and we actually have a way to decrypt legacy AES data)
-      final key = SecurityService().getCachedEncryptionKey();
-      
-      if (results.isEmpty) return [];
+      if (results.isEmpty) return const [];
 
-      if (key == null) {
-        // If no key, just map synchronously (only XOR legacy will decrypt).
-        // `await` keeps the mapping inside the try/finally so the query is not
-        // closed while conversion is still in flight.
-        return await Future.wait(results.map((e) => e.toFreezed()));
-      }
-      
-      // Extract raw data needed for decryption to pass to Isolate
-      final rawEntries = results.map((e) => e.toRawMap()).toList();
-      
-      // Perform batch decryption in an Isolate
-      final decryptedData = await compute(
-        _batchDecryptEntries,
-        {
-          'entries': rawEntries,
-          'key': key,
-        },
-      );
-      
-      // Reconstruct JournalEntry objects
-      return List.generate(results.length, (i) {
-        return results[i].toFreezedFromDecrypted(decryptedData[i]);
-      });
+      // One decrypt path. There used to be two: a `compute()` isolate taken
+      // whenever a key was cached, and this one otherwise. The isolate handled
+      // *only* version-1 (XOR) rows — a version-2 AES row fell straight
+      // through it and was handed back as raw base64 — so the correct path was
+      // reachable only when there was no key to decrypt with. Removing it also
+      // removes a second copy of the cipher and the per-read isolate spawn,
+      // which was pure overhead now that content is stored as plain text.
+      return await Future.wait(results.map((e) => e.toFreezed()));
     } finally {
       query.close();
     }
   }
+
+  /// Rewrite any legacy-encrypted journal row as plain text.
+  ///
+  /// Journal content is plain text by design; rows predating that decision may
+  /// still hold a version-1 (XOR) or version-2 (AES) envelope. This converts
+  /// them once so no read path needs a cipher at all.
+  ///
+  /// Safety invariant: a row is rewritten **only** when decryption actually
+  /// produced different text. If the value could not be read — no cached key,
+  /// wrong key, corrupt bytes — [EncryptionService.decrypt] returns the input
+  /// unchanged, this sees no difference, and the row is left exactly as it was.
+  /// Unreadable data is never overwritten with its own ciphertext.
+  ///
+  /// Idempotent: a second run finds nothing to do. Returns the number of rows
+  /// rewritten.
+  @override
+  Future<int> migrateLegacyEncryptedEntries() async {
+    final rows = _journalBox.getAll();
+    final rewritten = <ObjectBoxJournalEntry>[];
+
+    for (final row in rows) {
+      if (!_rowLooksEncrypted(row)) continue;
+
+      final decrypted = await row.toFreezed();
+      final feelingUnchanged =
+          (decrypted.feeling ?? '') == (row.feeling ?? '');
+      if (decrypted.headline == row.headline &&
+          decrypted.content == row.content &&
+          feelingUnchanged) {
+        continue; // could not decrypt — leave it untouched
+      }
+
+      final plain = await ObjectBoxJournalEntry.fromFreezed(decrypted);
+      plain.id = row.id;
+      rewritten.add(plain);
+    }
+
+    if (rewritten.isNotEmpty) {
+      _journalBox.putMany(rewritten);
+      debugPrint('Rewrote ${rewritten.length} legacy-encrypted entries as '
+          'plain text');
+    }
+    return rewritten.length;
+  }
+
+  static bool _rowLooksEncrypted(ObjectBoxJournalEntry row) =>
+      EncryptionService.looksEncrypted(row.headline) ||
+      EncryptionService.looksEncrypted(row.content) ||
+      EncryptionService.looksEncrypted(row.feeling ?? '');
 
   /// Number of stored journal entries visible under [privacy] — used for the
   /// header count when the list is only partially loaded via pagination.
@@ -169,19 +198,8 @@ class NativeStorageService extends StorageService {
     final hasMore = raw.length > pageSize;
     final page = hasMore ? raw.sublist(0, pageSize) : raw;
 
-    final key = SecurityService().getCachedEncryptionKey();
-    final List<JournalEntry> items;
-    if (key == null) {
-      items = await Future.wait(page.map((e) => e.toFreezed()));
-    } else {
-      final rawEntries = page.map((e) => e.toRawMap()).toList();
-      final decrypted = await compute(
-        _batchDecryptEntries,
-        {'entries': rawEntries, 'key': key},
-      );
-      items = List.generate(
-          page.length, (i) => page[i].toFreezedFromDecrypted(decrypted[i]));
-    }
+    // Single decrypt path — see the note in [getJournal].
+    final items = await Future.wait(page.map((e) => e.toFreezed()));
 
     final nextCursor = hasMore
         ? PaginationCursor(
@@ -736,36 +754,3 @@ class NativeStorageService extends StorageService {
   }
 }
 
-/// Top-level function for Isolate batch decryption.
-List<Map<String, dynamic>> _batchDecryptEntries(Map<String, dynamic> params) {
-  final entries = params['entries'] as List<Map<String, dynamic>>;
-  final key = params['key'] as Uint8List;
-
-  String decryptSync(String encryptedText) {
-    if (encryptedText.isEmpty) return '';
-    try {
-      final combined = base64Decode(encryptedText);
-      if (combined.length < 17) return encryptedText;
-      final version = combined[0];
-      if (version == 1) {
-        final data = combined.sublist(1);
-        final result = Uint8List(data.length);
-        for (int i = 0; i < data.length; i++) {
-          result[i] = data[i] ^ key[i % key.length];
-        }
-        return utf8.decode(result, allowMalformed: true);
-      }
-    } catch (_) {}
-    return encryptedText;
-  }
-
-  for (final entry in entries) {
-    entry['headline'] = decryptSync(entry['headline'] as String);
-    entry['content'] = decryptSync(entry['content'] as String);
-    if (entry['feeling'] != null) {
-      entry['feeling'] = decryptSync(entry['feeling'] as String);
-    }
-  }
-
-  return entries;
-}

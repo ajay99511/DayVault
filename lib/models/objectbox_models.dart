@@ -142,15 +142,6 @@ class ObjectBoxJournalEntry {
     }
   }
 
-  Map<String, dynamic> toRawMap() {
-    return {
-      'entryId': entryId,
-      'headline': headline,
-      'content': content,
-      'feeling': feeling,
-    };
-  }
-
   /// Parse images handling backward compatibility:
   /// - New format: List<ImageReference> JSON
   /// - Old format: List<String> (file paths) → converted to ImageReference(filePath)

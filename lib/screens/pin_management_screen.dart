@@ -17,7 +17,7 @@ class PinManagementScreen extends ConsumerStatefulWidget {
 }
 
 class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
-  final _securityService = SecurityService();
+  late final _securityService = ref.read(securityServiceProvider);
   
   bool _isLoading = true;
   bool _pinIsSet = false;

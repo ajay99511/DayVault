@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../config/constants.dart';
 import '../config/security_questions.dart';
+import 'credential_gate.dart';
 import 'pbkdf2.dart';
 import 'security_service.dart'
     show
@@ -30,14 +31,18 @@ class VaultSecurityService {
 
   final FlutterSecureStorage _storage;
 
-  static const int _maxAttempts = SecurityConstants.maxAttempts;
+  /// Attempt counting and escalating lockout — the same implementation the
+  /// app-lock PIN uses, namespaced so the two credentials' counters are
+  /// completely independent.
+  late final CredentialGate _gate = CredentialGate(
+    storage: _storage,
+    credentialLabel: 'passcode',
+    namespace: 'vault_',
+  );
 
   // Namespaced storage keys — must never overlap with SecurityService keys.
   static const String _pinHashKey = 'vault_pin_hash';
   static const String _saltKey = 'vault_salt';
-  static const String _attemptCountKey = 'vault_attempt_count';
-  static const String _lockoutUntilKey = 'vault_lockout_until';
-  static const String _lockoutCycleCountKey = 'vault_lockout_cycle_count';
   static const String _securityQuestionsKey = 'vault_security_questions';
   static const String _securityAnswersKey = 'vault_security_answers';
 
@@ -87,8 +92,8 @@ class VaultSecurityService {
 
   /// Verify the vault passcode with rate limiting and escalating lockout.
   Future<PinVerificationResult> verifyPasscode(String pin) async {
-    final lockoutResult = await _checkLockout();
-    if (!lockoutResult.success) return lockoutResult;
+    final gate = await _gate.check();
+    if (!gate.allowed) return _toPinResult(gate);
 
     if (!_isValidPasscode(pin)) {
       return PinVerificationResult(
@@ -105,10 +110,10 @@ class VaultSecurityService {
     final inputHash = await _hash(pin, salt);
 
     if (SecurityService.constantTimeEquals(inputHash, storedHash)) {
-      await _resetAttempts(clearBackoff: true);
+      await _gate.recordSuccess();
       return PinVerificationResult(success: true);
     }
-    return _handleFailedAttempt();
+    return _toPinResult(await _gate.recordFailure());
   }
 
   /// Change the vault passcode (requires the current one).
@@ -141,9 +146,24 @@ class VaultSecurityService {
     await _storage.delete(key: _securityQuestionsKey);
     await _storage.delete(key: _securityAnswersKey);
     await _storage.delete(key: _securityAnswersSaltKey);
-    await _resetAttempts(clearBackoff: true);
+    await _gate.recordSuccess();
     return PinVerificationResult(success: true);
   }
+
+  /// Adapt a [GateDecision] to the shared result type.
+  static PinVerificationResult _toPinResult(GateDecision decision) =>
+      PinVerificationResult(
+        success: decision.allowed,
+        error: decision.error,
+        remainingAttempts: decision.remainingAttempts,
+        remainingLockoutSeconds: decision.remainingLockoutSeconds,
+      );
+
+  /// Attempts left before the next lockout.
+  Future<int> getRemainingAttempts() => _gate.remainingAttempts();
+
+  /// Whether a lockout is currently in force.
+  Future<bool> isLockedOut() => _gate.isLockedOut();
 
   Future<void> _writeNewPasscode(String newPin) async {
     await _storage.delete(key: _pinHashKey);
@@ -151,94 +171,6 @@ class VaultSecurityService {
     await _storage.write(key: _saltKey, value: salt);
     final hash = await _hash(newPin, salt);
     await _storage.write(key: _pinHashKey, value: hash);
-  }
-
-  // ─── Rate limiting (mirrors SecurityService semantics) ────────────────────
-
-  Future<PinVerificationResult> _checkLockout() async {
-    final lockoutUntilStr = await _storage.read(key: _lockoutUntilKey);
-    if (lockoutUntilStr == null) return PinVerificationResult(success: true);
-
-    // A corrupt stamp used to throw straight out of verify, which fails *open*
-    // by skipping the check. Clear it and treat it as "no lockout" instead.
-    final lockoutMillis = int.tryParse(lockoutUntilStr);
-    if (lockoutMillis == null) {
-      await _storage.delete(key: _lockoutUntilKey);
-      return PinVerificationResult(success: true);
-    }
-
-    final lockoutUntil = DateTime.fromMillisecondsSinceEpoch(lockoutMillis);
-
-    if (DateTime.now().isBefore(lockoutUntil)) {
-      final remaining = lockoutUntil.difference(DateTime.now()).inSeconds;
-      return PinVerificationResult(
-        success: false,
-        error: 'Too many attempts. Try again in $remaining seconds.',
-        remainingLockoutSeconds: remaining,
-      );
-    }
-
-    // Lockout expired — clear it but keep the escalation cycle count so
-    // repeated lockouts keep getting longer until a successful unlock.
-    await _storage.delete(key: _lockoutUntilKey);
-    await _resetAttempts();
-    return PinVerificationResult(success: true);
-  }
-
-  Future<PinVerificationResult> _handleFailedAttempt() async {
-    final attemptsStr = await _storage.read(key: _attemptCountKey) ?? '0';
-    final attempts = (int.tryParse(attemptsStr) ?? 0) + 1;
-    await _storage.write(key: _attemptCountKey, value: attempts.toString());
-
-    final remainingAttempts = _maxAttempts - attempts;
-
-    if (remainingAttempts <= 0) {
-      final cycleStr = await _storage.read(key: _lockoutCycleCountKey) ?? '0';
-      final cycle = (int.tryParse(cycleStr) ?? 0) + 1;
-      await _storage.write(
-          key: _lockoutCycleCountKey, value: cycle.toString());
-
-      final lockoutSeconds =
-          SecurityService.computeLockoutDurationSeconds(cycle);
-      final lockoutUntil =
-          DateTime.now().add(Duration(seconds: lockoutSeconds));
-      await _storage.write(
-        key: _lockoutUntilKey,
-        value: lockoutUntil.millisecondsSinceEpoch.toString(),
-      );
-      await _storage.delete(key: _attemptCountKey);
-
-      return PinVerificationResult(
-        success: false,
-        error: 'Too many failed attempts. Locked for $lockoutSeconds seconds.',
-        remainingLockoutSeconds: lockoutSeconds,
-      );
-    }
-
-    return PinVerificationResult(
-      success: false,
-      error: 'Incorrect passcode. $remainingAttempts attempts remaining.',
-      remainingAttempts: remainingAttempts,
-    );
-  }
-
-  Future<void> _resetAttempts({bool clearBackoff = false}) async {
-    await _storage.delete(key: _attemptCountKey);
-    await _storage.delete(key: _lockoutUntilKey);
-    if (clearBackoff) {
-      await _storage.delete(key: _lockoutCycleCountKey);
-    }
-  }
-
-  Future<int> getRemainingAttempts() async {
-    final attemptsStr = await _storage.read(key: _attemptCountKey) ?? '0';
-    final attempts = int.tryParse(attemptsStr) ?? 0;
-    return (_maxAttempts - attempts).clamp(0, _maxAttempts);
-  }
-
-  Future<bool> isLockedOut() async {
-    final result = await _checkLockout();
-    return !result.success && result.remainingLockoutSeconds != null;
   }
 
   // ─── Security questions (forgot-passcode recovery) ────────────────────────
@@ -288,9 +220,9 @@ class VaultSecurityService {
     // unlimited-attempt path *around* the vault lockout — the same hole that
     // existed in SecurityService, present here because this state machine was
     // copy-pasted rather than shared.
-    final lockout = await _checkLockout();
-    if (!lockout.success) {
-      return SecurityQuestionsResult(success: false, error: lockout.error);
+    final gate = await _gate.check();
+    if (!gate.allowed) {
+      return SecurityQuestionsResult(success: false, error: gate.error);
     }
 
     if (answers.length != 3) {
@@ -323,11 +255,11 @@ class VaultSecurityService {
     }
 
     if (correctCount >= 2) {
-      await _resetAttempts(clearBackoff: true);
+      await _gate.recordSuccess();
       return SecurityQuestionsResult(success: true);
     }
 
-    await _handleFailedAttempt();
+    await _gate.recordFailure();
     return SecurityQuestionsResult(
       success: false,
       error: '$correctCount/3 answers correct. At least 2 required.',
@@ -353,23 +285,21 @@ class VaultSecurityService {
     }
 
     await _writeNewPasscode(newPin);
-    await _resetAttempts(clearBackoff: true);
+    await _gate.recordSuccess();
     return PinVerificationResult(success: true);
   }
 
-  /// Every key this service may write. Kept exhaustive so the "removePasscode
-  /// clears all vault keys" test fails loudly whenever a new key is added
-  /// without a matching cleanup — which is exactly how it caught
-  /// [_securityAnswersSaltKey].
+  /// Every key this service may write, including the ones its [CredentialGate]
+  /// owns. Kept exhaustive so the "removePasscode clears all vault keys" test
+  /// fails loudly whenever a new key is added without a matching cleanup —
+  /// which is exactly how it caught [_securityAnswersSaltKey].
   @visibleForTesting
-  static const List<String> storageKeysForTesting = [
-    _pinHashKey,
-    _saltKey,
-    _attemptCountKey,
-    _lockoutUntilKey,
-    _lockoutCycleCountKey,
-    _securityQuestionsKey,
-    _securityAnswersKey,
-    _securityAnswersSaltKey,
-  ];
+  List<String> get storageKeysForTesting => [
+        _pinHashKey,
+        _saltKey,
+        _securityQuestionsKey,
+        _securityAnswersKey,
+        _securityAnswersSaltKey,
+        ..._gate.storageKeys,
+      ];
 }

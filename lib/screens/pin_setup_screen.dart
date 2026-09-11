@@ -17,7 +17,7 @@ class PinSetupScreen extends ConsumerStatefulWidget {
 }
 
 class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
-  final _securityService = SecurityService();
+  late final _securityService = ref.read(securityServiceProvider);
   
   // Setup steps
   int _currentStep = 0; // 0: Select questions, 1: Set PIN, 2: Confirm PIN, 3: Answer questions, 4: Biometrics

@@ -2,13 +2,25 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:encrypt/encrypt.dart' as encrypt_lib;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart'
     show compute, debugPrint, visibleForTesting;
 import 'package:local_auth/local_auth.dart';
 import '../config/security_questions.dart';
 import '../config/constants.dart';
+import 'credential_gate.dart';
 import 'pbkdf2.dart';
+
+/// The app-lock security service.
+///
+/// Resolves to the process-wide instance: the unwrapped data key is cached in
+/// memory and every caller must see the same one, and the storage and model
+/// layers reach this service without a Riverpod `ref`. Screens should read it
+/// from here rather than calling the constructor, so a test can supply its own
+/// with a `ProviderScope` override instead of mutating global state.
+final securityServiceProvider =
+    Provider<SecurityService>((ref) => SecurityService());
 
 /// Security service handling PIN hashing, rate limiting, and data encryption.
 ///
@@ -33,8 +45,16 @@ class SecurityService {
   // Cache encryption key in memory after PIN verification (for decrypting existing data)
   Uint8List? _cachedEncryptionKey;
 
+  /// Attempt counting and escalating lockout, shared with the vault credential.
+  late final CredentialGate _gate =
+      CredentialGate(storage: _storage, credentialLabel: 'PIN');
+
+  /// Backoff schedule, exposed here because callers and tests reference it
+  /// through this service. Implemented once, in [CredentialGate].
+  static int computeLockoutDurationSeconds(int cycleCount) =>
+      CredentialGate.computeLockoutDurationSeconds(cycleCount);
+
   // Security constants
-  static const int _maxAttempts = SecurityConstants.maxAttempts;
   static const String _saltKey = 'security_salt';
 
   /// Salt for the PIN-derived *key-encryption key* (KEK). Named for the role it
@@ -42,9 +62,9 @@ class SecurityService {
   /// deriving the same value and their data stays readable.
   static const String _encryptionSaltKey = 'encryption_salt';
   static const String _pinHashKey = 'pin_hash';
-  static const String _attemptCountKey = 'attempt_count';
-  static const String _lockoutUntilKey = 'lockout_until';
-  static const String _lockoutCycleCountKey = 'lockout_cycle_count';
+  // attempt_count / lockout_until / lockout_cycle_count are owned by
+  // [CredentialGate] now; the key names are unchanged so existing installs
+  // keep their counters.
 
   /// The data-encryption key (DEK), sealed under the PIN-derived KEK.
   ///
@@ -69,23 +89,6 @@ class SecurityService {
   /// IV length used when sealing the DEK. Matches [EncryptionService]'s layout.
   static const int _wrapIvLengthBytes = 16;
 
-  /// Exponential backoff lockout duration for a given (1-based) lockout
-  /// [cycleCount]: base * 2^(cycle-1), clamped to
-  /// [SecurityConstants.maxLockoutDurationSeconds].
-  ///
-  /// Cycle 1 returns the base duration, preserving the previous fixed-lockout
-  /// behavior for a first offense. Pure; shared with [VaultSecurityService]
-  /// so both credential gates escalate identically.
-  static int computeLockoutDurationSeconds(int cycleCount) {
-    if (cycleCount <= 1) return SecurityConstants.lockoutDurationSeconds;
-    final exponent = cycleCount - 1;
-    // Guard the shift against overflow / runaway growth before computing.
-    if (exponent >= 20) return SecurityConstants.maxLockoutDurationSeconds;
-    final scaled = SecurityConstants.lockoutDurationSeconds * (1 << exponent);
-    return scaled > SecurityConstants.maxLockoutDurationSeconds
-        ? SecurityConstants.maxLockoutDurationSeconds
-        : scaled;
-  }
 
   // Security questions storage keys
   static const String _securityQuestionsKey = 'security_questions';
@@ -341,10 +344,8 @@ class SecurityService {
   /// Returns [PinVerificationResult] with status and any error message
   Future<PinVerificationResult> verifyPin(String pin) async {
     // Check if locked out
-    final lockoutResult = await _checkLockout();
-    if (!lockoutResult.success) {
-      return lockoutResult;
-    }
+    final gate = await _gate.check();
+    if (!gate.allowed) return _toPinResult(gate);
 
     // Validate PIN format
     if (!_isValidPin(pin)) {
@@ -355,7 +356,7 @@ class SecurityService {
     }
 
     // The PIN hash and salt are independent reads — fetch them concurrently.
-    // (Ordering vs. _checkLockout above is preserved: the lockout gate, which
+    // (Ordering vs. the lockout gate above is preserved: that gate, which
     // has side effects, still runs first.)
     final reads = await readKeysInParallel([_pinHashKey, _saltKey]);
     final storedHash = reads[0];
@@ -393,108 +394,25 @@ class SecurityService {
     final kek = derived[1];
 
     if (!constantTimeEquals(inputHash, storedHash)) {
-      return await _handleFailedAttempt();
+      return _toPinResult(await _gate.recordFailure());
     }
 
     // Correct PIN. Open the envelope (or adopt one, for installs predating it)
     // before clearing the failure state, so a corrupt key store surfaces as an
     // error instead of a silent half-unlock with no usable key.
     _cachedEncryptionKey = await _openOrAdoptDek(kek);
-    await _resetAttempts(clearBackoff: true);
+    await _gate.recordSuccess();
     return PinVerificationResult(success: true);
   }
 
-  /// Check if device is locked out
-  Future<PinVerificationResult> _checkLockout() async {
-    final lockoutUntilStr = await _storage.read(key: _lockoutUntilKey);
-    if (lockoutUntilStr == null) {
-      return PinVerificationResult(success: true);
-    }
-
-    // Stored values are parsed defensively: an unparseable lockout stamp used
-    // to throw straight out of verifyPin, which fails *open* by aborting the
-    // check entirely. Treat corruption as "no active lockout" only after
-    // clearing the bad value, so the counter starts from a known state.
-    final lockoutMillis = int.tryParse(lockoutUntilStr);
-    if (lockoutMillis == null) {
-      await _storage.delete(key: _lockoutUntilKey);
-      return PinVerificationResult(success: true);
-    }
-
-    final lockoutUntil = DateTime.fromMillisecondsSinceEpoch(lockoutMillis);
-
-    if (DateTime.now().isBefore(lockoutUntil)) {
-      final remaining = lockoutUntil.difference(DateTime.now()).inSeconds;
-      return PinVerificationResult(
-        success: false,
-        error: 'Too many attempts. Try again in $remaining seconds.',
-        remainingLockoutSeconds: remaining,
+  /// Adapt a [GateDecision] to this service's public result type.
+  static PinVerificationResult _toPinResult(GateDecision decision) =>
+      PinVerificationResult(
+        success: decision.allowed,
+        error: decision.error,
+        remainingAttempts: decision.remainingAttempts,
+        remainingLockoutSeconds: decision.remainingLockoutSeconds,
       );
-    }
-
-    // Lockout expired - clear it
-    await _storage.delete(key: _lockoutUntilKey);
-    await _resetAttempts();
-    
-    return PinVerificationResult(success: true);
-  }
-
-  /// Handle failed PIN attempt
-  Future<PinVerificationResult> _handleFailedAttempt() async {
-    final attemptsStr = await _storage.read(key: _attemptCountKey) ?? '0';
-    // A corrupt counter must not crash the failure path — that would let an
-    // attacker disable attempt counting by corrupting one value.
-    final attempts = (int.tryParse(attemptsStr) ?? 0) + 1;
-
-    await _storage.write(key: _attemptCountKey, value: attempts.toString());
-
-    final remainingAttempts = _maxAttempts - attempts;
-
-    if (remainingAttempts <= 0) {
-      // Escalating lockout — bump the persisted cycle count so each successive
-      // lockout (within the same failure streak) lasts longer. The cycle count
-      // survives lockout expiry and is only cleared on a successful unlock.
-      final cycleStr = await _storage.read(key: _lockoutCycleCountKey) ?? '0';
-      final cycle = (int.tryParse(cycleStr) ?? 0) + 1;
-      await _storage.write(key: _lockoutCycleCountKey, value: cycle.toString());
-
-      final lockoutSeconds = computeLockoutDurationSeconds(cycle);
-      final lockoutUntil = DateTime.now().add(
-        Duration(seconds: lockoutSeconds),
-      );
-      await _storage.write(
-        key: _lockoutUntilKey,
-        value: lockoutUntil.millisecondsSinceEpoch.toString(),
-      );
-      await _storage.delete(key: _attemptCountKey);
-
-      return PinVerificationResult(
-        success: false,
-        error: 'Too many failed attempts. Locked for $lockoutSeconds seconds.',
-        remainingLockoutSeconds: lockoutSeconds,
-      );
-    }
-
-    return PinVerificationResult(
-      success: false,
-      error: 'Incorrect PIN. $remainingAttempts attempts remaining.',
-      remainingAttempts: remainingAttempts,
-    );
-  }
-
-  /// Reset failed attempt counter (and the active lockout).
-  ///
-  /// [clearBackoff] additionally resets the escalating lockout cycle count;
-  /// pass `true` only when the user has successfully proven identity (correct
-  /// PIN, biometric/security-question reset, or PIN removal). It must stay
-  /// `false` on mere lockout expiry so repeated lock cycles keep escalating.
-  Future<void> _resetAttempts({bool clearBackoff = false}) async {
-    await _storage.delete(key: _attemptCountKey);
-    await _storage.delete(key: _lockoutUntilKey);
-    if (clearBackoff) {
-      await _storage.delete(key: _lockoutCycleCountKey);
-    }
-  }
 
   /// Change PIN (requires old PIN verification)
   Future<PinVerificationResult> changePin(String oldPin, String newPin) async {
@@ -575,7 +493,7 @@ class SecurityService {
     await _storage.delete(key: _rekeyPendingKey);
 
     _cachedEncryptionKey = freshDek;
-    await _resetAttempts(clearBackoff: true);
+    await _gate.recordSuccess();
     return hadEncryptedData;
   }
 
@@ -607,7 +525,7 @@ class SecurityService {
     await _storage.delete(key: _wrappedDekKey);
     await _storage.delete(key: _rekeyPendingKey);
     _cachedEncryptionKey = null;
-    await _resetAttempts(clearBackoff: true);
+    await _gate.recordSuccess();
 
     return PinVerificationResult(success: true);
   }
@@ -617,18 +535,7 @@ class SecurityService {
     return RegExp('^\\d{${SecurityConstants.pinLength}}\$').hasMatch(pin);
   }
 
-  /// Get remaining attempts before lockout
-  Future<int> getRemainingAttempts() async {
-    final attemptsStr = await _storage.read(key: _attemptCountKey) ?? '0';
-    final attempts = int.tryParse(attemptsStr) ?? 0;
-    return (_maxAttempts - attempts).clamp(0, _maxAttempts);
-  }
 
-  /// Check if currently locked out
-  Future<bool> isLockedOut() async {
-    final result = await _checkLockout();
-    return !result.success && result.remainingLockoutSeconds != null;
-  }
 
   // ==================== SECURITY QUESTIONS ====================
 
@@ -680,12 +587,9 @@ class SecurityService {
     // Without this gate it was an unlimited-attempt bypass *around* the PIN
     // lockout: two of three low-entropy answers, no counter, and a success then
     // cleared whatever backoff had been accrued on the PIN itself.
-    final lockout = await _checkLockout();
-    if (!lockout.success) {
-      return SecurityQuestionsResult(
-        success: false,
-        error: lockout.error,
-      );
+    final gate = await _gate.check();
+    if (!gate.allowed) {
+      return SecurityQuestionsResult(success: false, error: gate.error);
     }
 
     if (answers.length != 3) {
@@ -726,13 +630,13 @@ class SecurityService {
 
     // Require at least 2 out of 3 correct
     if (correctCount >= 2) {
-      await _resetAttempts(clearBackoff: true);
+      await _gate.recordSuccess();
       return SecurityQuestionsResult(success: true);
     }
 
     // A wrong answer set costs an attempt from the same budget as a wrong PIN,
     // so grinding recovery escalates into the same lockout.
-    await _handleFailedAttempt();
+    await _gate.recordFailure();
     return SecurityQuestionsResult(
       success: false,
       error: '$correctCount/3 answers correct. At least 2 required.',

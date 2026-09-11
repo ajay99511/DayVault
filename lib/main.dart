@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -191,6 +192,9 @@ class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
   /// is still in place in that case, so this is reported rather than swallowed.
   String? _initFailure;
 
+  /// Guards the one-shot legacy-entry migration; see [_migrateLegacyEntries].
+  bool _legacyMigrationStarted = false;
+
   // Auto-lock policy (deliberate):
   //
   // The vault unlocks ONCE per process and stays unlocked for the entire
@@ -272,6 +276,22 @@ class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
     }
   }
 
+  /// Convert any legacy-encrypted journal rows to plain text, once per launch.
+  ///
+  /// Runs after the vault is open, because decrypting a version-1 row needs the
+  /// PIN-derived key. It is safe to run with no key — rows that cannot be read
+  /// are left untouched — and safe to run repeatedly, so a failure here costs
+  /// nothing but a retry next launch and must never block startup.
+  Future<void> _migrateLegacyEntries() async {
+    if (_legacyMigrationStarted) return;
+    _legacyMigrationStarted = true;
+    try {
+      await ref.read(storageServiceProvider).migrateLegacyEncryptedEntries();
+    } catch (e, st) {
+      debugPrint('Legacy entry migration skipped: $e\n$st');
+    }
+  }
+
   Future<void> _checkSecurity() async {
     // If migration failed or cancelled, we might not have a storage provider ready
     try {
@@ -311,6 +331,11 @@ class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
         onUnlock: () => ref.read(authStateProvider.notifier).authenticate(),
       );
     }
+
+    // Past the gate, so the decryption key (if any) is available. Fire and
+    // forget: this must not delay the first frame, and it is idempotent.
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => unawaited(_migrateLegacyEntries()));
 
     return const MainShell();
   }

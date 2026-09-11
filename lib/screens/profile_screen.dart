@@ -95,7 +95,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   void _toggleSecurity() async {
-    final securityService = SecurityService();
+    final securityService = ref.read(securityServiceProvider);
     final status = await securityService.getVaultStatus(settings.securityEnabled);
 
     if (status.needsSetup) {
@@ -119,7 +119,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _showReactivationVerification() async {
-    final securityService = SecurityService();
+    final securityService = ref.read(securityServiceProvider);
 
     if (settings.biometricsEnabled) {
       try {
@@ -216,7 +216,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   void _showDisableSecurityVerification() async {
-    final securityService = SecurityService();
+    final securityService = ref.read(securityServiceProvider);
 
     if (settings.biometricsEnabled) {
       try {

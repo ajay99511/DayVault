@@ -169,6 +169,52 @@ class WebStorageService extends StorageService {
     _saveJournal(entries);
   }
 
+  /// See [StorageService.migrateLegacyEncryptedEntries].
+  ///
+  /// The web backend persists entries as plain JSON, so only rows written by an
+  /// older build that encrypted private entries can carry an envelope.
+  @override
+  Future<int> migrateLegacyEncryptedEntries() async {
+    final stored = _loadJournal();
+    var changed = 0;
+
+    final migrated = <JournalEntry>[];
+    for (final entry in stored) {
+      final needsWork = EncryptionService.looksEncrypted(entry.headline) ||
+          EncryptionService.looksEncrypted(entry.content) ||
+          EncryptionService.looksEncrypted(entry.feeling ?? '');
+      if (!needsWork) {
+        migrated.add(entry);
+        continue;
+      }
+
+      final headline = await EncryptionService().decrypt(entry.headline);
+      final content = await EncryptionService().decrypt(entry.content);
+      final feeling = entry.feeling == null
+          ? null
+          : await EncryptionService().decrypt(entry.feeling!);
+
+      // Only rewrite when decryption actually yielded different text; an
+      // unreadable value is left exactly as stored.
+      if (headline == entry.headline &&
+          content == entry.content &&
+          (feeling ?? '') == (entry.feeling ?? '')) {
+        migrated.add(entry);
+        continue;
+      }
+
+      migrated.add(entry.copyWith(
+        headline: headline,
+        content: content,
+        feeling: feeling,
+      ));
+      changed++;
+    }
+
+    if (changed > 0) _saveJournal(migrated);
+    return changed;
+  }
+
   @override
   Future<Map<String, int>> getTagCounts() async {
     final entries = await getJournal(privacy: PrivacyFilter.excludePrivate);

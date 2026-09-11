@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:memory_palace/config/constants.dart';
 import 'package:memory_palace/services/security_service.dart'
     show PinVerificationResult;
 import 'package:memory_palace/services/vault_security_service.dart';
@@ -128,23 +127,37 @@ void main() {
       expect(oneRight.correctCount, 1);
     });
 
-    test('wrong answers consume the passcode lockout budget', () async {
-      await vault.setPasscode('1234');
+    // These two prove recovery is *wired into* the shared lockout budget. The
+    // escalation behaviour itself lives in credential_gate_test.dart, which
+    // needs no PBKDF2 — driving a full lockout through here cost fifteen
+    // 100k-iteration derivations and tripped the 30s per-test timeout under
+    // full-suite concurrency.
+    test('a wrong answer set consumes an attempt from the shared budget',
+        () async {
       await vault.setSecurityQuestions(
           ['q1', 'q2', 'q3'], ['Rex', 'Paris', 'Blue']);
+      expect(store.containsKey('vault_attempt_count'), isFalse);
 
-      for (var i = 0; i < SecurityConstants.maxAttempts; i++) {
-        final attempt =
-            await vault.verifySecurityQuestions(['no', 'nope', 'wrong']);
-        expect(attempt.success, isFalse);
-      }
+      final attempt =
+          await vault.verifySecurityQuestions(['no', 'nope', 'wrong']);
 
+      expect(attempt.success, isFalse);
       // Recovery had no attempt counter at all before this: it was an
       // unlimited-attempt path around the vault lockout.
-      expect(store.containsKey('vault_lockout_until'), isTrue);
+      expect(store['vault_attempt_count'], '1');
+    });
+
+    test('an active lockout refuses even correct answers', () async {
+      await vault.setSecurityQuestions(
+          ['q1', 'q2', 'q3'], ['Rex', 'Paris', 'Blue']);
+      store['vault_lockout_until'] = DateTime.now()
+          .add(const Duration(minutes: 5))
+          .millisecondsSinceEpoch
+          .toString();
 
       final locked =
           await vault.verifySecurityQuestions(['Rex', 'Paris', 'Blue']);
+
       expect(locked.success, isFalse,
           reason: 'correct answers are still refused while locked out');
       expect(locked.error, contains('Too many attempts'));

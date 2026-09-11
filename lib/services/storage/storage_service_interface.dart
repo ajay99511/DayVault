@@ -76,6 +76,19 @@ abstract class StorageService {
   /// Batch upsert of journal entries in a single write.
   Future<void> putManyJournalEntries(List<JournalEntry> entries);
 
+  /// Rewrite any legacy-encrypted journal row as plain text, returning the
+  /// number of rows changed.
+  ///
+  /// Journal content is stored unencrypted by design — the Privacy Vault
+  /// separates entries behind a PIN rather than making them unreadable — but
+  /// rows written by older builds may still carry an encryption envelope.
+  /// Converting them once lets the read path drop its cipher entirely.
+  ///
+  /// Implementations must be idempotent, and must leave a row untouched when
+  /// they cannot actually decrypt it: unreadable data is never to be
+  /// overwritten with its own ciphertext.
+  Future<int> migrateLegacyEncryptedEntries();
+
   // ─── Tags ─────────────────────────────────────────────────────────────
 
   /// Distinct tags across all entries with their occurrence counts, keyed by the
