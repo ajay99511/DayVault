@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../config/constants.dart';
 import '../models/types.dart';
+import '../providers/journal_revision_provider.dart';
 import '../services/storage_service.dart';
 import '../services/vault_security_service.dart';
 import '../theme/app_tokens.dart';

@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:memory_palace/services/encryption_service.dart';
 import 'package:memory_palace/services/security_service.dart';
 import 'package:mockito/annotations.dart';
-import 'package:mockito/mockito.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 @GenerateNiceMocks([MockSpec<FlutterSecureStorage>()])

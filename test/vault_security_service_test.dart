@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:memory_palace/config/constants.dart';
 import 'package:memory_palace/services/security_service.dart'
     show PinVerificationResult;
 import 'package:memory_palace/services/vault_security_service.dart';
@@ -123,6 +126,38 @@ void main() {
           await vault.verifySecurityQuestions(['Rex', 'nope', 'wrong']);
       expect(oneRight.success, isFalse);
       expect(oneRight.correctCount, 1);
+    });
+
+    test('wrong answers consume the passcode lockout budget', () async {
+      await vault.setPasscode('1234');
+      await vault.setSecurityQuestions(
+          ['q1', 'q2', 'q3'], ['Rex', 'Paris', 'Blue']);
+
+      for (var i = 0; i < SecurityConstants.maxAttempts; i++) {
+        final attempt =
+            await vault.verifySecurityQuestions(['no', 'nope', 'wrong']);
+        expect(attempt.success, isFalse);
+      }
+
+      // Recovery had no attempt counter at all before this: it was an
+      // unlimited-attempt path around the vault lockout.
+      expect(store.containsKey('vault_lockout_until'), isTrue);
+
+      final locked =
+          await vault.verifySecurityQuestions(['Rex', 'Paris', 'Blue']);
+      expect(locked.success, isFalse,
+          reason: 'correct answers are still refused while locked out');
+      expect(locked.error, contains('Too many attempts'));
+    });
+
+    test('identical answers do not hash identically', () async {
+      await vault.setPasscode('1234');
+      await vault
+          .setSecurityQuestions(['q1', 'q2', 'q3'], ['same', 'same', 'other']);
+
+      final stored =
+          (jsonDecode(store['vault_security_answers']!) as List).cast<String>();
+      expect(stored[0], isNot(equals(stored[1])));
     });
 
     test('resetPasscodeViaSecurityQuestions replaces the passcode', () async {

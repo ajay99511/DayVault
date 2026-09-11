@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memory_palace/models/types.dart';
-import 'package:memory_palace/services/storage_service.dart';
+import 'package:memory_palace/domain/journal_rules.dart';
 
 JournalEntry _e(String id, {String headline = 'H', List<String> tags = const []}) =>
     JournalEntry(
@@ -15,19 +15,19 @@ JournalEntry _e(String id, {String headline = 'H', List<String> tags = const []}
 
 void main() {
   // ─── 11.1 putManyJournalEntries dedup logic ──────────────────────────────
-  group('StorageService.dedupeByEntryIdKeepingLast', () {
+  group('journalRules.dedupeByEntryIdKeepingLast', () {
     test('empty input yields empty output', () {
-      expect(StorageService.dedupeByEntryIdKeepingLast(const []), isEmpty);
+      expect(dedupeByEntryIdKeepingLast(const []), isEmpty);
     });
 
     test('distinct ids are preserved (one row each)', () {
       final out =
-          StorageService.dedupeByEntryIdKeepingLast([_e('a'), _e('b'), _e('c')]);
+          dedupeByEntryIdKeepingLast([_e('a'), _e('b'), _e('c')]);
       expect(out.map((e) => e.id).toList(), ['a', 'b', 'c']);
     });
 
     test('duplicate ids collapse to the last occurrence (last-write-wins)', () {
-      final out = StorageService.dedupeByEntryIdKeepingLast([
+      final out = dedupeByEntryIdKeepingLast([
         _e('a', headline: 'first'),
         _e('b'),
         _e('a', headline: 'last'),
@@ -43,9 +43,9 @@ void main() {
   });
 
   // ─── Tag management transforms ───────────────────────────────────────────
-  group('StorageService.applyTagRename', () {
+  group('journalRules.applyTagRename', () {
     test('renames a tag across entries (case-insensitive), only changed rows', () {
-      final out = StorageService.applyTagRename(
+      final out = applyTagRename(
         [
           _e('a', tags: ['Work', 'life']),
           _e('b', tags: ['health']), // untouched
@@ -60,7 +60,7 @@ void main() {
     });
 
     test('merges into an existing tag without duplicating', () {
-      final out = StorageService.applyTagRename(
+      final out = applyTagRename(
         [_e('a', tags: ['work', 'Career'])],
         'work',
         'career',
@@ -71,16 +71,16 @@ void main() {
 
     test('empty target is a no-op', () {
       expect(
-        StorageService.applyTagRename([_e('a', tags: ['work'])], 'work', '   '),
+        applyTagRename([_e('a', tags: ['work'])], 'work', '   '),
         isEmpty,
       );
     });
   });
 
-  group('StorageService.applyTagDelete', () {
+  group('journalRules.applyTagDelete', () {
     test('removes a tag (case-insensitive) from only the entries that carry it',
         () {
-      final out = StorageService.applyTagDelete(
+      final out = applyTagDelete(
         [
           _e('a', tags: ['Work', 'life']),
           _e('b', tags: ['health']),
@@ -92,9 +92,9 @@ void main() {
     });
   });
 
-  group('StorageService.computeStreak', () {
+  group('journalRules.computeStreak', () {
     test('returns 0 for empty entries', () {
-      expect(StorageService.computeStreak([]), 0);
+      expect(computeJournalStreak([], today: DateTime.now()), 0);
     });
 
     test('returns 1 if only entry is today', () {
@@ -109,7 +109,7 @@ void main() {
           mood: Mood.happy,
         ),
       ];
-      expect(StorageService.computeStreak(entries), 1);
+      expect(computeJournalStreak(entries, today: DateTime.now()), 1);
     });
 
     test('returns 1 if only entry is yesterday', () {
@@ -124,7 +124,7 @@ void main() {
           mood: Mood.happy,
         ),
       ];
-      expect(StorageService.computeStreak(entries), 1);
+      expect(computeJournalStreak(entries, today: DateTime.now()), 1);
     });
 
     test('returns 0 if only entry is 2 days ago', () {
@@ -139,7 +139,7 @@ void main() {
           mood: Mood.happy,
         ),
       ];
-      expect(StorageService.computeStreak(entries), 0);
+      expect(computeJournalStreak(entries, today: DateTime.now()), 0);
     });
 
     test('counts consecutive days correctly', () {
@@ -152,7 +152,7 @@ void main() {
         content: 'C',
         mood: Mood.happy,
       ));
-      expect(StorageService.computeStreak(entries), 7);
+      expect(computeJournalStreak(entries, today: DateTime.now()), 7);
     });
 
     test('stops at gap', () {
@@ -162,7 +162,7 @@ void main() {
         // skip yesterday
         JournalEntry(id: '2', type: EntryType.story, date: now.subtract(const Duration(days: 2)), headline: 'H', content: 'C', mood: Mood.happy),
       ];
-      expect(StorageService.computeStreak(entries), 1);
+      expect(computeJournalStreak(entries, today: DateTime.now()), 1);
     });
 
     test('order-independence', () {
@@ -171,7 +171,7 @@ void main() {
         JournalEntry(id: '1', type: EntryType.story, date: now, headline: 'H', content: 'C', mood: Mood.happy),
         JournalEntry(id: '2', type: EntryType.story, date: now.subtract(const Duration(days: 1)), headline: 'H', content: 'C', mood: Mood.happy),
       ];
-      expect(StorageService.computeStreak(entries.reversed.toList()), 2);
+      expect(computeJournalStreak(entries.reversed.toList(), today: DateTime.now()), 2);
     });
   });
 }

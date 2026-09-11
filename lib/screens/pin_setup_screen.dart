@@ -520,15 +520,15 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
   }
 
   Widget _buildBiometricSetup() {
-    return Column(
+    return const Column(
       children: [
-        const Icon(
+        Icon(
           Icons.fingerprint,
           color: AppColors.indigo500,
           size: 64,
         ),
-        const SizedBox(height: 24),
-        const Text(
+        SizedBox(height: 24),
+        Text(
           'Fast & Secure Access',
           style: TextStyle(
             color: Colors.white,
@@ -536,8 +536,8 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 12),
-        const Text(
+        SizedBox(height: 12),
+        Text(
           'Would you like to use biometric authentication (fingerprint/face) to unlock DayVault? You can always use your PIN as a backup.',
           textAlign: TextAlign.center,
           style: TextStyle(

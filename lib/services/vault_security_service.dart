@@ -41,6 +41,11 @@ class VaultSecurityService {
   static const String _securityQuestionsKey = 'vault_security_questions';
   static const String _securityAnswersKey = 'vault_security_answers';
 
+  /// Dedicated salt for recovery-answer hashes, so rotating the passcode salt
+  /// can never invalidate recovery. Installs predating this key keep verifying
+  /// under the old shared-salt scheme — see [verifySecurityQuestions].
+  static const String _securityAnswersSaltKey = 'vault_security_answers_salt';
+
   String _generateSalt() {
     final random = Random.secure();
     final saltBytes = List<int>.generate(16, (_) => random.nextInt(256));
@@ -99,7 +104,7 @@ class VaultSecurityService {
     final salt = await _storage.read(key: _saltKey) ?? '';
     final inputHash = await _hash(pin, salt);
 
-    if (inputHash == storedHash) {
+    if (SecurityService.constantTimeEquals(inputHash, storedHash)) {
       await _resetAttempts(clearBackoff: true);
       return PinVerificationResult(success: true);
     }
@@ -135,6 +140,7 @@ class VaultSecurityService {
     await _storage.delete(key: _saltKey);
     await _storage.delete(key: _securityQuestionsKey);
     await _storage.delete(key: _securityAnswersKey);
+    await _storage.delete(key: _securityAnswersSaltKey);
     await _resetAttempts(clearBackoff: true);
     return PinVerificationResult(success: true);
   }
@@ -153,8 +159,15 @@ class VaultSecurityService {
     final lockoutUntilStr = await _storage.read(key: _lockoutUntilKey);
     if (lockoutUntilStr == null) return PinVerificationResult(success: true);
 
-    final lockoutUntil =
-        DateTime.fromMillisecondsSinceEpoch(int.parse(lockoutUntilStr));
+    // A corrupt stamp used to throw straight out of verify, which fails *open*
+    // by skipping the check. Clear it and treat it as "no lockout" instead.
+    final lockoutMillis = int.tryParse(lockoutUntilStr);
+    if (lockoutMillis == null) {
+      await _storage.delete(key: _lockoutUntilKey);
+      return PinVerificationResult(success: true);
+    }
+
+    final lockoutUntil = DateTime.fromMillisecondsSinceEpoch(lockoutMillis);
 
     if (DateTime.now().isBefore(lockoutUntil)) {
       final remaining = lockoutUntil.difference(DateTime.now()).inSeconds;
@@ -174,7 +187,7 @@ class VaultSecurityService {
 
   Future<PinVerificationResult> _handleFailedAttempt() async {
     final attemptsStr = await _storage.read(key: _attemptCountKey) ?? '0';
-    final attempts = int.parse(attemptsStr) + 1;
+    final attempts = (int.tryParse(attemptsStr) ?? 0) + 1;
     await _storage.write(key: _attemptCountKey, value: attempts.toString());
 
     final remainingAttempts = _maxAttempts - attempts;
@@ -219,7 +232,7 @@ class VaultSecurityService {
 
   Future<int> getRemainingAttempts() async {
     final attemptsStr = await _storage.read(key: _attemptCountKey) ?? '0';
-    final attempts = int.parse(attemptsStr);
+    final attempts = int.tryParse(attemptsStr) ?? 0;
     return (_maxAttempts - attempts).clamp(0, _maxAttempts);
   }
 
@@ -239,21 +252,24 @@ class VaultSecurityService {
       List<String> questions, List<String> answers) async {
     if (questions.length != 3 || answers.length != 3) return false;
 
-    final salt = await _storage.read(key: _saltKey) ?? _generateSalt();
-    await _storage.write(key: _saltKey, value: salt);
-
+    final answersSalt = _generateSalt();
     final hashedAnswers = <String>[];
-    for (final answer in answers) {
-      final normalized = SecurityQuestions.normalizeAnswer(answer);
-      hashedAnswers.add(await _hash(normalized, salt));
+    for (var i = 0; i < answers.length; i++) {
+      hashedAnswers.add(await _hashAnswerAt(answers[i], answersSalt, i));
     }
 
+    await _storage.write(key: _securityAnswersSaltKey, value: answersSalt);
     await _storage.write(
         key: _securityQuestionsKey, value: jsonEncode(questions));
     await _storage.write(
         key: _securityAnswersKey, value: jsonEncode(hashedAnswers));
     return true;
   }
+
+  /// Hash the answer at [index] under a per-index salt derived from
+  /// [answersSalt], so two identical answers do not hash identically.
+  Future<String> _hashAnswerAt(String answer, String answersSalt, int index) =>
+      _hash(SecurityQuestions.normalizeAnswer(answer), '$answersSalt:$index');
 
   Future<List<String>> getSecurityQuestions() async {
     final questionsJson = await _storage.read(key: _securityQuestionsKey);
@@ -268,6 +284,15 @@ class VaultSecurityService {
   /// Verify recovery answers — at least 2 of 3 must match.
   Future<SecurityQuestionsResult> verifySecurityQuestions(
       List<String> answers) async {
+    // Recovery shares the passcode's lockout budget. Without this it was an
+    // unlimited-attempt path *around* the vault lockout — the same hole that
+    // existed in SecurityService, present here because this state machine was
+    // copy-pasted rather than shared.
+    final lockout = await _checkLockout();
+    if (!lockout.success) {
+      return SecurityQuestionsResult(success: false, error: lockout.error);
+    }
+
     if (answers.length != 3) {
       return SecurityQuestionsResult(
           success: false, error: 'Must provide exactly 3 answers');
@@ -281,17 +306,28 @@ class VaultSecurityService {
     }
 
     final List<dynamic> storedHashes = jsonDecode(answersJson);
-    final salt = await _storage.read(key: _saltKey) ?? '';
+    final answersSalt = await _storage.read(key: _securityAnswersSaltKey);
+    final legacySalt = await _storage.read(key: _saltKey) ?? '';
 
     int correctCount = 0;
-    for (int i = 0; i < answers.length; i++) {
-      final normalized = SecurityQuestions.normalizeAnswer(answers[i]);
-      if (await _hash(normalized, salt) == storedHashes[i]) {
+    for (int i = 0; i < answers.length && i < storedHashes.length; i++) {
+      final hashed = answersSalt == null
+          // Install predating the dedicated answers salt.
+          ? await _hash(
+              SecurityQuestions.normalizeAnswer(answers[i]), legacySalt)
+          : await _hashAnswerAt(answers[i], answersSalt, i);
+
+      if (SecurityService.constantTimeEquals(hashed, storedHashes[i] as String)) {
         correctCount++;
       }
     }
 
-    if (correctCount >= 2) return SecurityQuestionsResult(success: true);
+    if (correctCount >= 2) {
+      await _resetAttempts(clearBackoff: true);
+      return SecurityQuestionsResult(success: true);
+    }
+
+    await _handleFailedAttempt();
     return SecurityQuestionsResult(
       success: false,
       error: '$correctCount/3 answers correct. At least 2 required.',
@@ -321,6 +357,10 @@ class VaultSecurityService {
     return PinVerificationResult(success: true);
   }
 
+  /// Every key this service may write. Kept exhaustive so the "removePasscode
+  /// clears all vault keys" test fails loudly whenever a new key is added
+  /// without a matching cleanup — which is exactly how it caught
+  /// [_securityAnswersSaltKey].
   @visibleForTesting
   static const List<String> storageKeysForTesting = [
     _pinHashKey,
@@ -330,5 +370,6 @@ class VaultSecurityService {
     _lockoutCycleCountKey,
     _securityQuestionsKey,
     _securityAnswersKey,
+    _securityAnswersSaltKey,
   ];
 }

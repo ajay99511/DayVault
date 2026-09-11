@@ -3,24 +3,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:memory_palace/main.dart';
 import 'package:memory_palace/services/storage_service.dart';
-import 'package:memory_palace/services/security_service.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:memory_palace/models/types.dart';
 import 'package:memory_palace/models/paged_result.dart';
 
-@GenerateNiceMocks([MockSpec<StorageService>(), MockSpec<FlutterSecureStorage>()])
+@GenerateNiceMocks([MockSpec<StorageService>()])
 import 'root_orchestrator_test.mocks.dart';
 
 void main() {
   late MockStorageService mockStorageService;
-  late MockFlutterSecureStorage mockSecureStorage;
 
   setUp(() {
     mockStorageService = MockStorageService();
-    mockSecureStorage = MockFlutterSecureStorage();
-    
+
     // Setup default responses
     when(mockStorageService.getSettings()).thenReturn(const UserSettings(securityEnabled: false));
 

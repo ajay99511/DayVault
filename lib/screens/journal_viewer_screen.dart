@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
+import '../providers/journal_revision_provider.dart';
 import '../services/storage_service.dart';
 import '../services/vault_security_service.dart';
 import 'vault_passcode_setup_screen.dart';

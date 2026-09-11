@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
+import '../providers/journal_revision_provider.dart';
 import '../services/storage_service.dart';
 import '../services/image_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/types.dart';
 import '../config/constants.dart';
+import '../utils/dialog_controllers.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/glass_widgets.dart';
 import '../widgets/image_widgets.dart';
@@ -91,7 +93,8 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     int selectedColor = existingCat?.colorValue ?? 0;
     final isEditing = existingCat != null;
 
-    final result = await showDialog<bool>(
+    final result = await withDisposedControllers([titleCtrl], () =>
+        showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(builder: (ctx, setModalState) {
         return AlertDialog(
@@ -202,7 +205,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
           ],
         );
       }),
-    );
+    ));
 
     if (result == true) {
       await _load();
@@ -292,7 +295,9 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     ImageReference? selectedImage = existingItem?.image;
     final isEditing = existingItem != null;
 
-    final result = await showModalBottomSheet<RankedItem>(
+    final result = await withDisposedControllers(
+        [nameCtrl, subtitleCtrl, notesCtrl],
+        () => showModalBottomSheet<RankedItem>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -569,7 +574,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
           },
         );
       },
-    );
+    ));
 
     if (result == null) return;
 
@@ -1274,6 +1279,12 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                         return ReorderableListView.builder(
                           padding: const EdgeInsets.symmetric(horizontal: 24),
                           proxyDecorator: _proxyDecorator,
+                          // Deliberately still on the deprecated `onReorder` —
+                          // see the matching note in entry_editor.dart. Here the
+                          // compensation lives in _onReorder, and getting it
+                          // wrong would corrupt the rank-drift snapshots this
+                          // screen records on every manual reorder.
+                          // ignore: deprecated_member_use
                           onReorder: (oldIndex, newIndex) {
                             if (activeId != cat.id) {
                               setState(() => activeId = cat.id);
@@ -1719,7 +1730,8 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     final urlCtrl = TextEditingController();
     String? error;
     bool validating = false;
-    return showDialog<ImageReference?>(
+    return withDisposedControllers([urlCtrl], () =>
+        showDialog<ImageReference?>(
       context: context,
       builder: (dctx) => StatefulBuilder(builder: (dctx, setD) {
         return AlertDialog(
@@ -1783,7 +1795,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
           ],
         );
       }),
-    );
+    ));
   }
 
   Widget _dialogLabel(BuildContext ctx, String text) {

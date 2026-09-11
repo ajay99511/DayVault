@@ -7,6 +7,7 @@ import '../services/security_service.dart';
 import '../services/storage_service.dart';
 import '../widgets/glass_widgets.dart';
 import '../config/security_questions.dart';
+import '../utils/dialog_controllers.dart';
 
 class PinManagementScreen extends ConsumerStatefulWidget {
   const PinManagementScreen({super.key});
@@ -22,7 +23,6 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
   bool _pinIsSet = false;
   bool _securityQuestionsSet = false;
   bool _biometricAvailable = false;
-  String _biometricStatus = '';
   late UserSettings _settings;
 
   @override
@@ -35,7 +35,6 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
     final pinSet = await _securityService.isPinSet();
     final questionsSet = await _securityService.areSecurityQuestionsSet();
     final bioAvailable = await _securityService.isBiometricAvailable();
-    final bioStatus = await _securityService.getBiometricStatus();
     _settings = ref.read(storageServiceProvider).getSettings();
 
     if (mounted) {
@@ -43,11 +42,11 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
         _pinIsSet = pinSet;
         _securityQuestionsSet = questionsSet;
         _biometricAvailable = bioAvailable;
-        _biometricStatus = bioStatus;
         _isLoading = false;
       });
     }
   }
+
 
   void _toggleBiometrics(bool value) async {
     if (value) {
@@ -76,7 +75,7 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
     String? error;
     int step = 0; // 0 = select, 1 = answer
 
-    await showDialog(
+    await withDisposedControllers(answerControllers, () => showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
@@ -103,8 +102,11 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
                       title: Text(q, style: TextStyle(color: isSelected ? Colors.white : AppColors.slate400, fontSize: 13)),
                       leading: Icon(isSelected ? Icons.check_circle : Icons.radio_button_unchecked, color: isSelected ? AppColors.indigo500 : AppColors.slate600),
                       onTap: () => setDialogState(() {
-                        if (isSelected) selected.remove(q);
-                        else if (selected.length < 3) selected.add(q);
+                        if (isSelected) {
+                          selected.remove(q);
+                        } else if (selected.length < 3) {
+                          selected.add(q);
+                        }
                       }),
                     );
                   })
@@ -141,6 +143,7 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
                     return;
                   }
                   final success = await _securityService.setSecurityQuestions(selected, answers);
+                  if (!ctx.mounted) return;
                   if (success) {
                     Navigator.pop(ctx);
                     if (mounted) {
@@ -158,14 +161,14 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Future<void> _showDisableSecurityDialog() async {
     final pinController = TextEditingController();
     String? error;
 
-    await showDialog(
+    await withDisposedControllers([pinController], () => showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
@@ -211,7 +214,7 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Future<void> _showChangePinDialog() async {
@@ -220,7 +223,9 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
     final confirmPinController = TextEditingController();
     String? error;
 
-    await showDialog(
+    await withDisposedControllers(
+        [oldPinController, newPinController, confirmPinController],
+        () => showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
@@ -256,6 +261,7 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
               return;
             }
             final result = await _securityService.changePin(oldPinController.text, newPinController.text);
+            if (!ctx.mounted) return;
             if (result.success) {
               Navigator.pop(ctx);
               if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PIN changed successfully'), backgroundColor: AppColors.emerald500));
@@ -269,18 +275,22 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
       ],
         ),
       ),
-    );
+    ));
   }
 
   Future<void> _showResetPinViaQuestionsDialog() async {
     if (!_securityQuestionsSet) return;
     final questions = await _securityService.getSecurityQuestions();
+    // Guard before allocating the controllers so a screen popped during the
+    // read cannot leave them orphaned.
+    if (!mounted) return;
     final answerControllers = List.generate(questions.length, (_) => TextEditingController());
     final newPinController = TextEditingController();
     String? error;
     int step = 0;
 
-    await showDialog(
+    await withDisposedControllers([...answerControllers, newPinController],
+        () => showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
@@ -313,19 +323,26 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
               onPressed: () async {
                 if (step == 0) {
                   final result = await _securityService.verifySecurityQuestions(answerControllers.map((c) => c.text).toList());
-                  if (result.success) setDialogState(() => step = 1);
-                  else setDialogState(() => error = result.error ?? 'Verification failed');
+                  if (!ctx.mounted) return;
+                  if (result.success) {
+                    setDialogState(() => step = 1);
+                  } else {
+                    setDialogState(() => error = result.error ?? 'Verification failed');
+                  }
                 } else {
                   if (newPinController.text.length < SecurityConstants.pinLength) {
                     setDialogState(() => error = 'PIN too short');
                     return;
                   }
                   final result = await _securityService.resetPinViaSecurityQuestions(answerControllers.map((c) => c.text).toList(), newPinController.text);
+                  if (!ctx.mounted) return;
                   if (result.success) {
                     Navigator.pop(ctx);
                     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PIN reset successfully'), backgroundColor: AppColors.emerald500));
                     _loadSecurityStatus();
-                  } else setDialogState(() => error = result.error ?? 'Failed to reset');
+                  } else {
+                    setDialogState(() => error = result.error ?? 'Failed to reset');
+                  }
                 }
               },
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.indigo500),
@@ -334,7 +351,7 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
           ],
         ),
       ),
-    );
+    ));
   }
 
   @override
@@ -383,7 +400,7 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
                       secondary: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: AppColors.emerald500.withValues(alpha: 0.15), shape: BoxShape.circle), child: const Icon(Icons.fingerprint, color: AppColors.emerald500, size: 20)),
                       title: const Text('Biometric Unlock', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
                       subtitle: const Text('Use fingerprint for faster access', style: TextStyle(color: AppColors.slate400, fontSize: 11)),
-                      activeColor: AppColors.indigo500,
+                      activeThumbColor: AppColors.indigo500,
                     ),
                   if (_pinIsSet && _biometricAvailable) Divider(color: Colors.white.withValues(alpha: 0.1), height: 1),
 

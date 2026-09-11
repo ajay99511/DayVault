@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
@@ -7,6 +6,8 @@ import '../../models/types.dart';
 import '../../models/objectbox_models.dart';
 import '../../models/paged_result.dart';
 import '../../objectbox.g.dart';
+import '../../domain/journal_rules.dart' as journal_rules;
+import '../../utils/async_mutex.dart';
 import '../encryption_service.dart';
 import '../security_service.dart';
 import 'storage_service_interface.dart';
@@ -19,6 +20,12 @@ class NativeStorageService extends StorageService {
   // Draft storage - uses default FlutterSecureStorage
   // Key caching is handled in SecurityService
   final FlutterSecureStorage _draftStorage = const FlutterSecureStorage();
+
+  /// Secure-storage key holding the JSON array of known draft ids.
+  static const String _draftKeysKey = '_draft_keys_';
+
+  /// Serialises mutations of [_draftKeysKey]. See [saveDraft] for why.
+  final AsyncMutex _draftIndexLock = AsyncMutex();
 
   NativeStorageService(Store store)
       : _journalBox = store.box<ObjectBoxJournalEntry>(),
@@ -45,6 +52,7 @@ class NativeStorageService extends StorageService {
   ///
   /// Existing encrypted entries are auto-detected and decrypted during
   /// conversion. New entries are stored as plain text.
+  @override
   Future<List<JournalEntry>> getJournal(
       {PrivacyFilter privacy = PrivacyFilter.excludePrivate}) async {
     final query = _journalBox
@@ -61,8 +69,10 @@ class NativeStorageService extends StorageService {
       if (results.isEmpty) return [];
 
       if (key == null) {
-        // If no key, just map synchronously (only XOR legacy will decrypt)
-        return Future.wait(results.map((e) => e.toFreezed()));
+        // If no key, just map synchronously (only XOR legacy will decrypt).
+        // `await` keeps the mapping inside the try/finally so the query is not
+        // closed while conversion is still in flight.
+        return await Future.wait(results.map((e) => e.toFreezed()));
       }
       
       // Extract raw data needed for decryption to pass to Isolate
@@ -88,6 +98,7 @@ class NativeStorageService extends StorageService {
 
   /// Number of stored journal entries visible under [privacy] — used for the
   /// header count when the list is only partially loaded via pagination.
+  @override
   int journalCount({PrivacyFilter privacy = PrivacyFilter.excludePrivate}) {
     final cond = _privacyCondition(privacy);
     if (cond == null) return _journalBox.count();
@@ -99,6 +110,7 @@ class NativeStorageService extends StorageService {
     }
   }
 
+  @override
   Future<void> saveJournalEntry(JournalEntry entry) async {
     final obEntry = await ObjectBoxJournalEntry.fromFreezed(entry);
 
@@ -120,6 +132,7 @@ class NativeStorageService extends StorageService {
   /// Cursor-based pagination — returns at most [pageSize] entries ordered by
   /// date descending. Pass [cursor] from the previous [PagedResult.nextCursor]
   /// to fetch the next page; omit or pass null to start from the first page.
+  @override
   Future<PagedResult<JournalEntry>> getJournalPage(
     int pageSize, [
     PaginationCursor? cursor,
@@ -130,16 +143,19 @@ class NativeStorageService extends StorageService {
     }
 
     final privacyCond = _privacyCondition(privacy);
-    final cursorCond = cursor == null
-        ? null
-        : ObjectBoxJournalEntry_.id.lessThan(cursor.lastId);
+    final keysetCond = cursor == null ? null : _keysetCondition(cursor);
     final cond = privacyCond == null
-        ? cursorCond
-        : (cursorCond == null ? privacyCond : cursorCond & privacyCond);
+        ? keysetCond
+        : (keysetCond == null ? privacyCond : keysetCond & privacyCond);
     final queryBuilder = _journalBox.query(cond);
 
     final query = queryBuilder
+        // (date DESC, id DESC) is a *total* order. The secondary sort is what
+        // makes the keyset above exact: without it, two entries sharing a
+        // timestamp have no defined relative position, so a page boundary
+        // landing between them would drop one and repeat the other.
         .order(ObjectBoxJournalEntry_.date, flags: Order.descending)
+        .order(ObjectBoxJournalEntry_.id, flags: Order.descending)
         .build()
       ..limit = pageSize + 1;
 
@@ -167,15 +183,59 @@ class NativeStorageService extends StorageService {
           page.length, (i) => page[i].toFreezedFromDecrypted(decrypted[i]));
     }
 
-    final nextCursor =
-        hasMore ? PaginationCursor.fromLastId(page.last.id) : null;
+    final nextCursor = hasMore
+        ? PaginationCursor(
+            lastDate: page.last.date,
+            lastEntryId: page.last.entryId,
+          )
+        : null;
     return PagedResult(items: items, nextCursor: nextCursor);
+  }
+
+  /// Resume condition for [cursor]: everything strictly after it in
+  /// `(date DESC, id DESC)` order, i.e.
+  /// `date < lastDate OR (date == lastDate AND id < lastRowId)`.
+  ///
+  /// The cursor names an entry by its stable [JournalEntry.id], so the row id
+  /// is resolved here through the `@Unique` index — one cheap lookup per page.
+  /// Keying off the row id directly (as an earlier version did) is what made
+  /// pagination wrong: rows are numbered in insertion order while the listing
+  /// is ordered by user-chosen date, so a back-dated entry got a high row id
+  /// with an old date and fell out of every page after the first.
+  Condition<ObjectBoxJournalEntry>? _keysetCondition(PaginationCursor cursor) {
+    final lastMillis = cursor.lastDate.millisecondsSinceEpoch;
+    final lastRowId = _rowIdForEntryId(cursor.lastEntryId);
+
+    if (lastRowId == null) {
+      // The cursor's entry was deleted between pages. Fall back to the
+      // date-only boundary: that can only re-show entries sharing this exact
+      // millisecond, never skip one. Repeating an entry is a visible, harmless
+      // glitch; silently dropping one is data the user believes they lost.
+      return ObjectBoxJournalEntry_.date.lessOrEqual(lastMillis);
+    }
+
+    return ObjectBoxJournalEntry_.date.lessThan(lastMillis) |
+        (ObjectBoxJournalEntry_.date.equals(lastMillis) &
+            ObjectBoxJournalEntry_.id.lessThan(lastRowId));
+  }
+
+  /// Synchronous `entryId -> ObjectBox row id` lookup over the unique index.
+  int? _rowIdForEntryId(String entryId) {
+    final query = _journalBox
+        .query(ObjectBoxJournalEntry_.entryId.equals(entryId))
+        .build();
+    try {
+      return query.findFirst()?.id;
+    } finally {
+      query.close();
+    }
   }
 
   /// Entries from the same calendar day (month + day) as [reference] in earlier
   /// years — powers the "On this day" memory resurfacing. Entries from
   /// [reference]'s own year are excluded so only genuinely past memories show.
   /// Returned most-recent first.
+  @override
   Future<List<JournalEntry>> getOnThisDay(DateTime reference) async {
     final all = await getJournal(); // already ordered date-descending
     return all
@@ -194,6 +254,7 @@ class NativeStorageService extends StorageService {
   /// we deliberately do NOT touch any file in device storage. (See 9.4 — the
   /// app keeps no orphaned image files to clean up under the reference-only
   /// model.)
+  @override
   Future<void> deleteJournalEntry(String entryId) async {
     final query = _journalBox
         .query(ObjectBoxJournalEntry_.entryId.equals(entryId))
@@ -239,12 +300,13 @@ class NativeStorageService extends StorageService {
   /// that row's ObjectBox id, so the write updates the existing row in place
   /// instead of throwing a UniqueViolation. Within [entries], a later duplicate
   /// of the same id wins (last-write-wins).
+  @override
   Future<void> putManyJournalEntries(List<JournalEntry> entries) async {
     if (entries.isEmpty) return;
 
     // Collapse intra-batch duplicates so we never try to insert two rows with
     // the same unique entryId in one transaction.
-    final deduped = dedupeByEntryIdKeepingLast(entries);
+    final deduped = journal_rules.dedupeByEntryIdKeepingLast(entries);
 
     // Convert (serialize) all entries up front.
     final converted = <ObjectBoxJournalEntry>[];
@@ -268,23 +330,11 @@ class NativeStorageService extends StorageService {
     _journalBox.putMany(converted);
   }
 
-  /// Collapse a list of entries to one-per-[JournalEntry.id], keeping the last
-  /// occurrence of each id. Order of the surviving entries follows first-seen
-  /// id order. Pure + exposed for unit testing.
-  @visibleForTesting
-  static List<JournalEntry> dedupeByEntryIdKeepingLast(
-      List<JournalEntry> entries) {
-    final byId = <String, JournalEntry>{};
-    for (final e in entries) {
-      byId[e.id] = e; // later occurrence overwrites earlier
-    }
-    return byId.values.toList();
-  }
-
   // ─── Tags ─────────────────────────────────────────────────────────────--
 
   /// Distinct tags across all entries with their occurrence counts, keyed by the
   /// first-seen display casing (matching is case-insensitive).
+  @override
   Future<Map<String, int>> getTagCounts() async {
     final all = await getJournal();
     final counts = <String, int>{};
@@ -301,66 +351,32 @@ class NativeStorageService extends StorageService {
   /// Rename tag [from] to [to] across every entry (case-insensitive). When an
   /// entry already carries [to], the two are merged (no duplicate). Returns the
   /// number of entries changed.
+  @override
   Future<int> renameTag(String from, String to) async {
     // Tag integrity must reach vaulted entries too, or renames silently
     // diverge between the vault and the rest of the journal.
     final changed =
-        applyTagRename(await getJournal(privacy: PrivacyFilter.all), from, to);
+        journal_rules.applyTagRename(
+            await getJournal(privacy: PrivacyFilter.all), from, to);
     if (changed.isNotEmpty) await putManyJournalEntries(changed);
     return changed.length;
   }
 
   /// Remove [tag] from every entry (case-insensitive). Returns the number of
   /// entries changed.
+  @override
   Future<int> deleteTag(String tag) async {
     // Same as renameTag: deletion must reach vaulted entries.
     final changed =
-        applyTagDelete(await getJournal(privacy: PrivacyFilter.all), tag);
+        journal_rules.applyTagDelete(
+            await getJournal(privacy: PrivacyFilter.all), tag);
     if (changed.isNotEmpty) await putManyJournalEntries(changed);
     return changed.length;
   }
 
-  /// Pure transform powering [renameTag]: returns only the entries whose tag
-  /// list changed, with [from] replaced by [to] (case-insensitive) and any
-  /// resulting duplicate collapsed. An empty/whitespace [to] is a no-op.
-  /// Exposed for unit testing.
-  @visibleForTesting
-  static List<JournalEntry> applyTagRename(
-      List<JournalEntry> entries, String from, String to) {
-    final fromL = from.toLowerCase();
-    final toTrim = to.trim();
-    if (toTrim.isEmpty) return const [];
-    final changed = <JournalEntry>[];
-    for (final e in entries) {
-      if (!e.tags.any((t) => t.toLowerCase() == fromL)) continue;
-      final newTags = <String>[];
-      final seen = <String>{};
-      for (final t in e.tags) {
-        final replacement = t.toLowerCase() == fromL ? toTrim : t;
-        if (seen.add(replacement.toLowerCase())) newTags.add(replacement);
-      }
-      changed.add(e.copyWith(tags: newTags));
-    }
-    return changed;
-  }
-
-  /// Pure transform powering [deleteTag]: returns only the entries whose tag
-  /// list changed, with [tag] removed (case-insensitive). Exposed for testing.
-  @visibleForTesting
-  static List<JournalEntry> applyTagDelete(
-      List<JournalEntry> entries, String tag) {
-    final tagL = tag.toLowerCase();
-    final changed = <JournalEntry>[];
-    for (final e in entries) {
-      if (!e.tags.any((t) => t.toLowerCase() == tagL)) continue;
-      changed.add(e.copyWith(
-          tags: e.tags.where((t) => t.toLowerCase() != tagL).toList()));
-    }
-    return changed;
-  }
-
   // ─── Rankings ───────────────────────────────────────────────────────────
 
+  @override
   Future<List<RankingCategory>> getFavoriteRankings() async {
     final query = _rankingBox
         .query(ObjectBoxRankingCategory_.isFavorite.equals(true))
@@ -373,11 +389,13 @@ class NativeStorageService extends StorageService {
     }
   }
 
+  @override
   Future<List<RankingCategory>> getRankings() async {
     final results = _rankingBox.getAll();
     return results.map((c) => c.toFreezed()).toList();
   }
 
+  @override
   Future<void> addRankingCategory(RankingCategory category) async {
     final query = _rankingBox
         .query(ObjectBoxRankingCategory_.categoryId.equals(category.id))
@@ -395,6 +413,7 @@ class NativeStorageService extends StorageService {
     }
   }
 
+  @override
   Future<void> deleteRankingCategory(String categoryId) async {
     final query = _rankingBox
         .query(ObjectBoxRankingCategory_.categoryId.equals(categoryId))
@@ -409,6 +428,7 @@ class NativeStorageService extends StorageService {
     }
   }
 
+  @override
   Future<void> updateRankingCategory(RankingCategory category) async {
     final query = _rankingBox
         .query(ObjectBoxRankingCategory_.categoryId.equals(category.id))
@@ -425,6 +445,7 @@ class NativeStorageService extends StorageService {
     }
   }
 
+  @override
   Future<void> addRankedItem(String categoryId, RankedItem item) async {
     final query = _rankingBox
         .query(ObjectBoxRankingCategory_.categoryId.equals(categoryId))
@@ -444,6 +465,7 @@ class NativeStorageService extends StorageService {
     }
   }
 
+  @override
   Future<void> deleteRankedItem(String categoryId, String itemId) async {
     final query = _rankingBox
         .query(ObjectBoxRankingCategory_.categoryId.equals(categoryId))
@@ -469,6 +491,7 @@ class NativeStorageService extends StorageService {
     }
   }
 
+  @override
   Future<void> reorderRankedItems(
       String categoryId, List<RankedItem> reordered) async {
     final query = _rankingBox
@@ -495,12 +518,14 @@ class NativeStorageService extends StorageService {
 
   // ─── Vision Board ────────────────────────────────────────────────────────
 
+  @override
   List<VisionBoard> getVisionBoards() {
     final results = _visionBoardBox.getAll();
     return results.map((b) => b.toFreezed()).toList()
       ..sort((a, b) => b.year.compareTo(a.year));
   }
 
+  @override
   VisionBoard? getVisionBoardForYear(int year) {
     final query = _visionBoardBox
         .query(ObjectBoxVisionBoard_.year.equals(year))
@@ -512,6 +537,7 @@ class NativeStorageService extends StorageService {
     }
   }
 
+  @override
   VisionBoard getOrCreateVisionBoard(int year) {
     final existing = getVisionBoardForYear(year);
     if (existing != null) return existing;
@@ -524,6 +550,7 @@ class NativeStorageService extends StorageService {
     return board;
   }
 
+  @override
   void saveVisionBoard(VisionBoard board) {
     final ob = ObjectBoxVisionBoard.fromFreezed(board);
     final query = _visionBoardBox
@@ -538,11 +565,13 @@ class NativeStorageService extends StorageService {
     }
   }
 
+  @override
   void addVisionBoardItem(int year, VisionBoardItem item) {
     final board = getOrCreateVisionBoard(year);
     saveVisionBoard(board.copyWith(items: [...board.items, item]));
   }
 
+  @override
   void updateVisionBoardItem(int year, VisionBoardItem item) {
     final board = getVisionBoardForYear(year);
     if (board == null) return;
@@ -552,6 +581,7 @@ class NativeStorageService extends StorageService {
     saveVisionBoard(board.copyWith(items: updatedItems));
   }
 
+  @override
   void deleteVisionBoardItem(int year, String itemId) {
     final board = getVisionBoardForYear(year);
     if (board == null) return;
@@ -565,6 +595,7 @@ class NativeStorageService extends StorageService {
   /// year, the imported items are upserted into it (matched by item id) and the
   /// existing row's id is preserved, so a restore can never create two rows for
   /// the same year. Otherwise the imported board is saved as-is.
+  @override
   void mergeVisionBoard(VisionBoard imported) {
     final existing = getVisionBoardForYear(imported.year);
     if (existing == null) {
@@ -580,6 +611,7 @@ class NativeStorageService extends StorageService {
 
   // ─── Settings ───────────────────────────────────────────────────────────
 
+  @override
   UserSettings getSettings() {
     final byFixedId = _settingsBox.get(1);
     if (byFixedId != null) {
@@ -593,6 +625,7 @@ class NativeStorageService extends StorageService {
     return all.first.toFreezed();
   }
 
+  @override
   Future<UserSettings> saveSettings(UserSettings settings) async {
     final obSettings = ObjectBoxUserSettings.fromFreezed(settings);
     final byFixedId = _settingsBox.get(1);
@@ -606,51 +639,6 @@ class NativeStorageService extends StorageService {
     return settings;
   }
 
-  /// Compute the current journaling streak.
-  ///
-  /// Returns the number of consecutive calendar days ending on today
-  /// (or the most recent entry date) on which at least one entry exists.
-  /// Returns 0 if [entries] is empty.
-  static int computeStreak(List<JournalEntry> entries) {
-    if (entries.isEmpty) return 0;
-
-    // Extract unique calendar dates (date only, no time)
-    final dates = entries
-        .map((e) => DateTime(e.date.year, e.date.month, e.date.day))
-        .toSet()
-        .toList()
-      ..sort((a, b) => b.compareTo(a)); // descending
-
-    final today = DateTime.now();
-    final todayDate = DateTime(today.year, today.month, today.day);
-
-    int streak = 0;
-    DateTime expected = todayDate;
-
-    // If the most recent entry is not today or yesterday, streak is 0
-    if (dates.first.isBefore(expected.subtract(const Duration(days: 1)))) {
-      return 0;
-    }
-
-    // If most recent is yesterday, start from yesterday
-    if (dates.first == expected.subtract(const Duration(days: 1)) &&
-        dates.first != expected) {
-      expected = dates.first;
-    }
-
-    for (final date in dates) {
-      if (date == expected) {
-        streak++;
-        expected = expected.subtract(const Duration(days: 1));
-      } else if (date.isBefore(expected)) {
-        break; // gap found
-      }
-      // date > expected means duplicate date (already counted via toSet)
-    }
-
-    return streak;
-  }
-
   // ─── "On this day" banner dismissal ─────────────────────────────────────
   // Persist the calendar day the user dismissed the banner on, so it stays
   // hidden for that day but returns on later days (previously the dismissal was
@@ -660,11 +648,13 @@ class NativeStorageService extends StorageService {
 
   static String _dayKey(DateTime day) => '${day.year}-${day.month}-${day.day}';
 
+  @override
   Future<void> setOnThisDayDismissed(DateTime day) async {
     await _draftStorage.write(
         key: _onThisDayDismissedKey, value: _dayKey(day));
   }
 
+  @override
   Future<bool> isOnThisDayDismissed(DateTime day) async {
     final stored = await _draftStorage.read(key: _onThisDayDismissedKey);
     return stored == _dayKey(day);
@@ -673,22 +663,28 @@ class NativeStorageService extends StorageService {
   // ─── Draft Management ───────────────────────────────────────────────────
 
   /// Save entry draft for auto-save functionality
+  @override
   Future<void> saveDraft(String draftId, String draftData) async {
     final encrypted = await EncryptionService().encrypt(draftData);
     await _draftStorage.write(key: 'draft_$draftId', value: encrypted);
-    
-    // Track this draft ID for bulk operations
-    final existingDrafts = await getAllDraftIds();
-    if (!existingDrafts.contains(draftId)) {
-      existingDrafts.add(draftId);
+
+    // The id index is one JSON blob, so appending to it is a read-modify-write
+    // across an await. The editor autosaves on a timer while other flows can
+    // save at the same moment; unsynchronised, both read the same list and the
+    // later write drops the earlier id — stranding an encrypted blob that
+    // clearAllDrafts can then never find. Serialise index mutations.
+    await _draftIndexLock.run(() async {
+      final existingDrafts = await getAllDraftIds();
+      if (existingDrafts.contains(draftId)) return;
       await _draftStorage.write(
-        key: '_draft_keys_', 
-        value: jsonEncode(existingDrafts),
+        key: _draftKeysKey,
+        value: jsonEncode([...existingDrafts, draftId]),
       );
-    }
+    });
   }
 
   /// Get saved draft by ID
+  @override
   Future<String?> getDraft(String draftId) async {
     final raw = await _draftStorage.read(key: 'draft_$draftId');
     if (raw == null) return null;
@@ -696,21 +692,25 @@ class NativeStorageService extends StorageService {
   }
 
   /// Delete draft by ID
+  @override
   Future<void> deleteDraft(String draftId) async {
     await _draftStorage.delete(key: 'draft_$draftId');
-    
-    // Remove from tracking
-    final existingDrafts = await getAllDraftIds();
-    existingDrafts.remove(draftId);
-    await _draftStorage.write(
-      key: '_draft_keys_', 
-      value: jsonEncode(existingDrafts),
-    );
+
+    // Same read-modify-write hazard as saveDraft — see the note there.
+    await _draftIndexLock.run(() async {
+      final existingDrafts = await getAllDraftIds();
+      if (!existingDrafts.remove(draftId)) return;
+      await _draftStorage.write(
+        key: _draftKeysKey,
+        value: jsonEncode(existingDrafts),
+      );
+    });
   }
 
   /// Get all draft IDs
+  @override
   Future<List<String>> getAllDraftIds() async {
-    final json = await _draftStorage.read(key: '_draft_keys_');
+    final json = await _draftStorage.read(key: _draftKeysKey);
     if (json == null || json.isEmpty) {
       return [];
     }
@@ -724,12 +724,15 @@ class NativeStorageService extends StorageService {
   }
 
   /// Clear all drafts (useful after successful save or user logout)
+  @override
   Future<void> clearAllDrafts() async {
-    final draftIds = await getAllDraftIds();
-    for (final id in draftIds) {
-      await _draftStorage.delete(key: 'draft_$id');
-    }
-    await _draftStorage.delete(key: '_draft_keys_');
+    await _draftIndexLock.run(() async {
+      final draftIds = await getAllDraftIds();
+      for (final id in draftIds) {
+        await _draftStorage.delete(key: 'draft_$id');
+      }
+      await _draftStorage.delete(key: _draftKeysKey);
+    });
   }
 }
 

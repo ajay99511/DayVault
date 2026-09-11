@@ -54,6 +54,44 @@ class ImageThumbnailWidget extends StatefulWidget {
 }
 
 class _ImageThumbnailWidgetState extends State<ImageThumbnailWidget> {
+  /// Cached gallery thumbnail load.
+  ///
+  /// This future used to be created inline in the `FutureBuilder`, which means
+  /// a *new* platform-channel round trip and image decode on every rebuild —
+  /// and, because a fresh future starts in the waiting state, a spinner flash
+  /// each time. In a scrolling list of image-bearing entries that multiplied
+  /// per visible item. Create it once per (asset, decode size) instead.
+  Future<Uint8List?>? _thumbnailFuture;
+  int? _thumbnailDimension;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _ensureThumbnailFuture();
+  }
+
+  @override
+  void didUpdateWidget(covariant ImageThumbnailWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageRef.source != widget.imageRef.source ||
+        oldWidget.imageRef.type != widget.imageRef.type ||
+        oldWidget.width != widget.width ||
+        oldWidget.height != widget.height) {
+      _thumbnailFuture = null;
+      _ensureThumbnailFuture();
+    }
+  }
+
+  /// (Re)create the load only when the asset or the required decode size
+  /// actually changed.
+  void _ensureThumbnailFuture() {
+    if (widget.imageRef.type != ImageSourceType.galleryAsset) return;
+    final dimension = _cacheDimension(context);
+    if (_thumbnailFuture != null && dimension == _thumbnailDimension) return;
+    _thumbnailDimension = dimension;
+    _thumbnailFuture = _loadGalleryThumbnail(dimension);
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -99,9 +137,9 @@ class _ImageThumbnailWidgetState extends State<ImageThumbnailWidget> {
   }
 
   Widget _buildGalleryImage() {
-    final cacheDim = _cacheDimension(context);
+    final cacheDim = _thumbnailDimension ?? _cacheDimension(context);
     return FutureBuilder<Uint8List?>(
-      future: _loadGalleryThumbnail(cacheDim),
+      future: _thumbnailFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildLoadingIndicator();

@@ -15,6 +15,56 @@
 
 ---
 
+## 0. Remediation Status (updated after the fix pass)
+
+Everything below in sections 1–5 describes the codebase **as audited**. A
+remediation pass has since landed on branch `fix/audit-remediation`. This
+section records what changed so the rest of the document is not read as a
+description of the current tree.
+
+| Metric | As audited | After remediation |
+|---|---|---|
+| `flutter analyze` | **74 issues** | **0 issues** |
+| `flutter test` | **104 passed / 3 failed** † | **163 passed / 0 failed** |
+| CI pipeline | none | `.github/workflows/ci.yml` (analyze `--fatal-infos --fatal-warnings`, generated-source drift check, tests) |
+
+† The suite was already red on `main` at the time of the fix pass — a Flutter
+framework assertion fired for every `ListTile` inside a `GlassContainer`. That
+was pre-existing, not introduced by this work (verified by running the suite in
+a pristine worktree at the base commit), and is now fixed.
+
+### Fixed
+
+| Finding | Resolution |
+|---|---|
+| **C-2** destructive DB init | `init()` now retries transient failures with backoff and **never** moves data; the move happens only in `reinitializeAfterConsent`, after an explicit prompt whose "Keep and close" option leaves the database untouched. `instance` throws instead of asserting. |
+| **C-3** `changePin` orphans the key | Envelope encryption: a random DEK wrapped by a PIN-derived KEK, so a PIN change re-wraps 32 bytes instead of changing the key. Pre-envelope installs **adopt their existing derived key as the DEK**, so the migration rewrites nothing and every existing draft and encrypted backup stays readable. The `rekey_pending` journal that was declared and never implemented is now written, replayed on the next `initialize()`, and cleared. |
+| **H-1** pagination cursor | `PaginationCursor` now carries the ordering key (`date`, stable entry id) instead of an ObjectBox row id; both backends share one meaning and one total order. Measured on the old algorithm: 26 entries in, **10 distinct returned, 9 duplicated, back-dated entry unreachable**. |
+| **H-2** recovery bypassed rate limiting | `verifySecurityQuestions` now shares the PIN lockout budget in **both** services, uses constant-time comparison, and hashes each answer under a per-index salt (legacy hashes still verify). |
+| **H-3** undeclared crypto dependency | `pointycastle` declared in `dependencies`. |
+| **H-4** leaked controllers | All dialog-scoped `TextEditingController`s disposed via `withDisposedControllers`, which clears the buffer first so PIN digits and recovery answers do not linger in the heap. |
+| **H-6** dead `merge` flag | Removed; the doc comment now states the actual upsert semantics. |
+| **M-1 / M-2 / M-8** performance | Filter and tag derivation memoized out of `build()`; the gallery `FutureBuilder` future created once per (asset, size) instead of per frame; the ambient orb layer wrapped in a `RepaintBoundary` with the orbs built once. |
+| **M-3** unguarded enum decode | Every ordinal decode bounds-checked and degraded per-field rather than failing the whole journal load; `tagsJson`/`locationJson` parsed defensively; `enum_ordinals_test.dart` pins the declaration order so a reorder fails CI. |
+| **M-5** provider in the contract | `journalRevisionProvider` moved to `lib/providers/`; the storage contract no longer imports Riverpod. |
+| **M-6** draft index race | `AsyncMutex` serialises index mutations in both backends; the web backend no longer swallows save failures. |
+| **M-7** image URL validation | HTTPS-only, private/loopback/link-local/metadata ranges blocked (including IPv4-mapped IPv6), redirects disabled, generic user-facing errors, and the two never-passed parameters removed. |
+| **L-1 / L-2 / L-3** hygiene | Analyzer to zero; vacuous test file and two stray tracked `.txt` artifacts deleted; `main()` no longer calls itself from the Retry button. |
+| Part of **H-5** | The triplicated `computeStreak` and duplicated tag/dedupe helpers collapsed into `lib/domain/journal_rules.dart`. |
+
+### Not fixed — deliberately deferred
+
+| Finding | Why, and what it needs |
+|---|---|
+| **C-1** vault has no at-rest confidentiality | The largest item and the only **Foundational**-tier one. Encrypting vaulted rows needs a vault-passcode-derived key, an expand→backfill→contract migration over existing rows, and a `VaultGrant` capability threaded to the query layer so authorization moves off the screen. It warrants its own ADR and its own review; bundling it into this pass would have made the change unreviewable. **The vault still provides concealment, not confidentiality.** |
+| **C-4** XOR on the read path | Removing it safely requires the one-shot v1→AES migration first; deleting the decrypt path before migrating would strand any remaining legacy rows. |
+| **H-5** (remainder) | The lockout state machine is still implemented twice. Behaviour is now identical in both, so this is a pure refactor — but it is why H-2 had to be fixed in two places. |
+| **M-4** two DI dialects | `SecurityService`/`EncryptionService` are still singletons. Untangling them is coupled to C-1 (the model layer needs a cipher injected) and is best done with it. |
+| `dart format` | Would rewrite 46 of 94 files, nearly all untouched. The CI step is present but `continue-on-error`; enable it after one commit that is *only* the reformat. |
+| Real-store integration tests | `getJournalPage` and friends are still only exercised through the pure reference implementation, because ObjectBox needs its native library in the test environment. The paging contract is now covered by `journal_pagination_test.dart`; a real-store test is still owed. |
+
+---
+
 ## 1. Executive Summary & Quality Scorecard
 
 DayVault is a **mature, thoughtfully-commented offline-first Flutter journal** that is a long way past prototype. There is real engineering judgment on display: PBKDF2 is pushed into isolates (`security_service.dart:223–228`), backup JSON encode/decode runs off the main isolate (`backup_service.dart:100`, `:175`), image decode is bounded to on-screen pixels (`image_widgets.dart:36–50`), the expensive `BackdropFilter` is isolated behind a `RepaintBoundary` (`glass_widgets.dart:83–90`), and several pure functions were deliberately extracted as `static` specifically so they could be unit-tested (`journal_screen.dart:24`, `stats_provider.dart:22`, `glass_widgets.dart:14`). The comments explaining *why* — the `heightFactor: 1.0` note at `main.dart:388–393`, the auto-lock policy rationale at `main.dart:141–156` — are exactly what `testing-quality.md` asks for ("Comment **why**, never what").
