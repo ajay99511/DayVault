@@ -37,6 +37,10 @@ void main() {
     return ProviderScope(
       overrides: [
         storageServiceProvider.overrideWithValue(mockStorageService),
+        // The app-lock gate reads the never-substituted platform provider
+        // on purpose (demo mode must not be able to answer "is this app
+        // locked?"), so the test supplies it the same mock.
+        platformStorageServiceProvider.overrideWithValue(mockStorageService),
       ],
       child: const MaterialApp(
         home: RootOrchestrator(),

@@ -63,7 +63,12 @@ void main() {
           .thenReturn(const UserSettings(securityEnabled: true));
 
       final container = ProviderContainer(
-        overrides: [storageServiceProvider.overrideWithValue(mockStorage)],
+        overrides: [
+          storageServiceProvider.overrideWithValue(mockStorage),
+          // The app-lock gate reads the never-substituted platform provider, so
+          // it has to be overridden too or the test opens a real store.
+          platformStorageServiceProvider.overrideWithValue(mockStorage),
+        ],
       );
       addTearDown(container.dispose);
 

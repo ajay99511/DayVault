@@ -94,7 +94,10 @@ class _LockScreenState extends ConsumerState<LockScreen>
       });
 
       // Auto-authenticate if enabled
-      final settings = ref.read(storageServiceProvider).getSettings();
+      // Real storage: biometric enrolment is a device fact, and the lock
+      // screen must behave identically whether or not demo mode is on.
+      final settings =
+          ref.read(platformStorageServiceProvider).getSettings();
       if (pinIsSet && settings.biometricsEnabled && bioAvailable) {
         // Delay slightly to allow UI to settle
         Future.delayed(const Duration(milliseconds: 300), () {

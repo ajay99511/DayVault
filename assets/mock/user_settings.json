@@ -1,0 +1,17 @@
+{
+  "fixtureVersion": 1,
+  "_readme": [
+    "Demo settings. Shape must match UserSettings.toJson() exactly.",
+    "securityEnabled and biometricsEnabled are deliberately false: demo mode",
+    "must never put a PIN wall in front of fabricated data, and the real",
+    "SecurityService is not consulted while mock mode is on.",
+    "theme is left at the app default so entering demo mode does not silently",
+    "rewrite the look of the app."
+  ],
+  "settings": {
+    "securityEnabled": false,
+    "biometricsEnabled": false,
+    "username": "Alex Mercer",
+    "theme": "dark"
+  }
+}

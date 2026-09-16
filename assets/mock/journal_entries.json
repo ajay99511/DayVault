@@ -1,0 +1,342 @@
+{
+  "fixtureVersion": 1,
+  "_readme": [
+    "Demo journal fixtures. Shape must match JournalEntry.toJson() exactly --",
+    "they are parsed with JournalEntry.fromJson, so a model change that is not",
+    "mirrored here fails test/mock/mock_fixtures_test.dart.",
+    "Dates use the relative tokens documented in lib/mock/mock_date_resolver.dart",
+    "so the demo never goes stale. Entries 15 and 16 use years:-1 / years:-2 with",
+    "no day offset on purpose: that is what makes them land on today's calendar",
+    "day in past years and light up the 'On this day' banner.",
+    "Feed entries (isPrivate=false): 16. Vault entries (isPrivate=true): 3."
+  ],
+  "entries": [
+    {
+      "id": "mock-entry-01",
+      "type": "story",
+      "date": { "$date": { "days": 0, "hour": 21, "minute": 40 } },
+      "headline": "The quiet win at the end of a loud week",
+      "content": "Nothing about this week looked like progress from the outside. Four days of meetings that could have been notes, a migration that rolled back twice, and a laptop that decided Thursday was a good day to forget my keyboard layout.\n\nThen at nine tonight the last check went green and the room went quiet in a good way. I sat with it for a minute before telling anyone, which is new for me. Usually I broadcast the win before I have felt it.\n\nWriting it down so that next time the week is loud I remember it can still end like this.",
+      "mood": "productive",
+      "feeling": "Accomplished",
+      "tags": ["reflection", "work", "craft"],
+      "location": { "name": "Home studio" },
+      "timeBucket": "night",
+      "images": [],
+      "isSpotlight": true,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-02",
+      "type": "event",
+      "date": { "$date": { "days": -1, "hour": 19, "minute": 15 } },
+      "headline": "Team dinner after the v2 launch",
+      "content": "Twelve of us around a table built for eight. Priya ordered for the whole group without asking anyone and somehow got it exactly right.\n\nThe part I want to keep: Daniel raising a glass to the people who wrote the migration scripts nobody will ever see. That is the kind of credit that does not usually make it to the toast.",
+      "mood": "excited",
+      "feeling": "Grateful",
+      "tags": ["work", "friends", "food"],
+      "location": { "name": "Saffron House" },
+      "timeBucket": "evening",
+      "images": [
+        {
+          "source": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=1200&q=70",
+          "type": "webUrl",
+          "displayName": "The long table"
+        }
+      ],
+      "isSpotlight": false,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-03",
+      "type": "story",
+      "date": { "$date": { "days": -2, "hour": 6, "minute": 5 } },
+      "headline": "Six kilometres before sunrise",
+      "content": "Out the door before I could argue with myself about it. The road by the reservoir still had last night's rain on it and the light came up somewhere around the fourth kilometre.\n\nNo music today. Just the sound of my own pace settling down after the first ten minutes, which is the part I always forget is coming.",
+      "mood": "happy",
+      "feeling": "Energetic",
+      "tags": ["health", "reflection"],
+      "location": { "name": "Reservoir loop" },
+      "timeBucket": "earlyMorning",
+      "images": [],
+      "isSpotlight": false,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-04",
+      "type": "story",
+      "date": { "$date": { "days": -3, "hour": 23, "minute": 30 } },
+      "headline": "Couldn't sleep, so I mapped the whole year",
+      "content": "Two in the morning, notebook on the floor, every quarter sketched out in a handwriting that got worse as the hours went on.\n\nMost of it will not survive contact with reality and I know that. But there is something about laying the whole thing out end to end that makes the next two weeks feel smaller instead of larger.",
+      "mood": "anxious",
+      "feeling": "Hopeful",
+      "tags": ["reflection", "craft"],
+      "location": { "name": "Home studio" },
+      "timeBucket": "midnight",
+      "images": [],
+      "isSpotlight": false,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-05",
+      "type": "event",
+      "date": { "$date": { "days": -6, "hour": 11, "minute": 0 } },
+      "headline": "Coastal hike with Ravi and Meera",
+      "content": "Fourteen kilometres of ridge with the sea on our left the entire way. Ravi brought a thermos of coffee that had gone cold by the first viewpoint and we drank it anyway.\n\nWe stopped talking somewhere around the halfway mark and stayed quiet for almost an hour. Three people who have known each other for a decade, walking, saying nothing, and none of it awkward.\n\nBest day in months and it cost us a tank of fuel and a packet of biscuits.",
+      "mood": "euphoric",
+      "feeling": "Inspired",
+      "tags": ["travel", "friends", "health"],
+      "location": { "name": "Chorla Ghat" },
+      "timeBucket": "morning",
+      "images": [
+        {
+          "source": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1200&q=70",
+          "type": "webUrl",
+          "displayName": "The first viewpoint"
+        },
+        {
+          "source": "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1200&q=70",
+          "type": "webUrl",
+          "displayName": "The descent"
+        }
+      ],
+      "isSpotlight": true,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-06",
+      "type": "story",
+      "date": { "$date": { "days": -9, "hour": 15, "minute": 20 } },
+      "headline": "Rewrote the onboarding in one sitting",
+      "content": "Four hours, one pot of tea, no notifications. The whole flow came apart and went back together as three screens instead of seven.\n\nI have been circling this for a month. It turns out the thing blocking me was not the problem, it was never giving myself an afternoon where nothing else was allowed to be urgent.",
+      "mood": "productive",
+      "feeling": "Inspired",
+      "tags": ["work", "craft"],
+      "location": { "name": "Home studio" },
+      "timeBucket": "afternoon",
+      "images": [],
+      "isSpotlight": false,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-07",
+      "type": "event",
+      "date": { "$date": { "days": -13, "hour": 20, "minute": 0 } },
+      "headline": "Anniversary dinner, table by the window",
+      "content": "Same restaurant, same table, ninth year running. The owner recognised us before we said the name on the booking, which is either lovely or a sign we are extremely predictable.\n\nWe spent most of it talking about the year ahead rather than the one behind. That felt like the right direction.",
+      "mood": "happy",
+      "feeling": "Loved",
+      "tags": ["family", "food", "milestones"],
+      "location": { "name": "Olive & Ash" },
+      "timeBucket": "evening",
+      "images": [
+        {
+          "source": "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=70",
+          "type": "webUrl",
+          "displayName": "Window table"
+        }
+      ],
+      "isSpotlight": false,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-08",
+      "type": "story",
+      "date": { "$date": { "days": -17, "hour": 9, "minute": 15 } },
+      "headline": "A slow Sunday and nothing to prove",
+      "content": "Woke without an alarm. Read on the balcony until the sun came round far enough to make it uncomfortable, then moved inside and kept reading.\n\nDid not open a laptop. Did not make a list. The whole day came to about six hundred words of a book and two cups of coffee, and I am counting it as a good one.",
+      "mood": "relaxed",
+      "feeling": "Peaceful",
+      "tags": ["rest", "books"],
+      "location": { "name": "Home" },
+      "timeBucket": "morning",
+      "images": [],
+      "isSpotlight": false,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-09",
+      "type": "event",
+      "date": { "$date": { "days": -22, "hour": 18, "minute": 45 } },
+      "headline": "Live set at the Old Tram Shed",
+      "content": "A room for two hundred with maybe ninety people in it, which turned out to be the right number. The band played the second album front to back with no gap between tracks.\n\nStood near the back with Nadia, both of us pretending we were too old for the front and both of us wrong about that.",
+      "mood": "euphoric",
+      "feeling": "Energetic",
+      "tags": ["music", "friends", "celebration"],
+      "location": { "name": "Old Tram Shed" },
+      "timeBucket": "evening",
+      "images": [
+        {
+          "source": "https://images.unsplash.com/photo-1533929736458-ca588d08c8be?auto=format&fit=crop&w=1200&q=70",
+          "type": "webUrl",
+          "displayName": "Second encore"
+        }
+      ],
+      "isSpotlight": false,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-10",
+      "type": "story",
+      "date": { "$date": { "days": -27, "hour": 13, "minute": 0 } },
+      "headline": "The deadline moved and so did I",
+      "content": "Third time the date has shifted and the second time nobody told the people doing the work until the day of.\n\nI wrote a long message, deleted it, and wrote a short one instead. The short one got a reply in four minutes. Noting that for next time, because the long one would have felt better to send and done nothing.",
+      "mood": "angry",
+      "feeling": "Frustrated",
+      "tags": ["work", "reflection"],
+      "timeBucket": "afternoon",
+      "images": [],
+      "isSpotlight": false,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-11",
+      "type": "event",
+      "date": { "$date": { "days": -34, "hour": 10, "minute": 30 } },
+      "headline": "Moving day: forty-two boxes, one surviving plant",
+      "content": "Started at six, finished at nine at night, ate standing up in a kitchen with no chairs yet.\n\nThe monstera made it. The one I have moved four times and nearly killed twice. Everything else is replaceable and I would like the record to show I know that.",
+      "mood": "tired",
+      "feeling": "Exhausted",
+      "tags": ["home", "milestones"],
+      "location": { "name": "Bandra West" },
+      "timeBucket": "morning",
+      "images": [],
+      "isSpotlight": false,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-12",
+      "type": "story",
+      "date": { "$date": { "days": -41, "hour": 16, "minute": 45 } },
+      "headline": "Finished the Le Guin, started it again",
+      "content": "Closed it, sat there for a while, then opened it at page one the same evening. I have done that with maybe four books.\n\nWhat gets me is how little of it is spent explaining itself. It just builds the place and trusts you to keep up.",
+      "mood": "creative",
+      "feeling": "Curious",
+      "tags": ["books", "reflection"],
+      "location": { "name": "Home" },
+      "timeBucket": "afternoon",
+      "images": [],
+      "isSpotlight": false,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-13",
+      "type": "event",
+      "date": { "$date": { "days": -49, "hour": 8, "minute": 30 } },
+      "headline": "First day at the new desk",
+      "content": "Arrived forty minutes early because I could not judge the commute, then sat in a cafe across the road pretending that was the plan.\n\nBy the afternoon I had a laptop, a badge that did not work, and the names of about nine people I will absolutely have to ask again.",
+      "mood": "anxious",
+      "feeling": "Hopeful",
+      "tags": ["work", "milestones"],
+      "location": { "name": "Lower Parel" },
+      "timeBucket": "morning",
+      "images": [
+        {
+          "source": "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&w=1200&q=70",
+          "type": "webUrl",
+          "displayName": "Desk, day one"
+        }
+      ],
+      "isSpotlight": true,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-14",
+      "type": "story",
+      "date": { "$date": { "days": -58, "hour": 0, "minute": 20 } },
+      "headline": "Three in the morning and the city is finally quiet",
+      "content": "Could not sleep again. Sat by the window and watched the one delivery bike that seems to run this street at this hour.\n\nSome nights the quiet is restful and some nights it is just empty. Tonight it was the second one. Writing it down anyway, because the rule I made was that I write the flat days too.",
+      "mood": "sad",
+      "feeling": "Lonely",
+      "tags": ["reflection", "rest"],
+      "timeBucket": "midnight",
+      "images": [],
+      "isSpotlight": false,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-15",
+      "type": "event",
+      "date": { "$date": { "years": -1, "hour": 19, "minute": 0 } },
+      "headline": "The rooftop birthday",
+      "content": "Somebody strung lights across the whole terrace and nobody will admit to organising it. Twenty-odd people, one speaker that kept disconnecting, and a cake that arrived an hour late and got eaten anyway.\n\nThis is the one I think about when someone asks what a good night looks like.",
+      "mood": "social",
+      "feeling": "Loved",
+      "tags": ["friends", "celebration", "milestones"],
+      "location": { "name": "Aarey rooftop" },
+      "timeBucket": "evening",
+      "images": [
+        {
+          "source": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=70",
+          "type": "webUrl",
+          "displayName": "Lights on the terrace"
+        }
+      ],
+      "isSpotlight": true,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-16",
+      "type": "story",
+      "date": { "$date": { "years": -2, "hour": 7, "minute": 30 } },
+      "headline": "The morning I decided to start writing this down",
+      "content": "Two years ago today. A cheap notebook, a train that was late, and the sudden and slightly embarrassing realisation that I could not account for most of the previous year.\n\nNot the big things. Those I remember. The ordinary Tuesdays had just gone, and there had been a few hundred of them.",
+      "mood": "excited",
+      "feeling": "Hopeful",
+      "tags": ["reflection", "milestones"],
+      "location": { "name": "Platform 4" },
+      "timeBucket": "earlyMorning",
+      "images": [
+        {
+          "source": "https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=1200&q=70",
+          "type": "webUrl",
+          "displayName": "The first notebook"
+        }
+      ],
+      "isSpotlight": false,
+      "isPrivate": false
+    },
+    {
+      "id": "mock-entry-private-01",
+      "type": "story",
+      "date": { "$date": { "days": -4, "hour": 22, "minute": 10 } },
+      "headline": "The conversation I keep rehearsing",
+      "content": "Ran the numbers three times and then ran the conversation five times in my head, which is four more than useful.\n\nThe facts are fine. It is the asking that I keep stalling on.",
+      "mood": "anxious",
+      "feeling": "Anxious",
+      "tags": ["work", "reflection"],
+      "timeBucket": "night",
+      "images": [],
+      "isSpotlight": false,
+      "isPrivate": true
+    },
+    {
+      "id": "mock-entry-private-02",
+      "type": "story",
+      "date": { "$date": { "days": -20, "hour": 21, "minute": 0 } },
+      "headline": "A letter I will probably never send",
+      "content": "Wrote four paragraphs to someone who has not spoken to me in two years, then sat and looked at it.\n\nIt says what I would want it to say. That might be enough on its own.",
+      "mood": "sad",
+      "feeling": "Melancholic",
+      "tags": ["family", "reflection"],
+      "timeBucket": "night",
+      "images": [],
+      "isSpotlight": false,
+      "isPrivate": true
+    },
+    {
+      "id": "mock-entry-private-03",
+      "type": "event",
+      "date": { "$date": { "days": -45, "hour": 17, "minute": 0 } },
+      "headline": "Session nine",
+      "content": "We went back to the thing from session two and it landed completely differently this time.\n\nHomework for the fortnight: notice when I am managing the room instead of being in it.",
+      "mood": "neutral",
+      "feeling": "Curious",
+      "tags": ["health", "reflection"],
+      "timeBucket": "evening",
+      "images": [],
+      "isSpotlight": false,
+      "isPrivate": true
+    }
+  ]
+}

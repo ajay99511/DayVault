@@ -43,6 +43,10 @@ void main() {
       final fake = _FakeStorageService(journal: const []);
       final container = ProviderContainer(overrides: [
         storageServiceProvider.overrideWithValue(fake),
+        // Device-level settings (app lock, biometrics, theme) are read
+        // through the never-substituted platform provider, so it has to be
+        // overridden too or the test opens a real store.
+        platformStorageServiceProvider.overrideWithValue(fake),
       ]);
       addTearDown(container.dispose);
 
@@ -58,6 +62,10 @@ void main() {
       final fake = _FakeStorageService(journal: const []);
       final container = ProviderContainer(overrides: [
         storageServiceProvider.overrideWithValue(fake),
+        // Device-level settings (app lock, biometrics, theme) are read
+        // through the never-substituted platform provider, so it has to be
+        // overridden too or the test opens a real store.
+        platformStorageServiceProvider.overrideWithValue(fake),
       ]);
       addTearDown(container.dispose);
 
@@ -78,6 +86,10 @@ void main() {
         ProviderScope(
           overrides: [
             storageServiceProvider.overrideWithValue(fake),
+            // Device-level settings (app lock, biometrics, theme) are read
+            // through the never-substituted platform provider, so it has to be
+            // overridden too or the test opens a real store.
+            platformStorageServiceProvider.overrideWithValue(fake),
           ],
           child: const MaterialApp(home: ProfileScreen()),
         ),

@@ -19,6 +19,8 @@ import '../widgets/glass_widgets.dart';
 import '../widgets/app_components.dart';
 import 'pin_management_screen.dart';
 import 'privacy_vault_screen.dart';
+import '../mock/mock_mode_guard.dart';
+import '../mock/mock_mode_settings_section.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -28,7 +30,17 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  /// Content settings — the display name. Comes from whichever backend is
+  /// active, so the demo shows the demo profile.
   UserSettings settings = const UserSettings();
+
+  /// Device settings — the app lock and biometric enrolment. Always read from
+  /// and written to real storage, because they are facts about this install
+  /// rather than journal content. Keeping them separate is what stops demo mode
+  /// from reporting "App Lock: off" while a real PIN is set, and stops a PIN
+  /// change made during a demo from recording its flag in a store that is
+  /// thrown away on restart.
+  UserSettings deviceSettings = const UserSettings();
 
   @override
   void initState() {
@@ -41,8 +53,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   /// or computes the streak (that work now lives in [StatsNotifier]).
   Future<void> _load() async {
     final s = ref.read(storageServiceProvider).getSettings();
+    final device = ref.read(platformStorageServiceProvider).getSettings();
     if (mounted) {
-      setState(() => settings = s);
+      setState(() {
+        settings = s;
+        deviceSettings = device;
+      });
     }
   }
 
@@ -96,7 +112,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   void _toggleSecurity() async {
     final securityService = ref.read(securityServiceProvider);
-    final status = await securityService.getVaultStatus(settings.securityEnabled);
+    final status =
+        await securityService.getVaultStatus(deviceSettings.securityEnabled);
 
     if (status.needsSetup) {
       if (!mounted) return;
@@ -121,7 +138,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _showReactivationVerification() async {
     final securityService = ref.read(securityServiceProvider);
 
-    if (settings.biometricsEnabled) {
+    if (deviceSettings.biometricsEnabled) {
       try {
         final didAuthenticate = await LocalAuthentication().authenticate(
           localizedReason: 'Authenticate to reactivate security',
@@ -201,11 +218,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _enableSecurityAction() async {
-    final storage = ref.read(storageServiceProvider);
-    final newSettings = settings.copyWith(securityEnabled: true);
+    // Re-read from real storage rather than copying the in-memory record: in
+    // demo mode `settings` holds the *fixture* profile, so copyWith on it would
+    // write the demo display name into the user's real settings.
+    final storage = ref.read(platformStorageServiceProvider);
+    final newSettings = storage.getSettings().copyWith(securityEnabled: true);
     await storage.saveSettings(newSettings);
     if (mounted) {
-      setState(() => settings = newSettings);
+      setState(() => deviceSettings = newSettings);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Security reactivated'),
@@ -218,7 +238,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   void _showDisableSecurityVerification() async {
     final securityService = ref.read(securityServiceProvider);
 
-    if (settings.biometricsEnabled) {
+    if (deviceSettings.biometricsEnabled) {
       try {
         final didAuthenticate = await LocalAuthentication().authenticate(
           localizedReason: 'Authenticate to disable security',
@@ -298,14 +318,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   Future<void> _disableSecurityAction() async {
-    final storage = ref.read(storageServiceProvider);
-    final newSettings = settings.copyWith(
+    // See _enableSecurityAction: based on real settings, never the active
+    // backend's, so a demo profile cannot bleed into the real record.
+    final storage = ref.read(platformStorageServiceProvider);
+    final newSettings = storage.getSettings().copyWith(
       securityEnabled: false,
       biometricsEnabled: false,
     );
     await storage.saveSettings(newSettings);
     if (mounted) {
-      setState(() => settings = newSettings);
+      setState(() => deviceSettings = newSettings);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Security disabled'),
@@ -462,16 +484,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: settings.securityEnabled
+                            color: deviceSettings.securityEnabled
                                 ? AppColors.indigo500.withValues(alpha: 0.2)
                                 : AppColors.slate800,
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            settings.securityEnabled
+                            deviceSettings.securityEnabled
                                 ? Icons.verified_user
                                 : Icons.security,
-                            color: settings.securityEnabled
+                            color: deviceSettings.securityEnabled
                                 ? AppColors.indigo500
                                 : AppColors.slate400,
                           ),
@@ -489,7 +511,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                 ),
                               ),
                               Text(
-                                settings.biometricsEnabled
+                                deviceSettings.biometricsEnabled
                                     ? "Biometric unlock enrolled"
                                     : "Require a PIN on launch",
                                 style: TextStyle(
@@ -501,14 +523,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                         ),
                         Switch(
-                          value: settings.securityEnabled,
+                          value: deviceSettings.securityEnabled,
                           onChanged: (_) => _toggleSecurity(),
                           activeThumbColor: AppColors.indigo500,
                         ),
                       ],
                     ),
                   ),
-                  if (settings.securityEnabled)
+                  if (deviceSettings.securityEnabled)
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
@@ -519,7 +541,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               size: 12, color: AppColors.indigo500),
                           const SizedBox(width: 8),
                           Text(
-                            settings.biometricsEnabled
+                            deviceSettings.biometricsEnabled
                                 ? "BIOMETRICS + PIN ACTIVE"
                                 : "PIN LOCK ACTIVE",
                             style: const TextStyle(
@@ -693,6 +715,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ],
               ),
             ),
+
+            // Demo mode. Self-contained in lib/mock/; reloads this screen's
+            // locally-held settings once the backend has actually swapped.
+            MockModeSettingsSection(onModeChanged: _load),
           ],
         ),
         ),
@@ -725,6 +751,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           style: TextStyle(color: context.tokens.textTertiary, fontSize: 11)),
       trailing: Icon(Icons.chevron_right, color: context.tokens.textTertiary),
       onTap: () async {
+        // A demo-mode export would produce a file indistinguishable from a real
+        // backup but full of fixture entries — which a later restore would merge
+        // into the real journal.
+        if (MockModeGuard.blocks(context, ref, operation: 'Exporting a backup')) {
+          return;
+        }
         final backupService = ref.read(backupServiceProvider);
         if (!context.mounted) return;
         showDialog(
@@ -771,7 +803,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       subtitle: Text('View and restore previous backups',
           style: TextStyle(color: context.tokens.textTertiary, fontSize: 11)),
       trailing: Icon(Icons.chevron_right, color: context.tokens.textTertiary),
-      onTap: () => _showBackupsDialog(context, ref),
+      onTap: () {
+        if (MockModeGuard.blocks(context, ref, operation: 'Managing backups')) {
+          return;
+        }
+        _showBackupsDialog(context, ref);
+      },
     );
   }
 
@@ -792,7 +829,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       subtitle: Text('Restore from a backup saved on this device',
           style: TextStyle(color: context.tokens.textTertiary, fontSize: 11)),
       trailing: Icon(Icons.chevron_right, color: context.tokens.textTertiary),
-      onTap: () => _importBackupFromFile(context, ref),
+      onTap: () {
+        // Restoring into the in-memory store would vanish on restart, which
+        // looks exactly like losing the backup.
+        if (MockModeGuard.blocks(context, ref, operation: 'Restoring a backup')) {
+          return;
+        }
+        _importBackupFromFile(context, ref);
+      },
     );
   }
 

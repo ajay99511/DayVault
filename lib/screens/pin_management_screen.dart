@@ -35,7 +35,10 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
     final pinSet = await _securityService.isPinSet();
     final questionsSet = await _securityService.areSecurityQuestionsSet();
     final bioAvailable = await _securityService.isBiometricAvailable();
-    _settings = ref.read(storageServiceProvider).getSettings();
+    // Device settings, so always real storage: this screen changes actual
+    // credentials, and persisting the matching flags into demo mode's
+    // throwaway store would leave the two out of step.
+    _settings = ref.read(platformStorageServiceProvider).getSettings();
 
     if (mounted) {
       setState(() {
@@ -62,7 +65,7 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
     }
 
     final newSettings = _settings.copyWith(biometricsEnabled: value);
-    await ref.read(storageServiceProvider).saveSettings(newSettings);
+    await ref.read(platformStorageServiceProvider).saveSettings(newSettings);
     setState(() {
       _settings = newSettings;
     });
@@ -200,7 +203,7 @@ class _PinManagementScreenState extends ConsumerState<PinManagementScreen> {
               onPressed: () async {
                 final result = await _securityService.removePin(pinController.text);
                 if (result.success) {
-                  final storage = ref.read(storageServiceProvider);
+                  final storage = ref.read(platformStorageServiceProvider);
                   await storage.saveSettings(_settings.copyWith(securityEnabled: false, biometricsEnabled: false));
                   if (ctx.mounted) Navigator.pop(ctx);
                   if (mounted) Navigator.pop(context); // Go back to profile

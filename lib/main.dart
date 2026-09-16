@@ -22,6 +22,10 @@ import 'services/platform/platform_init_stub.dart'
     if (dart.library.ffi) 'services/platform/platform_init_native.dart'
     if (dart.library.js_interop) 'services/platform/platform_init_web.dart';
 import 'services/security_service.dart';
+import 'mock/mock_data_repository.dart';
+import 'mock/mock_mode_banner.dart';
+import 'mock/mock_mode_preference.dart';
+import 'mock/mock_mode_scope.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,8 +46,50 @@ void main() async {
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
 
   final bootstrap = await runBootstrap();
+  final mockMode = await hydrateMockMode();
 
-  runApp(ProviderScope(child: MemoryPalaceApp(initial: bootstrap)));
+  runApp(ProviderScope(
+    overrides: mockModeOverrides(
+      repository: mockMode.repository,
+      initiallyEnabled: mockMode.enabled,
+    ),
+    child: MemoryPalaceApp(initial: bootstrap),
+  ));
+}
+
+/// What `main` needs to know about demo mode before the first frame.
+class MockModeBootstrap {
+  final MockDataRepository repository;
+  final bool enabled;
+  const MockModeBootstrap({required this.repository, required this.enabled});
+}
+
+/// Resolve demo mode for this launch: read the persisted choice and, if it is
+/// on, parse the fixtures before any screen can ask for data.
+///
+/// Kept out of [runBootstrap] on purpose. That function is re-runnable from the
+/// error screen's Retry and concerns the *real* storage and security stack;
+/// demo mode is a separate, one-time decision and must not be re-derived by a
+/// retry of something unrelated.
+///
+/// Failing to load the fixtures downgrades to real data rather than failing the
+/// launch: a broken demo fixture should never be able to stop the app from
+/// opening someone's actual journal. The test suite is what makes that failure
+/// loud (see test/mock/mock_fixtures_test.dart).
+Future<MockModeBootstrap> hydrateMockMode() async {
+  final repository = MockDataRepository();
+  var enabled = await const MockModePreference().read();
+
+  if (enabled) {
+    try {
+      await repository.ensureLoaded();
+    } catch (e, st) {
+      debugPrint('Mock data unavailable, starting on real data: $e\n$st');
+      enabled = false;
+    }
+  }
+
+  return MockModeBootstrap(repository: repository, enabled: enabled);
 }
 
 /// Outcome of the one-time platform bootstrap: storage and security init.
@@ -286,7 +332,12 @@ class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
     if (_legacyMigrationStarted) return;
     _legacyMigrationStarted = true;
     try {
-      await ref.read(storageServiceProvider).migrateLegacyEncryptedEntries();
+      // Real storage: this is maintenance on the user's actual rows. Run
+      // through the substitutable provider it would be a no-op whenever demo
+      // mode happened to be on, silently postponing the migration.
+      await ref
+          .read(platformStorageServiceProvider)
+          .migrateLegacyEncryptedEntries();
     } catch (e, st) {
       debugPrint('Legacy entry migration skipped: $e\n$st');
     }
@@ -295,7 +346,12 @@ class _RootOrchestratorState extends ConsumerState<RootOrchestrator> {
   Future<void> _checkSecurity() async {
     // If migration failed or cancelled, we might not have a storage provider ready
     try {
-      final settings = ref.read(storageServiceProvider).getSettings();
+      // platformStorageServiceProvider, NOT storageServiceProvider: whether the
+      // app is PIN-locked is a fact about the real install. Demo mode's
+      // settings carry securityEnabled: false, so reading the lock state
+      // through the substitutable provider let a demo-mode launch skip the PIN
+      // prompt — after which switching demo mode off exposed the real journal.
+      final settings = ref.read(platformStorageServiceProvider).getSettings();
       _securityEnabled = settings.securityEnabled;
       if (mounted) setState(() => isLoading = false);
     } catch (e) {
@@ -481,6 +537,10 @@ class _MainShellState extends State<MainShell>
             index: _idx,
             children: _screens,
           ),
+
+          // Marks every screen while demo data is being served. Renders
+          // nothing at all when demo mode is off.
+          const MockModeBanner(),
         ],
       ),
       bottomNavigationBar: GlassNavBar(

@@ -1,0 +1,189 @@
+{
+  "fixtureVersion": 1,
+  "_readme": [
+    "Demo vision board fixtures. Shape must match VisionBoard.toJson() exactly.",
+    "`year` uses the $year token so the current board is always the one",
+    "VisionBoardScreen opens on (it starts at DateTime.now().year). The",
+    "years:-1 board exists so the year arrows have somewhere to go.",
+    "`category` must be a value from `visionBoardCategories` in",
+    "lib/models/types.dart; colorAccent is an ARGB int (0 = category default)."
+  ],
+  "boards": [
+    {
+      "id": "mock-vision-board-current",
+      "year": { "$year": { "years": 0 } },
+      "createdAt": { "$date": { "years": 0, "months": -8, "hour": 8 } },
+      "items": [
+        {
+          "id": "mock-vision-01",
+          "title": "Ship the thing I keep rewriting",
+          "description": "Stop polishing the plan. One public release, however small, before the year is out.",
+          "category": "Career",
+          "images": [
+            {
+              "source": "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?auto=format&fit=crop&w=1000&q=70",
+              "type": "webUrl",
+              "displayName": "The desk it happens at"
+            }
+          ],
+          "isAchieved": false,
+          "targetDate": { "$date": { "months": 3, "hour": 12 } },
+          "createdAt": { "$date": { "months": -8, "hour": 8 } },
+          "colorAccent": 0,
+          "affirmation": "Finished beats perfect."
+        },
+        {
+          "id": "mock-vision-02",
+          "title": "Run a half marathon without walking",
+          "description": "Three mornings a week at the reservoir. Distance, not pace.",
+          "category": "Health",
+          "images": [],
+          "isAchieved": false,
+          "targetDate": { "$date": { "months": 5, "hour": 7 } },
+          "createdAt": { "$date": { "months": -8, "hour": 8, "minute": 20 } },
+          "colorAccent": 4279286145,
+          "affirmation": "Slow is still forward."
+        },
+        {
+          "id": "mock-vision-03",
+          "title": "Two weeks in Japan, no itinerary",
+          "description": "November. Trains, walking, whatever is in front of me.",
+          "category": "Travel",
+          "images": [
+            {
+              "source": "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=1000&q=70",
+              "type": "webUrl",
+              "displayName": "Somewhere in Kyoto"
+            }
+          ],
+          "isAchieved": false,
+          "targetDate": { "$date": { "months": 7, "hour": 9 } },
+          "createdAt": { "$date": { "months": -7, "hour": 21 } },
+          "colorAccent": 0,
+          "affirmation": "Booked is decided."
+        },
+        {
+          "id": "mock-vision-04",
+          "title": "Call home every Sunday",
+          "description": "Not a text. An actual call, and not while doing something else.",
+          "category": "Relationships",
+          "images": [],
+          "isAchieved": true,
+          "targetDate": null,
+          "createdAt": { "$date": { "months": -8, "hour": 9 } },
+          "colorAccent": 0,
+          "affirmation": "Attention is the gift."
+        },
+        {
+          "id": "mock-vision-05",
+          "title": "Six months of expenses, untouched",
+          "description": "Automatic on payday so the decision only gets made once.",
+          "category": "Finance",
+          "images": [],
+          "isAchieved": true,
+          "targetDate": { "$date": { "months": -1, "hour": 12 } },
+          "createdAt": { "$date": { "months": -8, "hour": 9, "minute": 15 } },
+          "colorAccent": 4294286859,
+          "affirmation": "Quiet money buys loud freedom."
+        },
+        {
+          "id": "mock-vision-06",
+          "title": "Read twenty-four books",
+          "description": "Two a month. Fiction counts double when the year gets heavy.",
+          "category": "Growth",
+          "images": [
+            {
+              "source": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=1000&q=70",
+              "type": "webUrl",
+              "displayName": "The stack"
+            }
+          ],
+          "isAchieved": false,
+          "targetDate": { "$date": { "months": 4, "hour": 20 } },
+          "createdAt": { "$date": { "months": -6, "hour": 18 } },
+          "colorAccent": 0,
+          "affirmation": "Pages, not opinions about pages."
+        },
+        {
+          "id": "mock-vision-07",
+          "title": "Finish the film photography roll backlog",
+          "description": "Eleven rolls in a drawer. Develop them, print six, hang four.",
+          "category": "Creative",
+          "images": [],
+          "isAchieved": false,
+          "targetDate": { "$date": { "months": 2, "hour": 15 } },
+          "createdAt": { "$date": { "months": -5, "hour": 14 } },
+          "colorAccent": 4292429551,
+          "affirmation": "Made is better than stored."
+        },
+        {
+          "id": "mock-vision-08",
+          "title": "Learn to actually cook three dishes",
+          "description": "Not recipes I follow. Three I can make from memory on a weeknight.",
+          "category": "Other",
+          "images": [],
+          "isAchieved": true,
+          "targetDate": { "$date": { "months": -2, "hour": 19 } },
+          "createdAt": { "$date": { "months": -8, "hour": 10 } },
+          "colorAccent": 0,
+          "affirmation": "Feed the people you like."
+        }
+      ]
+    },
+    {
+      "id": "mock-vision-board-previous",
+      "year": { "$year": { "years": -1 } },
+      "createdAt": { "$date": { "years": -1, "months": -8, "hour": 8 } },
+      "items": [
+        {
+          "id": "mock-vision-prev-01",
+          "title": "Move somewhere with morning light",
+          "description": "Forty-two boxes later, done.",
+          "category": "Other",
+          "images": [],
+          "isAchieved": true,
+          "targetDate": null,
+          "createdAt": { "$date": { "years": -1, "months": -8, "hour": 8 } },
+          "colorAccent": 0,
+          "affirmation": "The room shapes the year."
+        },
+        {
+          "id": "mock-vision-prev-02",
+          "title": "Change jobs on my own terms",
+          "description": "Waited for the right one instead of the next one.",
+          "category": "Career",
+          "images": [],
+          "isAchieved": true,
+          "targetDate": null,
+          "createdAt": { "$date": { "years": -1, "months": -8, "hour": 8, "minute": 30 } },
+          "colorAccent": 0,
+          "affirmation": "Patience is a strategy."
+        },
+        {
+          "id": "mock-vision-prev-03",
+          "title": "Walk the coastal ridge",
+          "description": "Fourteen kilometres with Ravi and Meera.",
+          "category": "Travel",
+          "images": [],
+          "isAchieved": true,
+          "targetDate": null,
+          "createdAt": { "$date": { "years": -1, "months": -6, "hour": 11 } },
+          "colorAccent": 0,
+          "affirmation": "Go while the knees are good."
+        },
+        {
+          "id": "mock-vision-prev-04",
+          "title": "Keep a journal for a full year",
+          "description": "Missed thirty-one days. Counting it anyway.",
+          "category": "Growth",
+          "images": [],
+          "isAchieved": true,
+          "targetDate": null,
+          "createdAt": { "$date": { "years": -1, "months": -11, "hour": 7 } },
+          "colorAccent": 0,
+          "affirmation": "Showing up is the whole trick."
+        }
+      ]
+    }
+  ]
+}

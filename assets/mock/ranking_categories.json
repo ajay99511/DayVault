@@ -1,0 +1,414 @@
+{
+  "fixtureVersion": 1,
+  "_readme": [
+    "Demo ranking fixtures. Shape must match RankingCategory.toJson() exactly.",
+    "Category ids are kept identical to `defaultCategories` in",
+    "lib/services/storage/storage_service_interface.dart because IdentityScreen",
+    "opens on the 'movies' id; renaming an id here leaves the screen on an empty",
+    "tab. colorValue is an ARGB int (0 = use the theme accent) and iconName must",
+    "be a key of `categoryIcons` in lib/config/constants.dart.",
+    "Items with two or more history snapshots render the Preference Drift chart."
+  ],
+  "categories": [
+    {
+      "id": "movies",
+      "title": "Movies",
+      "iconName": "movie",
+      "isFavorite": true,
+      "colorValue": 4284704497,
+      "items": [
+        {
+          "id": "mock-rank-movie-01",
+          "rank": 1,
+          "name": "In the Mood for Love",
+          "rating": 5.0,
+          "subtitle": "Wong Kar-wai, 2000",
+          "notes": "Held the top spot for two years now. It is the restraint — nothing is ever said and everything lands.",
+          "dateAdded": { "$date": { "years": -2, "months": -3, "days": 4 } },
+          "image": {
+            "source": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=800&q=70",
+            "type": "webUrl",
+            "displayName": "Cover"
+          },
+          "history": [
+            { "date": { "$date": { "years": -2, "months": -3, "days": 4 } }, "rank": 3 },
+            { "date": { "$date": { "years": -1, "months": -2 } }, "rank": 2 },
+            { "date": { "$date": { "months": -4 } }, "rank": 1 }
+          ]
+        },
+        {
+          "id": "mock-rank-movie-02",
+          "rank": 2,
+          "name": "Arrival",
+          "rating": 4.5,
+          "subtitle": "Denis Villeneuve, 2016",
+          "notes": "Slipped one place after a rewatch. Still the best thing anyone has done with a non-linear script.",
+          "dateAdded": { "$date": { "years": -2, "months": -1 } },
+          "history": [
+            { "date": { "$date": { "years": -2, "months": -1 } }, "rank": 1 },
+            { "date": { "$date": { "months": -4 } }, "rank": 2 }
+          ]
+        },
+        {
+          "id": "mock-rank-movie-03",
+          "rank": 3,
+          "name": "Past Lives",
+          "rating": 4.5,
+          "subtitle": "Celine Song, 2023",
+          "notes": "Climbing fast. Ask me again in six months.",
+          "dateAdded": { "$date": { "months": -8, "days": -2 } },
+          "history": [
+            { "date": { "$date": { "months": -8, "days": -2 } }, "rank": 6 },
+            { "date": { "$date": { "months": -5 } }, "rank": 4 },
+            { "date": { "$date": { "months": -1 } }, "rank": 3 }
+          ]
+        },
+        {
+          "id": "mock-rank-movie-04",
+          "rank": 4,
+          "name": "Spirited Away",
+          "rating": 4.5,
+          "subtitle": "Hayao Miyazaki, 2001",
+          "notes": "The bathhouse still looks like nothing else.",
+          "dateAdded": { "$date": { "years": -2, "months": -2 } },
+          "history": []
+        },
+        {
+          "id": "mock-rank-movie-05",
+          "rank": 5,
+          "name": "Before Sunset",
+          "rating": 4.0,
+          "subtitle": "Richard Linklater, 2004",
+          "notes": "Eighty minutes of walking and talking and it never sags.",
+          "dateAdded": { "$date": { "years": -1, "months": -6 } },
+          "history": []
+        },
+        {
+          "id": "mock-rank-movie-06",
+          "rank": 6,
+          "name": "Paddington 2",
+          "rating": 4.0,
+          "subtitle": "Paul King, 2017",
+          "notes": "Not a joke entry. Genuinely one of the kindest films ever made.",
+          "dateAdded": { "$date": { "months": -3 } },
+          "history": []
+        }
+      ]
+    },
+    {
+      "id": "restaurants",
+      "title": "Restaurants",
+      "iconName": "restaurant",
+      "isFavorite": true,
+      "colorValue": 4294286859,
+      "items": [
+        {
+          "id": "mock-rank-rest-01",
+          "rank": 1,
+          "name": "Saffron House",
+          "rating": 5.0,
+          "subtitle": "North Indian · Fort",
+          "notes": "The dal takes twenty-four hours and you can taste every one of them.",
+          "dateAdded": { "$date": { "years": -1, "months": -4 } },
+          "image": {
+            "source": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=800&q=70",
+            "type": "webUrl",
+            "displayName": "The long table"
+          },
+          "history": [
+            { "date": { "$date": { "years": -1, "months": -4 } }, "rank": 2 },
+            { "date": { "$date": { "months": -6 } }, "rank": 1 }
+          ]
+        },
+        {
+          "id": "mock-rank-rest-02",
+          "rank": 2,
+          "name": "Olive & Ash",
+          "rating": 4.5,
+          "subtitle": "Mediterranean · Bandra",
+          "notes": "Ninth anniversary in a row. They know the table.",
+          "dateAdded": { "$date": { "years": -2 } },
+          "history": [
+            { "date": { "$date": { "years": -2 } }, "rank": 1 },
+            { "date": { "$date": { "months": -6 } }, "rank": 2 }
+          ]
+        },
+        {
+          "id": "mock-rank-rest-03",
+          "rank": 3,
+          "name": "Koya Ramen Bar",
+          "rating": 4.5,
+          "subtitle": "Japanese · Lower Parel",
+          "notes": "Eleven seats, no bookings, worth the queue on a weekday.",
+          "dateAdded": { "$date": { "months": -7 } },
+          "history": []
+        },
+        {
+          "id": "mock-rank-rest-04",
+          "rank": 4,
+          "name": "The Table at Nine",
+          "rating": 4.0,
+          "subtitle": "Small plates · Colaba",
+          "notes": "Menu changes weekly, which is the whole appeal and also the risk.",
+          "dateAdded": { "$date": { "months": -5, "days": -10 } },
+          "history": []
+        },
+        {
+          "id": "mock-rank-rest-05",
+          "rank": 5,
+          "name": "Copper Kettle",
+          "rating": 3.5,
+          "subtitle": "Cafe · Khar",
+          "notes": "Coffee is excellent, everything else is fine. Good for long mornings.",
+          "dateAdded": { "$date": { "months": -2 } },
+          "history": []
+        }
+      ]
+    },
+    {
+      "id": "places",
+      "title": "Places",
+      "iconName": "place",
+      "isFavorite": false,
+      "colorValue": 4279286145,
+      "items": [
+        {
+          "id": "mock-rank-place-01",
+          "rank": 1,
+          "name": "Chorla Ghat",
+          "rating": 5.0,
+          "subtitle": "Ridge trail · Goa border",
+          "notes": "Fourteen kilometres with the sea on your left the whole way.",
+          "dateAdded": { "$date": { "months": -9 } },
+          "image": {
+            "source": "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=800&q=70",
+            "type": "webUrl",
+            "displayName": "The first viewpoint"
+          },
+          "history": [
+            { "date": { "$date": { "months": -9 } }, "rank": 3 },
+            { "date": { "$date": { "days": -6 } }, "rank": 1 }
+          ]
+        },
+        {
+          "id": "mock-rank-place-02",
+          "rank": 2,
+          "name": "Kyoto in November",
+          "rating": 5.0,
+          "subtitle": "Japan",
+          "notes": "Everyone says go in spring. They are wrong.",
+          "dateAdded": { "$date": { "years": -1, "months": -10 } },
+          "history": [
+            { "date": { "$date": { "years": -1, "months": -10 } }, "rank": 1 },
+            { "date": { "$date": { "days": -6 } }, "rank": 2 }
+          ]
+        },
+        {
+          "id": "mock-rank-place-03",
+          "rank": 3,
+          "name": "Reservoir loop at dawn",
+          "rating": 4.5,
+          "subtitle": "Ten minutes from the flat",
+          "notes": "Unglamorous and I am there three mornings a week.",
+          "dateAdded": { "$date": { "months": -6 } },
+          "history": []
+        },
+        {
+          "id": "mock-rank-place-04",
+          "rank": 4,
+          "name": "Lisbon, Alfama",
+          "rating": 4.5,
+          "subtitle": "Portugal",
+          "notes": "Got lost twice on purpose.",
+          "dateAdded": { "$date": { "years": -2, "months": -5 } },
+          "history": []
+        },
+        {
+          "id": "mock-rank-place-05",
+          "rank": 5,
+          "name": "Old Tram Shed",
+          "rating": 4.0,
+          "subtitle": "Music venue",
+          "notes": "Terrible acoustics near the bar, perfect everywhere else.",
+          "dateAdded": { "$date": { "days": -22 } },
+          "history": []
+        }
+      ]
+    },
+    {
+      "id": "people",
+      "title": "People",
+      "iconName": "person",
+      "isFavorite": false,
+      "colorValue": 4292429551,
+      "items": [
+        {
+          "id": "mock-rank-person-01",
+          "rank": 1,
+          "name": "Meera",
+          "rating": 5.0,
+          "subtitle": "Since university",
+          "notes": "Fourteen years and she still calls out the thing nobody else will.",
+          "dateAdded": { "$date": { "years": -2, "months": -6 } },
+          "history": []
+        },
+        {
+          "id": "mock-rank-person-02",
+          "rank": 2,
+          "name": "Ravi",
+          "rating": 5.0,
+          "subtitle": "Walks, arguments, cold coffee",
+          "notes": "The only person I can be quiet with for an hour.",
+          "dateAdded": { "$date": { "years": -2, "months": -6 } },
+          "history": []
+        },
+        {
+          "id": "mock-rank-person-03",
+          "rank": 3,
+          "name": "Priya",
+          "rating": 4.5,
+          "subtitle": "Work, then friend",
+          "notes": "Orders for the whole table without asking and is never wrong.",
+          "dateAdded": { "$date": { "years": -1, "months": -1 } },
+          "history": [
+            { "date": { "$date": { "years": -1, "months": -1 } }, "rank": 5 },
+            { "date": { "$date": { "months": -2 } }, "rank": 3 }
+          ]
+        },
+        {
+          "id": "mock-rank-person-04",
+          "rank": 4,
+          "name": "Nadia",
+          "rating": 4.5,
+          "subtitle": "Gig buddy",
+          "notes": "Has never once suggested leaving before the encore.",
+          "dateAdded": { "$date": { "months": -11 } },
+          "history": []
+        }
+      ]
+    },
+    {
+      "id": "books",
+      "title": "Books",
+      "iconName": "book",
+      "isFavorite": true,
+      "colorValue": 4294197086,
+      "items": [
+        {
+          "id": "mock-rank-book-01",
+          "rank": 1,
+          "name": "The Dispossessed",
+          "rating": 5.0,
+          "subtitle": "Ursula K. Le Guin",
+          "notes": "Finished it and started it again the same evening.",
+          "dateAdded": { "$date": { "days": -41 } },
+          "image": {
+            "source": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=70",
+            "type": "webUrl",
+            "displayName": "Cover"
+          },
+          "history": [
+            { "date": { "$date": { "days": -41 } }, "rank": 4 },
+            { "date": { "$date": { "days": -20 } }, "rank": 2 },
+            { "date": { "$date": { "days": -5 } }, "rank": 1 }
+          ]
+        },
+        {
+          "id": "mock-rank-book-02",
+          "rank": 2,
+          "name": "Piranesi",
+          "rating": 5.0,
+          "subtitle": "Susanna Clarke",
+          "notes": "Read it in two sittings and told four people about it badly.",
+          "dateAdded": { "$date": { "months": -7 } },
+          "history": [
+            { "date": { "$date": { "months": -7 } }, "rank": 1 },
+            { "date": { "$date": { "days": -5 } }, "rank": 2 }
+          ]
+        },
+        {
+          "id": "mock-rank-book-03",
+          "rank": 3,
+          "name": "The Overstory",
+          "rating": 4.5,
+          "subtitle": "Richard Powers",
+          "notes": "The first two hundred pages are nine short stories and it earns all of it.",
+          "dateAdded": { "$date": { "years": -1, "months": -3 } },
+          "history": []
+        },
+        {
+          "id": "mock-rank-book-04",
+          "rank": 4,
+          "name": "Thinking in Systems",
+          "rating": 4.5,
+          "subtitle": "Donella Meadows",
+          "notes": "Changed how I write project plans more than any book about project plans.",
+          "dateAdded": { "$date": { "years": -1 } },
+          "history": []
+        },
+        {
+          "id": "mock-rank-book-05",
+          "rank": 5,
+          "name": "A Psalm for the Wild-Built",
+          "rating": 4.0,
+          "subtitle": "Becky Chambers",
+          "notes": "Short, warm, no villain. Reread when things are loud.",
+          "dateAdded": { "$date": { "months": -4 } },
+          "history": []
+        }
+      ]
+    },
+    {
+      "id": "mock-category-albums",
+      "title": "Albums",
+      "iconName": "music",
+      "isFavorite": false,
+      "colorValue": 0,
+      "items": [
+        {
+          "id": "mock-rank-album-01",
+          "rank": 1,
+          "name": "For Emma, Forever Ago",
+          "rating": 5.0,
+          "subtitle": "Bon Iver, 2007",
+          "notes": "Winter record. Comes out every November without fail.",
+          "dateAdded": { "$date": { "years": -2, "months": -4 } },
+          "history": []
+        },
+        {
+          "id": "mock-rank-album-02",
+          "rank": 2,
+          "name": "In Rainbows",
+          "rating": 5.0,
+          "subtitle": "Radiohead, 2007",
+          "notes": "Played front to back at the Old Tram Shed and it still holds.",
+          "dateAdded": { "$date": { "days": -22 } },
+          "history": [
+            { "date": { "$date": { "days": -22 } }, "rank": 4 },
+            { "date": { "$date": { "days": -3 } }, "rank": 2 }
+          ]
+        },
+        {
+          "id": "mock-rank-album-03",
+          "rank": 3,
+          "name": "Blue",
+          "rating": 4.5,
+          "subtitle": "Joni Mitchell, 1971",
+          "notes": "Took me until thirty to hear it properly.",
+          "dateAdded": { "$date": { "years": -1, "months": -2 } },
+          "history": []
+        },
+        {
+          "id": "mock-rank-album-04",
+          "rank": 4,
+          "name": "Promises",
+          "rating": 4.5,
+          "subtitle": "Floating Points & Pharoah Sanders, 2021",
+          "notes": "Best thing to work to. One idea, forty-six minutes.",
+          "dateAdded": { "$date": { "months": -5 } },
+          "history": []
+        }
+      ]
+    }
+  ]
+}

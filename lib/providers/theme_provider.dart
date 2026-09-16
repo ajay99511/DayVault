@@ -7,6 +7,13 @@ import '../services/storage_service.dart';
 /// Initializes from saved settings on first build and writes any change back
 /// through [StorageService] so the choice survives restarts. Defaults to dark
 /// to preserve the app's historical behavior when no preference is stored.
+///
+/// Reads and writes [platformStorageServiceProvider] rather than
+/// [storageServiceProvider]: the theme is a device preference, not journal
+/// content. Going through the substitutable provider meant entering demo mode
+/// silently replaced the user's chosen theme with the fixture's, and changing
+/// the theme *while* in demo mode wrote the choice to a store that is discarded
+/// on restart — so it appeared to work and then reverted.
 final themeModeProvider =
     NotifierProvider<ThemeModeNotifier, ThemeMode>(ThemeModeNotifier.new);
 
@@ -14,7 +21,8 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
   @override
   ThemeMode build() {
     try {
-      final settings = ref.read(storageServiceProvider).getSettings();
+      final settings =
+          ref.read(platformStorageServiceProvider).getSettings();
       return _decode(settings.theme);
     } catch (_) {
       // Storage not ready (e.g. failed init) — fall back to dark.
@@ -26,7 +34,7 @@ class ThemeModeNotifier extends Notifier<ThemeMode> {
   Future<void> setMode(ThemeMode mode) async {
     if (mode == state) return;
     state = mode;
-    final storage = ref.read(storageServiceProvider);
+    final storage = ref.read(platformStorageServiceProvider);
     final settings = storage.getSettings();
     await storage.saveSettings(settings.copyWith(theme: _encode(mode)));
   }

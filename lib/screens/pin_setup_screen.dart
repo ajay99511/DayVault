@@ -185,8 +185,13 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
         return;
       }
 
-      // Save Settings with security enabled
-      final storage = ref.read(storageServiceProvider);
+      // Save Settings with security enabled.
+      //
+      // Real storage, always. The PIN itself went into SecurityService (which is
+      // always real), so recording the matching flag in demo mode's throwaway
+      // store would leave an install with a PIN set and `securityEnabled: false`
+      // — the launch gate would then let anyone straight in.
+      final storage = ref.read(platformStorageServiceProvider);
       final currentSettings = storage.getSettings();
       await storage.saveSettings(currentSettings.copyWith(
         securityEnabled: true,

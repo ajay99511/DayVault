@@ -56,6 +56,11 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  assets:
+    # Demo (mock) data fixtures, served by lib/mock/ when mock mode is on.
+    # Registered as a directory so adding a fixture file needs no pubspec edit.
+    - assets/mock/
+
 dependency_overrides:
   # Override to satisfy both encrypt and objectbox_generator
   pointycastle: ^4.0.0
