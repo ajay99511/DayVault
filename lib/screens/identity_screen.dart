@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
 import '../providers/journal_revision_provider.dart';
+import '../services/identity_view_preferences.dart';
 import '../services/storage_service.dart';
 import '../services/image_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,10 +14,6 @@ import '../utils/dialog_controllers.dart';
 import '../theme/app_tokens.dart';
 import '../widgets/glass_widgets.dart';
 import '../widgets/image_widgets.dart';
-
-/// How the active category's items are ordered for display. [manual] keeps the
-/// user's drag-ordered rank; the others are derived (and disable reordering).
-enum _ItemSort { manual, ratingDesc, dateDesc }
 
 class IdentityScreen extends ConsumerStatefulWidget {
   const IdentityScreen({super.key});
@@ -28,7 +27,10 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
   String activeId = 'movies';
   bool _showFavoritesOnly = false;
   bool _isLoading = true;
-  bool _isMasked = true; // PII masking state (R3.2)
+
+  /// PII masking (R3.2). Starts **off** and is remembered once switched on —
+  /// see [IdentityViewState.masked] for why the default is this way round.
+  bool _isMasked = false;
 
   // Search state
   bool _isSearching = false;
@@ -37,17 +39,17 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
   String _searchQuery = '';
 
   // Sort mode for the active category list.
-  _ItemSort _sortMode = _ItemSort.manual;
+  ItemSort _sortMode = ItemSort.manual;
 
   /// Apply the active sort to [items]. [manual] preserves the incoming (rank)
   /// order. Non-manual sorts return a new list and are pure for testability.
   List<RankedItem> _applySort(List<RankedItem> items) {
     switch (_sortMode) {
-      case _ItemSort.manual:
+      case ItemSort.manual:
         return items;
-      case _ItemSort.ratingDesc:
+      case ItemSort.ratingDesc:
         return [...items]..sort((a, b) => b.rating.compareTo(a.rating));
-      case _ItemSort.dateDesc:
+      case ItemSort.dateDesc:
         return [...items]..sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
     }
   }
@@ -61,7 +63,25 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _restoreThenLoad();
+  }
+
+  /// Read the remembered view choices *before* the first load.
+  ///
+  /// Order matters: DefaultTabController honours `initialIndex` only on the
+  /// build that first creates its controller, which is the first build after
+  /// [_isLoading] clears. Restoring the active category any later would leave
+  /// the bar on the wrong tab.
+  Future<void> _restoreThenLoad() async {
+    final view = await ref.read(identityViewPreferencesProvider).read();
+    if (!mounted) return;
+    _isMasked = view.masked;
+    _showFavoritesOnly = view.favoritesOnly;
+    _sortMode = view.sort;
+    // A stale id — category since deleted, or filtered out by the favourites
+    // toggle — is harmless: _load falls back to the first available category.
+    activeId = view.activeCategoryId ?? activeId;
+    await _load();
   }
 
   Future<void> _load() async {
@@ -69,6 +89,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     final d = _showFavoritesOnly
         ? await storage.getFavoriteRankings()
         : await storage.getRankings();
+    if (!mounted) return;
 
     if (d.isNotEmpty && !d.any((c) => c.id == activeId)) {
       activeId = d.first.id;
@@ -77,6 +98,33 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
       categories = d;
       _isLoading = false;
     });
+  }
+
+  /// Remember how the screen is being looked at.
+  ///
+  /// Deliberately not awaited: the session is already correct without it, and
+  /// the write goes over a platform channel that is absent in tests and can
+  /// stall on a device with a misbehaving keystore. Failures are swallowed
+  /// inside `write()`.
+  void _persistView() {
+    unawaited(ref.read(identityViewPreferencesProvider).write(
+          IdentityViewState(
+            masked: _isMasked,
+            favoritesOnly: _showFavoritesOnly,
+            sort: _sortMode,
+            // Never persist an id with no category behind it; that would pin
+            // the next launch to something that no longer exists.
+            activeCategoryId:
+                categories.any((c) => c.id == activeId) ? activeId : null,
+          ),
+        ));
+  }
+
+  /// Switch to a category and remember it. No-op when already there.
+  void _setActiveCategory(String id) {
+    if (activeId == id) return;
+    setState(() => activeId = id);
+    _persistView();
   }
 
   RankingCategory get _activeCategory => categories.firstWhere(
@@ -811,7 +859,9 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
         backgroundColor: ctx.tokens.surfaceBase,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          'Remove "${item.name}"?',
+          // The snackbar below already withholds the name while masked; this
+          // dialog used to put it straight back on screen.
+          _isMasked ? 'Remove this item?' : 'Remove "${item.name}"?',
           style: GoogleFonts.outfit(
               color: ctx.tokens.textPrimary, fontWeight: FontWeight.bold),
         ),
@@ -1074,32 +1124,37 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                           ),
                         if (!_isSearching) _buildTopActions(),
                         _sortButton(),
-                        const SizedBox(width: 4),
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              _isSearching = !_isSearching;
-                              if (!_isSearching) {
-                                _searchCtrl.clear();
-                                _searchQuery = '';
-                              }
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: context.tokens.surfaceGlassFill,
-                              shape: BoxShape.circle,
-                              border:
-                                  Border.all(color: context.tokens.glassBorder),
-                            ),
-                            child: Icon(
-                              _isSearching ? Icons.close : Icons.search,
-                              color: context.tokens.textPrimary,
-                              size: 20,
+                        // Queries are ignored while masked, so hidden content
+                        // can't be probed through the field. Hide the button
+                        // too rather than leaving one that does nothing.
+                        if (!_isMasked) ...[
+                          const SizedBox(width: 4),
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _isSearching = !_isSearching;
+                                if (!_isSearching) {
+                                  _searchCtrl.clear();
+                                  _searchQuery = '';
+                                }
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: context.tokens.surfaceGlassFill,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: context.tokens.glassBorder),
+                              ),
+                              child: Icon(
+                                _isSearching ? Icons.close : Icons.search,
+                                color: context.tokens.textPrimary,
+                                size: 20,
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ),
@@ -1116,7 +1171,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
               _SyncedTabBar(
                 categories: categories,
                 activeId: activeId,
-                onTabChanged: (newId) => setState(() => activeId = newId),
+                onTabChanged: _setActiveCategory,
                 onCategoryOptions: () => _showCategoryOptions(_activeCategory),
               ),
             const SizedBox(height: 24),
@@ -1130,18 +1185,33 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.category_outlined,
-                              size: 60, color: context.tokens.textDisabled),
+                          Icon(
+                              _showFavoritesOnly
+                                  ? Icons.star_border
+                                  : Icons.category_outlined,
+                              size: 60,
+                              color: context.tokens.textDisabled),
                           const SizedBox(height: 16),
-                          Text('No categories found',
+                          Text(
+                              _showFavoritesOnly
+                                  ? 'No favourite categories'
+                                  : 'No categories found',
                               style: TextStyle(
                                   color: context.tokens.textTertiary,
                                   fontSize: 16)),
                           const SizedBox(height: 16),
+                          // With the filter on, an empty screen means the
+                          // filter — not an empty library. Offer the way back
+                          // out of it instead of only offering to add more.
                           TextButton(
-                            onPressed: () => _showCategoryDialog(),
-                            child: const Text('ADD CATEGORY',
-                                style: TextStyle(
+                            onPressed: _showFavoritesOnly
+                                ? _toggleFavoritesOnly
+                                : () => _showCategoryDialog(),
+                            child: Text(
+                                _showFavoritesOnly
+                                    ? 'SHOW ALL CATEGORIES'
+                                    : 'ADD CATEGORY',
+                                style: const TextStyle(
                                     color: AppColors.indigo500,
                                     fontWeight: FontWeight.bold,
                                     letterSpacing: 1.5)),
@@ -1166,7 +1236,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                         // sort while not searching.
                         final displayItems = _applySort(filteredItems);
                         final reorderable =
-                            _sortMode == _ItemSort.manual && !_isSearching;
+                            _sortMode == ItemSort.manual && !_isSearching;
 
                         if (displayItems.isEmpty) {
                           return Center(
@@ -1215,7 +1285,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                                   const SizedBox(height: 16),
                                   TextButton(
                                     onPressed: () {
-                                      setState(() => activeId = cat.id);
+                                      _setActiveCategory(cat.id);
                                       _showAddEditDialog();
                                     },
                                     child: Container(
@@ -1257,9 +1327,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                             showHandle: reorderable,
                             getRankGradient: _getRankGradient,
                             onTap: () {
-                              if (activeId != cat.id) {
-                                setState(() => activeId = cat.id);
-                              }
+                              _setActiveCategory(cat.id);
                               _showItemDetail(item);
                             },
                           );
@@ -1286,9 +1354,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
                           // screen records on every manual reorder.
                           // ignore: deprecated_member_use
                           onReorder: (oldIndex, newIndex) {
-                            if (activeId != cat.id) {
-                              setState(() => activeId = cat.id);
-                            }
+                            _setActiveCategory(cat.id);
                             _onReorder(oldIndex, newIndex);
                           },
                           itemCount: displayItems.length,
@@ -1419,9 +1485,12 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     );
   }
 
-  void _toggleFavoritesOnly() {
+  Future<void> _toggleFavoritesOnly() async {
     setState(() => _showFavoritesOnly = !_showFavoritesOnly);
-    _load();
+    // Persist after the reload, not before: the filter can move activeId onto
+    // a different category, and it's the settled pair we want to remember.
+    await _load();
+    if (mounted) _persistView();
   }
 
   /// Toggle privacy masking. Entering privacy mode also exits search so masked
@@ -1435,35 +1504,40 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
         _searchQuery = '';
       }
     });
+    _persistView();
   }
 
   /// Sort selector for the active category list.
   Widget _sortButton() {
-    return PopupMenuButton<_ItemSort>(
+    return PopupMenuButton<ItemSort>(
       tooltip: 'Sort',
       color: context.tokens.surfaceBase,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       icon: Icon(
         Icons.sort_rounded,
-        color: _sortMode == _ItemSort.manual
+        color: _sortMode == ItemSort.manual
             ? context.tokens.textTertiary
             : AppColors.indigo500,
       ),
-      onSelected: (m) => setState(() => _sortMode = m),
+      onSelected: (m) {
+        if (m == _sortMode) return;
+        setState(() => _sortMode = m);
+        _persistView();
+      },
       itemBuilder: (ctx) => [
         CheckedPopupMenuItem(
-          value: _ItemSort.manual,
-          checked: _sortMode == _ItemSort.manual,
+          value: ItemSort.manual,
+          checked: _sortMode == ItemSort.manual,
           child: const Text('Manual (rank)'),
         ),
         CheckedPopupMenuItem(
-          value: _ItemSort.ratingDesc,
-          checked: _sortMode == _ItemSort.ratingDesc,
+          value: ItemSort.ratingDesc,
+          checked: _sortMode == ItemSort.ratingDesc,
           child: const Text('Rating (high → low)'),
         ),
         CheckedPopupMenuItem(
-          value: _ItemSort.dateDesc,
-          checked: _sortMode == _ItemSort.dateDesc,
+          value: ItemSort.dateDesc,
+          checked: _sortMode == ItemSort.dateDesc,
           child: const Text('Recently added'),
         ),
       ],
@@ -1545,9 +1619,7 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
               showHandle: false,
               getRankGradient: _getRankGradient,
               onTap: () {
-                if (activeId != cat.id) {
-                  setState(() => activeId = cat.id);
-                }
+                _setActiveCategory(cat.id);
                 _showItemDetail(item);
               },
             ),
@@ -2175,6 +2247,36 @@ class _SyncedTabBarState extends State<_SyncedTabBar> {
       };
       _tabCtrl!.addListener(_tabListener!);
     }
+    _syncControllerToActiveId();
+  }
+
+  @override
+  void didUpdateWidget(_SyncedTabBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncControllerToActiveId();
+  }
+
+  /// Drive the shared TabController from [_SyncedTabBar.activeId].
+  ///
+  /// DefaultTabController honours `initialIndex` only when it first builds its
+  /// controller, and rebuilds that controller only when the tab *count*
+  /// changes. So a category selected in code — a cross-category search hit,
+  /// the empty-state "start ranking" button, a restored preference after a
+  /// category was added — left the bar and the TabBarView on the previous
+  /// tab, and the listener above then quietly pushed activeId back to it.
+  ///
+  /// Both this and the listener are guarded on already being in agreement, so
+  /// they cannot drive each other in a loop.
+  void _syncControllerToActiveId() {
+    final ctrl = _tabCtrl;
+    if (ctrl == null) return;
+    final target = widget.categories.indexWhere((c) => c.id == widget.activeId);
+    if (target < 0 || target >= ctrl.length || target == ctrl.index) return;
+    // Deferred: this runs during build, and animateTo notifies synchronously.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _tabCtrl != ctrl) return;
+      if (target < ctrl.length && target != ctrl.index) ctrl.animateTo(target);
+    });
   }
 
   @override
@@ -2259,9 +2361,13 @@ class _StarRatingPicker extends StatelessWidget {
 
         return GestureDetector(
           onTap: () {
-            // Tap toggles between full star and half star
+            // Tapping the same star cycles full → half → cleared. Without
+            // the last step a rating given by mistake could never be removed:
+            // full and half just swapped back and forth forever.
             if (rating == starIndex.toDouble()) {
               onChanged(starIndex - 0.5);
+            } else if (rating == starIndex - 0.5) {
+              onChanged(starIndex - 1.0);
             } else {
               onChanged(starIndex.toDouble());
             }

@@ -33,6 +33,15 @@ every APK so the in-app toggle works on a downloaded build.
 | `storageServiceProvider` | Journal entries, tags, rankings, vision boards, drafts, display name | Substituted |
 | `platformStorageServiceProvider` | App lock (`securityEnabled`), biometrics, theme, real-data maintenance | **Never** substituted |
 
+There is also a third, much smaller store: `IdentityViewPreferences`
+(`lib/services/identity_view_preferences.dart`), which keeps the Identity
+screen's *view* state — privacy masking, favourites filter, sort, last open
+category — in `flutter_secure_storage`, the same place and for the same reason
+as `MockModePreference`. View state is neither journal content nor a
+`UserSettings` field: it must not be replaced by the fixtures when demo mode
+goes on, and a choice made during a demo must not be thrown away with the demo
+data. Privacy masking defaults to **off**; don't "restore" it to on.
+
 `ref.read(storageServiceProvider)` is the idiom everywhere else, which makes this
 an easy slip with serious consequences — reading `securityEnabled` through the
 substitutable provider once let a demo-mode launch skip the PIN screen entirely.
