@@ -1,20 +1,39 @@
-# DayVault Code Owners
+# DayVault code owners
 # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 #
-# Owner: Ajay Elika <ajayelika99511@gmail.com>
+# The LAST matching pattern wins, so keep the catch-all first and specific
+# paths below it. When a second maintainer joins, add them to the areas they
+# own rather than to the catch-all.
 
-# Global owner
-*       @ajay99511
+# Default owner for everything not matched below.
+*                                       @ajay99511
 
-# Security-sensitive files
-SECURITY.md             @ajay99511
-LICENSE                 @ajay99511
-.github/CODEOWNERS      @ajay99511
+# Security: app lock, vault, credentials, encryption, backups.
+/lib/services/security_service.dart     @ajay99511
+/lib/services/vault_security_service.dart @ajay99511
+/lib/services/credential_gate.dart      @ajay99511
+/lib/services/pbkdf2.dart               @ajay99511
+/lib/services/encryption_service.dart   @ajay99511
+/lib/services/backup_service.dart       @ajay99511
+/SECURITY.md                            @ajay99511
 
-# Flutter config
-pubspec.yaml            @ajay99511
-pubspec.lock            @ajay99511
-analysis_options.yaml   @ajay99511
+# Storage layer and the demo-mode isolation boundary.
+/lib/services/storage/                  @ajay99511
+/lib/services/storage_service.dart      @ajay99511
+/lib/mock/                              @ajay99511
+/assets/mock/                           @ajay99511
+/test/mock/                             @ajay99511
 
-# App source
-lib/                    @ajay99511
+# Dependencies and platform build configuration.
+/pubspec.yaml                           @ajay99511
+/pubspec.lock                           @ajay99511
+/android/                               @ajay99511
+/ios/                                   @ajay99511
+/windows/                               @ajay99511
+/macos/                                 @ajay99511
+/linux/                                 @ajay99511
+
+# Repository governance and CI.
+/.github/                               @ajay99511
+/analysis_options.yaml                  @ajay99511
+/LICENSE                                @ajay99511

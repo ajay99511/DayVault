@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in DayVault is broken or behaves unexpectedly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. **Please don't paste real
+        journal content, PINs or passcodes** — describe them instead.
+        Security problems go through [private reporting](https://github.com/ajay99511/DayVault/security/advisories/new), not here.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you saw, and what you expected to see instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Tap …
+        3. See …
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      multiple: true
+      options: [Android, iOS, Windows, macOS, Linux, Web]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version or commit
+      description: From Profile, or the commit you built from.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS version
+      placeholder: e.g. Pixel 8, Android 15 / Windows 11 24H2
+  - type: dropdown
+    id: demo-mode
+    attributes:
+      label: Was demo mode on?
+      description: Profile → DEMO MODE. Some bugs only appear with real data or only with demo data.
+      options: ["No", "Yes", "Not sure"]
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Optional. Check them for personal data before posting.
+      render: shell
